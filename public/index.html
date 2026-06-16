@@ -272,6 +272,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
       <div class="timer-circle" id="timer-el">15</div>
     </div>
     <div class="phase-banner" id="q-phase-banner">المرحلة 1 - سهل</div>
+    <div id="logo-box" style="display:none;"></div>
     <div class="q-text" id="q-text">...</div>
     <div class="options-grid" id="q-opts"></div>
     <div id="q-result" style="display:none;margin-top:14px;text-align:center;font-size:14px;font-weight:600;"></div>
@@ -445,13 +446,28 @@ function connectSocket() {
     show('s-phase');
   });
 
-  socket.on('question', ({ index, total, question, options, points, phase }) => {
+  socket.on('question', ({ index, total, question, options, points, phase, is_logo }) => {
     const phaseNames=['سهل','متوسط','صعب'];
     document.getElementById('q-num').textContent=`سؤال ${index}/${total}`;
     document.getElementById('q-pts').textContent=`${points} نقطة`;
     document.getElementById('q-phase-banner').textContent=`المرحلة ${phase} - ${phaseNames[phase-1]||''}`;
-    document.getElementById('q-text').textContent=question;
     document.getElementById('q-result').style.display='none';
+
+    // FIX #3: Logo question special display
+    const logoBox = document.getElementById('logo-box');
+    const qTextEl = document.getElementById('q-text');
+    if (is_logo) {
+      logoBox.style.display='block';
+      logoBox.innerHTML=`<div style="background:var(--card2);border-radius:var(--radius-sm);padding:18px;margin-bottom:14px;text-align:center;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">وصف الشعار:</div>
+        <div style="font-size:15px;line-height:1.6;color:var(--text);">${question}</div>
+      </div>`;
+      qTextEl.textContent='ما هي الشركة التي يعود لها هذا الشعار؟';
+    } else {
+      logoBox.style.display='none';
+      qTextEl.textContent=question;
+    }
+
     const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
     options.forEach(opt => {
       const btn=document.createElement('button');
@@ -470,11 +486,25 @@ function connectSocket() {
     el.className='timer-circle'+(seconds<=5?' urgent':'');
   });
 
-  socket.on('answer_result', ({ correct, correct_answer, points }) => {
-    document.querySelectorAll('.opt').forEach(b => { b.disabled=true; if(b.textContent===correct_answer) b.classList.add('correct'); });
+  // FIX #1: Only show player's own result, not the correct answer yet
+  socket.on('answer_result', ({ correct, points }) => {
+    document.querySelectorAll('.opt').forEach(b => b.disabled=true);
     const res=document.getElementById('q-result'); res.style.display='block';
     if(correct) { res.style.color='var(--success)'; res.textContent=`✅ إجابة صحيحة! +${points} نقطة`; }
-    else { res.style.color='var(--danger)'; res.textContent='❌ إجابة خاطئة'; }
+    else { res.style.color='var(--danger)'; res.textContent='❌ إجابة خاطئة — انتظر انتهاء الجميع...'; }
+  });
+
+  // Reveal correct answer to everyone at the same time
+  socket.on('reveal_answer', ({ correct_answer }) => {
+    document.querySelectorAll('.opt').forEach(b => {
+      b.disabled=true;
+      if(b.textContent===correct_answer) b.classList.add('correct');
+    });
+    const res=document.getElementById('q-result');
+    // Update message if they got it wrong
+    if(res.style.color==='var(--danger)' || res.textContent.includes('خاطئة')) {
+      res.textContent='❌ إجابة خاطئة';
+    }
   });
 
   socket.on('time_up', ({ correct_answer }) => {
