@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Database = require('better-sqlite3');
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 const app = express();
@@ -15,10 +15,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'trivia_secret_key_2024';
 const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
-// ─── Database ───────────────────────────────────────────────────────────────
-const db = new Database('./data/trivia.db');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
+// ─── Database ─────────────────────────────────────────────────────────────────
+const db = new sqlite3.Database('./trivia.db');
+
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
@@ -29,18 +30,17 @@ db.exec(`
     password TEXT NOT NULL,
     total_score INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  CREATE TABLE IF NOT EXISTS game_history (
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS game_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
     room_code TEXT,
     score INTEGER,
-    played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
+    played_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+});
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function getLevel(score) {
   if (score <= 500)  return { name: 'البطريق', emoji: '🐧', level: 1 };
   if (score <= 1250) return { name: 'الذئب',   emoji: '🐺', level: 2 };
@@ -51,8 +51,7 @@ function getLevel(score) {
 }
 
 function displayName(user) {
-  const last3 = user.last_name.substring(0, 3);
-  return `${user.first_name} ${last3}`;
+  return `${user.first_name} ${user.last_name.substring(0, 3)}`;
 }
 
 function verifyToken(token) {
@@ -60,11 +59,32 @@ function verifyToken(token) {
   catch { return null; }
 }
 
+function safeUser(u) {
+  const level = getLevel(u.total_score || 0);
+  return {
+    id: u.id, first_name: u.first_name, last_name: u.last_name,
+    email: u.email, phone: u.phone, dob: u.dob, gender: u.gender,
+    total_score: u.total_score || 0, display_name: displayName(u), level
+  };
+}
+
+function dbGet(sql, params) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
+  });
+}
+
+function dbRun(sql, params) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function(err) { err ? reject(err) : resolve(this); });
+  });
+}
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── Auth Routes ─────────────────────────────────────────────────────────────
+// ─── Auth Routes ──────────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   const { first_name, last_name, phone, email, dob, gender, password } = req.body;
   if (!first_name || !last_name || !phone || !email || !dob || !gender || !password)
@@ -73,9 +93,11 @@ app.post('/api/register', async (req, res) => {
     return res.status(400).json({ error: 'الجنس غير صحيح' });
   try {
     const hash = await bcrypt.hash(password, 10);
-    const stmt = db.prepare('INSERT INTO users (first_name,last_name,phone,email,dob,gender,password) VALUES (?,?,?,?,?,?,?)');
-    const result = stmt.run(first_name, last_name, phone, email, dob, gender, hash);
-    const user = db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
+    const result = await dbRun(
+      'INSERT INTO users (first_name,last_name,phone,email,dob,gender,password) VALUES (?,?,?,?,?,?,?)',
+      [first_name, last_name, phone, email, dob, gender, hash]
+    );
+    const user = await dbGet('SELECT * FROM users WHERE id=?', [result.lastID]);
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: safeUser(user) });
   } catch (e) {
@@ -86,7 +108,7 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  const user = await dbGet('SELECT * FROM users WHERE email=?', [email]);
   if (!user) return res.status(400).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(400).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
@@ -94,23 +116,14 @@ app.post('/api/login', async (req, res) => {
   res.json({ token, user: safeUser(user) });
 });
 
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(payload.id);
+  const user = await dbGet('SELECT * FROM users WHERE id=?', [payload.id]);
   if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
   res.json(safeUser(user));
 });
-
-function safeUser(u) {
-  const level = getLevel(u.total_score);
-  return {
-    id: u.id, first_name: u.first_name, last_name: u.last_name,
-    email: u.email, phone: u.phone, dob: u.dob, gender: u.gender,
-    total_score: u.total_score, display_name: displayName(u), level
-  };
-}
 
 // ─── AI Question Generation ───────────────────────────────────────────────────
 async function generateQuestions(category, difficulty, count = 12) {
@@ -123,10 +136,7 @@ async function generateQuestions(category, difficulty, count = 12) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: 4000,
-      messages: [{ role: 'user', content: prompt }]
-    })
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] })
   });
   const data = await response.json();
   const raw = data.content?.map(b => b.text || '').join('') || '[]';
@@ -137,32 +147,27 @@ async function generateQuestions(category, difficulty, count = 12) {
 // ─── Room Management ──────────────────────────────────────────────────────────
 const rooms = {};
 
-function generateCode() {
-  return String(Math.floor(1000 + Math.random() * 9000));
-}
-
-const CATEGORIES = ['الكويت', 'التكنولوجيا', 'معلومات عامة', 'شعارات الشركات', 'عواصم الدول', 'خرائط وجغرافيا'];
+function generateCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
 
 // ─── Socket.io ────────────────────────────────────────────────────────────────
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
   const payload = verifyToken(token);
   if (!payload) return next(new Error('غير مصرح'));
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(payload.id);
-  if (!user) return next(new Error('المستخدم غير موجود'));
-  socket.user = safeUser(user);
-  next();
+  dbGet('SELECT * FROM users WHERE id=?', [payload.id]).then(user => {
+    if (!user) return next(new Error('المستخدم غير موجود'));
+    socket.user = safeUser(user);
+    next();
+  }).catch(() => next(new Error('خطأ')));
 });
 
 io.on('connection', (socket) => {
-  // CREATE ROOM
   socket.on('create_room', ({ category }) => {
     const code = generateCode();
     rooms[code] = {
       code, host: socket.id, category: category || 'معلومات عامة',
       players: {}, phase: 0, phaseNames: ['easy','medium','hard'],
-      questions: [], qIndex: 0, timer: null, status: 'waiting',
-      phaseScores: {}
+      questions: [], qIndex: 0, timer: null, status: 'waiting'
     };
     rooms[code].players[socket.id] = { ...socket.user, sessionScore: 0, ready: false };
     socket.join(code);
@@ -171,7 +176,6 @@ io.on('connection', (socket) => {
     io.to(code).emit('players_update', getPlayers(code));
   });
 
-  // JOIN ROOM
   socket.on('join_room', ({ code }) => {
     const room = rooms[code];
     if (!room) return socket.emit('error_msg', 'الغرفة غير موجودة');
@@ -183,21 +187,16 @@ io.on('connection', (socket) => {
     io.to(code).emit('players_update', getPlayers(code));
   });
 
-  // PLAYER READY
   socket.on('player_ready', () => {
     const code = socket.roomCode;
     const room = rooms[code];
     if (!room) return;
     room.players[socket.id].ready = true;
     io.to(code).emit('players_update', getPlayers(code));
-    // Check if all non-host players are ready
     const nonHost = Object.entries(room.players).filter(([id]) => id !== room.host);
-    if (nonHost.length > 0 && nonHost.every(([,p]) => p.ready)) {
-      io.to(code).emit('all_ready');
-    }
+    if (nonHost.length > 0 && nonHost.every(([,p]) => p.ready)) io.to(code).emit('all_ready');
   });
 
-  // HOST STARTS GAME
   socket.on('start_game', async () => {
     const code = socket.roomCode;
     const room = rooms[code];
@@ -221,7 +220,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ANSWER
   socket.on('submit_answer', ({ answer }) => {
     const code = socket.roomCode;
     const room = rooms[code];
@@ -232,24 +230,20 @@ io.on('connection', (socket) => {
     room.answered[socket.id] = true;
     const correct = answer === q.answer;
     const pts = { easy: 100, medium: 200, hard: 300 }[room.phaseNames[room.phase]];
-    if (correct) {
-      room.players[socket.id].sessionScore += pts;
-    }
+    if (correct) room.players[socket.id].sessionScore += pts;
     socket.emit('answer_result', { correct, correct_answer: q.answer, points: correct ? pts : 0 });
     io.to(code).emit('players_update', getPlayers(code));
   });
 
-  // DISCONNECT
   socket.on('disconnect', () => {
     const code = socket.roomCode;
     if (!code || !rooms[code]) return;
     delete rooms[code].players[socket.id];
     if (Object.keys(rooms[code].players).length === 0) {
-      clearTimeout(rooms[code].timer);
+      clearInterval(rooms[code].timer);
       delete rooms[code];
       return;
     }
-    // If host left, assign new host
     if (rooms[code].host === socket.id) {
       rooms[code].host = Object.keys(rooms[code].players)[0];
       io.to(code).emit('host_changed', { host: rooms[code].host });
@@ -279,10 +273,7 @@ function startPhase(code) {
 function askQuestion(code) {
   const room = rooms[code];
   if (!room || room.status !== 'playing') return;
-  if (room.qIndex >= room.questions.length) {
-    endPhase(code);
-    return;
-  }
+  if (room.qIndex >= room.questions.length) { endPhase(code); return; }
   const q = room.questions[room.qIndex];
   room.currentQuestion = q;
   room.answered = {};
@@ -290,8 +281,7 @@ function askQuestion(code) {
   const pts = { easy: 100, medium: 200, hard: 300 }[phaseName];
   io.to(code).emit('question', {
     index: room.qIndex + 1, total: room.questions.length,
-    question: q.question, options: q.options,
-    points: pts, phase: room.phase + 1
+    question: q.question, options: q.options, points: pts, phase: room.phase + 1
   });
   let timeLeft = 15;
   io.to(code).emit('timer', { seconds: timeLeft });
@@ -300,7 +290,6 @@ function askQuestion(code) {
     io.to(code).emit('timer', { seconds: timeLeft });
     if (timeLeft <= 0) {
       clearInterval(room.timer);
-      // Reveal answer to those who didn't answer
       io.to(code).emit('time_up', { correct_answer: q.answer });
       room.qIndex++;
       setTimeout(() => askQuestion(code), 3000);
@@ -310,28 +299,22 @@ function askQuestion(code) {
 
 function endPhase(code) {
   const room = rooms[code];
-  const leaderboard = getPlayers(code);
-  io.to(code).emit('phase_end', { leaderboard, phase: room.phase + 1 });
+  io.to(code).emit('phase_end', { leaderboard: getPlayers(code), phase: room.phase + 1 });
   room.phase++;
-  if (room.phase >= 3) {
-    endGame(code);
-  } else {
-    setTimeout(() => startPhase(code), 8000);
-  }
+  if (room.phase >= 3) endGame(code);
+  else setTimeout(() => startPhase(code), 8000);
 }
 
 function endGame(code) {
   const room = rooms[code];
   const leaderboard = getPlayers(code);
-  // Save scores to DB
-  Object.values(room.players).forEach(p => {
+  leaderboard.forEach(p => {
     const levelPts = Math.floor(p.sessionScore / 100);
-    db.prepare('UPDATE users SET total_score = total_score + ? WHERE id = ?').run(levelPts, p.id);
-    db.prepare('INSERT INTO game_history (user_id, room_code, score) VALUES (?,?,?)').run(p.id, code, p.sessionScore);
+    dbRun('UPDATE users SET total_score = total_score + ? WHERE id = ?', [levelPts, p.id]);
+    dbRun('INSERT INTO game_history (user_id, room_code, score) VALUES (?,?,?)', [p.id, code, p.sessionScore]);
   });
   io.to(code).emit('game_end', { leaderboard });
   setTimeout(() => delete rooms[code], 30000);
 }
 
-// ─── Start ────────────────────────────────────────────────────────────────────
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
