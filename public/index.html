@@ -3,108 +3,197 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لعبة المعلومات</title>
+<title>الفلته</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
 :root {
-  --primary: #6C63FF; --primary-dark: #5A52D5;
-  --success: #22C55E; --danger: #EF4444; --warning: #F59E0B;
-  --bg: #0F0F1A; --card: #1A1A2E; --card2: #222240; --border: #2E2E4A;
-  --text: #F0F0FF; --muted: #8888AA; --font: 'Segoe UI', Tahoma, sans-serif; --radius: 16px; --radius-sm: 10px;
+  --red:    #E8472A;
+  --blue:   #3AABDB;
+  --yellow: #F5C200;
+  --green:  #5BBD4E;
+  --red-d:  #C73820;
+  --blue-d: #2090BB;
+  --yellow-d:#D4A500;
+  --green-d: #3E9E34;
+  --bg: #0F0F1A;
+  --card: #1A1A2E;
+  --card2: #222240;
+  --border: #2E2E4A;
+  --text: #F0F0FF;
+  --muted: #8888AA;
+  --font: 'Segoe UI', Tahoma, sans-serif;
+  --radius: 16px; --radius-sm: 12px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; direction: rtl; }
 .screen { display: none; min-height: 100vh; padding: 20px; max-width: 520px; margin: auto; }
 .screen.active { display: flex; flex-direction: column; }
-.logo { text-align: center; margin: 24px 0 20px; }
-.logo h1 { font-size: 30px; font-weight: 800; background: linear-gradient(135deg,#6C63FF,#A78BFA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* ── Logo ── */
+.game-logo { text-align:center; margin: 20px 0 16px; }
+.game-logo img { width: 90px; height: 90px; border-radius: 22px; box-shadow: 0 6px 24px rgba(0,0,0,0.4); }
+.game-logo h1 { font-size: 28px; font-weight: 800; margin-top: 8px;
+  background: linear-gradient(135deg, var(--red), var(--yellow), var(--green), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.game-logo p { color: var(--muted); font-size: 13px; margin-top: 3px; }
+
+/* ── Cards ── */
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; }
 .field { margin-bottom: 12px; }
 .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
 .field input, .field select { width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 13px; color: var(--text); font-size: 15px; font-family: var(--font); outline: none; transition: border 0.2s; }
-.field input:focus, .field select:focus { border-color: var(--primary); }
+.field input:focus, .field select:focus { border-color: var(--blue); }
 .field input::placeholder { color: var(--muted); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.btn { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.2s, transform 0.1s; font-family: var(--font); }
-.btn:active { transform: scale(0.98); }
-.btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover { background: var(--primary-dark); }
+
+/* ── Buttons ── */
+.btn { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700; cursor: pointer; border: none; transition: transform 0.1s, opacity 0.2s; font-family: var(--font); }
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: linear-gradient(135deg, var(--blue), #5B6BFF); color: #fff; }
 .btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); margin-top: 8px; }
-.btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
-.btn-success { background: var(--success); color: #fff; }
+.btn-secondary:hover { border-color: var(--blue); color: var(--blue); }
+.btn-success { background: linear-gradient(135deg, var(--green), var(--green-d)); color: #fff; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.error-msg { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #FCA5A5; border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
-.avatar { font-size: 50px; display: block; text-align: center; margin-bottom: 6px; }
-.level-badge { display: inline-block; background: var(--primary); color: #fff; border-radius: 20px; padding: 3px 13px; font-size: 13px; font-weight: 600; }
+.error-msg { background: rgba(232,71,42,0.15); border: 1px solid rgba(232,71,42,0.4); color: #FCA5A5; border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
+
+/* ── Home profile card ── */
+.home-profile { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.2s; }
+.home-profile:hover { border-color: var(--blue); }
+.home-profile .hp-emo { font-size: 44px; }
+.home-profile .hp-info { flex: 1; }
+.home-profile .hp-name { font-size: 17px; font-weight: 700; }
+.home-profile .hp-level { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.home-profile .hp-score { font-size: 13px; font-weight: 600; color: var(--yellow); }
+.home-profile .hp-arrow { font-size: 18px; color: var(--muted); }
+
+/* ── Room code ── */
 .room-code-display { text-align: center; margin: 12px 0; }
-.room-code-display .code { font-size: 46px; font-weight: 800; letter-spacing: 8px; color: var(--primary); }
+.room-code-display .code { font-size: 46px; font-weight: 800; letter-spacing: 8px;
+  background: linear-gradient(135deg, var(--red), var(--yellow), var(--green), var(--blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* ── Players list ── */
 .players-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0; }
 .player-card { background: var(--card2); border-radius: var(--radius-sm); padding: 11px 14px; display: flex; align-items: center; gap: 10px; }
 .player-card .emo { font-size: 26px; }
 .player-card .info { flex: 1; }
 .player-card .name { font-size: 14px; font-weight: 600; }
 .player-card .lvl { font-size: 12px; color: var(--muted); }
-.badge-host { background: var(--warning); color: #000; border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700; }
-.badge-ready { background: var(--success); color: #fff; border-radius: 6px; padding: 2px 7px; font-size: 11px; }
-.phase-banner { text-align: center; background: var(--primary); border-radius: var(--radius-sm); padding: 9px; font-weight: 700; font-size: 14px; margin-bottom: 14px; }
-.q-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: var(--muted); font-size: 13px; }
-.timer-circle { width: 50px; height: 50px; border-radius: 50%; border: 3px solid var(--primary); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: var(--text); flex-shrink: 0; transition: border-color 0.3s; }
-.timer-circle.urgent { border-color: var(--danger); color: var(--danger); animation: pulse 0.5s infinite; }
-@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-.q-text { font-size: 18px; font-weight: 700; text-align: center; line-height: 1.5; margin-bottom: 18px; min-height: 56px; }
-.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.opt { background: var(--card2); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 14px 12px; cursor: pointer; font-size: 14px; font-family: var(--font); color: var(--text); text-align: center; transition: all 0.2s; font-weight: 500; line-height: 1.4; }
-.opt:hover:not(:disabled) { border-color: var(--primary); background: rgba(108,99,255,0.15); }
-.opt.correct { background: rgba(34,197,94,0.2); border-color: var(--success); color: #86EFAC; }
-.opt.wrong   { background: rgba(239,68,68,0.2);  border-color: var(--danger);  color: #FCA5A5; }
-.opt:disabled { cursor: default; }
-.points-tag { display: inline-block; background: var(--warning); color: #000; border-radius: 6px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
-.lb-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0; }
-.lb-card { background: var(--card2); border-radius: var(--radius-sm); padding: 11px 14px; display: flex; align-items: center; gap: 10px; }
-.lb-rank { font-size: 20px; width: 34px; text-align: center; }
-.lb-info { flex: 1; }
-.lb-name { font-size: 14px; font-weight: 600; }
-.lb-score { font-size: 12px; color: var(--muted); }
-.lb-emo { font-size: 26px; }
-.spinner-big { display: block; width: 46px; height: 46px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 28px auto; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.toast { position: fixed; bottom: 20px; right: 50%; transform: translateX(50%); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 22px; font-size: 13px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
-.toast.show { opacity: 1; }
+.badge-host { background: var(--yellow); color: #000; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+.badge-ready { background: var(--green); color: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; }
+
+/* ── Category grid ── */
 .cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 10px 0; }
 .cat-opt { background: var(--card2); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 12px; cursor: pointer; text-align: center; transition: all 0.2s; position: relative; }
-.cat-opt:hover { border-color: var(--primary); }
-.cat-opt.selected { border-color: var(--primary); background: rgba(108,99,255,0.15); }
-.cat-opt.selected::after { content: '✓'; position: absolute; top: 6px; left: 8px; background: var(--primary); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.cat-opt:hover { border-color: var(--blue); }
+.cat-opt.selected { border-color: var(--blue); background: rgba(58,171,219,0.15); }
+.cat-opt.selected::after { content:'✓'; position:absolute; top:6px; left:8px; background:var(--blue); color:#fff; border-radius:50%; width:18px; height:18px; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:700; }
 .cat-opt .cicon { font-size: 24px; margin-bottom: 3px; }
 .cat-opt .cname { font-size: 12px; font-weight: 600; }
-.section-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-.mt { margin-top: 10px; }
 
-/* ── Profile / Level meter ── */
-.profile-header { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 18px; margin-top: 10px; }
-.level-all { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
-.level-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--card2); border-radius: var(--radius-sm); border: 1px solid transparent; transition: border 0.2s; }
-.level-row.current { border-color: var(--primary); background: rgba(108,99,255,0.12); }
-.level-row .lemo { font-size: 26px; width: 34px; text-align: center; }
-.level-row .linfo { flex: 1; }
-.level-row .lname { font-size: 14px; font-weight: 600; }
-.level-row .lrange { font-size: 11px; color: var(--muted); }
-.level-row .lcurrent { font-size: 11px; color: var(--primary); font-weight: 600; }
-.progress-wrap { margin: 14px 0; }
-.progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.progress-bar { height: 10px; background: var(--card2); border-radius: 10px; overflow: hidden; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #A78BFA); border-radius: 10px; transition: width 0.5s ease; }
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
-.info-item { background: var(--card2); border-radius: var(--radius-sm); padding: 10px 13px; }
-.info-item .ilabel { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
-.info-item .ivalue { font-size: 14px; font-weight: 600; }
+/* ── Phase banner ── */
+.phase-banner { text-align:center; border-radius:var(--radius-sm); padding:9px; font-weight:700; font-size:14px; margin-bottom:14px; }
+.phase-1 .phase-banner { background: var(--green); color:#fff; }
+.phase-2 .phase-banner { background: var(--blue); color:#fff; }
+.phase-3 .phase-banner { background: var(--red); color:#fff; }
+
+/* ── Timer ── */
+.q-meta { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.timer-circle { width:52px; height:52px; border-radius:50%; border:3px solid var(--blue); display:flex; align-items:center; justify-content:center; font-size:21px; font-weight:800; color:var(--text); flex-shrink:0; transition:all 0.3s; }
+.timer-circle.urgent { border-color:var(--red); color:var(--red); animation:pulse 0.5s infinite; }
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.points-tag { display:inline-block; background:var(--yellow); color:#000; border-radius:6px; padding:2px 9px; font-size:12px; font-weight:700; }
+
+/* ── Question ── */
+.q-text { font-size:18px; font-weight:700; text-align:center; line-height:1.5; margin-bottom:18px; min-height:56px; }
+
+/* ── Answer options — 4 colored quadrants ── */
+.options-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.opt {
+  border:none; border-radius:var(--radius-sm);
+  padding:16px 12px; cursor:pointer;
+  font-size:15px; font-family:var(--font);
+  color:#fff; text-align:center;
+  font-weight:700; line-height:1.4;
+  transition:transform 0.1s, opacity 0.2s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.opt:active { transform:scale(0.96); }
+.opt:disabled { cursor:default; opacity:0.85; }
+.opt-0 { background: var(--red); }
+.opt-1 { background: var(--blue); }
+.opt-2 { background: var(--yellow); color:#000; }
+.opt-3 { background: var(--green); }
+.opt-0:hover:not(:disabled) { background:var(--red-d); }
+.opt-1:hover:not(:disabled) { background:var(--blue-d); }
+.opt-2:hover:not(:disabled) { background:var(--yellow-d); }
+.opt-3:hover:not(:disabled) { background:var(--green-d); }
+.opt.correct { outline:4px solid #fff; opacity:1; animation:correctPop 0.3s ease; }
+.opt.wrong   { opacity:0.45; }
+@keyframes correctPop{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+/* ── Result ── */
+#q-result { display:none; margin-top:14px; text-align:center; font-size:15px; font-weight:700; padding:10px; border-radius:var(--radius-sm); }
+
+/* ── Leaderboard ── */
+.lb-list { display:flex; flex-direction:column; gap:9px; margin:12px 0; }
+.lb-card { border-radius:var(--radius-sm); padding:12px 14px; display:flex; align-items:center; gap:10px; }
+.lb-card:nth-child(1) { background:linear-gradient(135deg,rgba(245,194,0,0.3),rgba(245,194,0,0.1)); border:1px solid var(--yellow); }
+.lb-card:nth-child(2) { background:linear-gradient(135deg,rgba(58,171,219,0.2),rgba(58,171,219,0.05)); border:1px solid var(--blue); }
+.lb-card:nth-child(3) { background:linear-gradient(135deg,rgba(232,71,42,0.2),rgba(232,71,42,0.05)); border:1px solid var(--red); }
+.lb-card:nth-child(n+4) { background:var(--card2); border:1px solid var(--border); }
+.lb-rank { font-size:22px; width:36px; text-align:center; }
+.lb-info { flex:1; }
+.lb-name { font-size:14px; font-weight:600; }
+.lb-score { font-size:12px; color:var(--muted); }
+.lb-emo { font-size:26px; }
+
+/* ── Profile ── */
+.level-all { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
+.level-row { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--card2); border-radius:var(--radius-sm); border:1px solid transparent; }
+.level-row.current { border-color:var(--blue); background:rgba(58,171,219,0.1); }
+.level-row .lemo { font-size:26px; width:34px; text-align:center; }
+.level-row .linfo { flex:1; }
+.level-row .lname { font-size:14px; font-weight:600; }
+.level-row .lrange { font-size:11px; color:var(--muted); }
+.level-row .lcurrent { font-size:11px; color:var(--blue); font-weight:600; }
+.progress-wrap { margin:14px 0; }
+.progress-label { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:6px; }
+.progress-bar { height:12px; background:var(--card2); border-radius:10px; overflow:hidden; }
+.progress-fill { height:100%; border-radius:10px; background:linear-gradient(90deg,var(--red),var(--yellow),var(--green),var(--blue)); transition:width 0.6s ease; }
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+.info-item { background:var(--card2); border-radius:var(--radius-sm); padding:10px 13px; }
+.info-item .ilabel { font-size:11px; color:var(--muted); margin-bottom:3px; }
+.info-item .ivalue { font-size:13px; font-weight:600; }
+.section-title { font-size:12px; color:var(--muted); margin-bottom:8px; letter-spacing:1px; }
+
+/* ── Loading spinner ── */
+.spinner-big { display:block; width:48px; height:48px; border:4px solid var(--border); border-top-color:var(--blue); border-radius:50%; animation:spin 0.8s linear infinite; margin:28px auto; }
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Phase start ── */
+.phase-icon { font-size:70px; text-align:center; display:block; margin:60px 0 16px; }
+
+/* ── Toast ── */
+.toast { position:fixed; bottom:20px; right:50%; transform:translateX(50%); background:var(--card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 22px; font-size:13px; z-index:999; opacity:0; transition:opacity 0.3s; pointer-events:none; white-space:nowrap; }
+.toast.show { opacity:1; }
+
+.mt { margin-top:10px; }
+.back-btn { background:none; border:none; color:var(--blue); cursor:pointer; font-size:22px; padding:0; }
 </style>
 </head>
 <body>
 
+<!-- SOUNDS -->
+<audio id="snd-click"   src="https://cdn.jsdelivr.net/gh/anars/blank-audio@master/250-milliseconds-of-silence.mp3" preload="auto"></audio>
+
 <!-- LOGIN -->
 <div id="s-login" class="screen active">
-  <div class="logo"><h1>🎯 لعبة المعلومات</h1><p style="color:var(--muted);font-size:13px;">تريفيا متعدد اللاعبين</p></div>
+  <div class="game-logo">
+    <img id="logo-img" src="/logo.jpg" alt="الفلته" onerror="this.style.display='none'">
+    <h1>الفلته!</h1>
+    <p>تريفيا متعدد اللاعبين</p>
+  </div>
   <div class="card">
     <h2 style="margin-bottom:16px;font-size:19px;">تسجيل الدخول</h2>
     <div id="login-err" class="error-msg"></div>
@@ -117,15 +206,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 <!-- REGISTER -->
 <div id="s-register" class="screen">
-  <div class="logo"><h1>🎯 لعبة المعلومات</h1></div>
+  <div class="game-logo"><h1>الفلته!</h1></div>
   <div class="card">
     <h2 style="margin-bottom:16px;font-size:19px;">إنشاء حساب</h2>
     <div id="reg-err" class="error-msg"></div>
     <div class="row2">
-      <div class="field"><label>الاسم الأول</label><input id="r-fname" type="text" placeholder="محمد"></div>
-      <div class="field"><label>الاسم الأخير</label><input id="r-lname" type="text" placeholder="العلي"></div>
+      <div class="field"><label>الاسم الأول</label><input id="r-fname" placeholder="محمد"></div>
+      <div class="field"><label>الاسم الأخير</label><input id="r-lname" placeholder="العلي"></div>
     </div>
-    <div class="field"><label>رقم الهاتف (مع كود الدولة)</label><input id="r-phone" type="tel" placeholder="+96512345678" dir="ltr"></div>
+    <div class="field"><label>رقم الهاتف</label><input id="r-phone" type="tel" placeholder="+96512345678" dir="ltr"></div>
     <div class="field"><label>البريد الإلكتروني</label><input id="r-email" type="email" placeholder="example@email.com" dir="ltr"></div>
     <div class="row2">
       <div class="field"><label>تاريخ الميلاد</label><input id="r-dob" type="date" dir="ltr"></div>
@@ -142,44 +231,48 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 <!-- HOME -->
 <div id="s-home" class="screen">
-  <div class="profile-header" style="margin-top:20px;">
-    <span id="home-emo" class="avatar">🐧</span>
-    <div id="home-name" style="font-size:19px;font-weight:700;"></div>
-    <span class="level-badge" id="home-level">البطريق</span>
-    <div style="color:var(--muted);font-size:12px;margin-top:3px;">النقاط الكلية: <b id="home-score">0</b></div>
+  <div class="game-logo" style="margin-top:16px;">
+    <img id="logo-img2" src="/logo.jpg" alt="الفلته" onerror="this.style.display='none'">
+    <h1>الفلته!</h1>
+  </div>
+  <!-- Clickable profile card -->
+  <div class="home-profile" onclick="showProfile()">
+    <div class="hp-emo" id="home-emo">🐧</div>
+    <div class="hp-info">
+      <div class="hp-name" id="home-name"></div>
+      <div class="hp-level" id="home-level-txt"></div>
+      <div class="hp-score" id="home-score"></div>
+    </div>
+    <div class="hp-arrow">←</div>
   </div>
   <div class="card">
-    <button class="btn btn-primary" onclick="show('s-create')" style="margin-bottom:8px;">🏠 إنشاء غرفة</button>
-    <button class="btn btn-secondary" onclick="show('s-join')" style="margin-top:0;margin-bottom:8px;">🔑 دخول غرفة</button>
-    <button class="btn btn-secondary" onclick="showProfile()" style="margin-top:0;">👤 حسابي ومستواي</button>
+    <button class="btn btn-primary" onclick="playSound('click');show('s-create')" style="margin-bottom:8px;">🏠 إنشاء غرفة</button>
+    <button class="btn btn-secondary" onclick="playSound('click');show('s-join')" style="margin-top:0;">🔑 دخول غرفة</button>
   </div>
   <button class="btn btn-secondary" onclick="logout()">تسجيل الخروج</button>
 </div>
 
 <!-- PROFILE -->
 <div id="s-profile" class="screen">
-  <div style="margin-top:10px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
-    <button onclick="show('s-home')" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:22px;">←</button>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:4px;">
+    <button class="back-btn" onclick="show('s-home')">←</button>
     <h2 style="font-size:20px;">حسابي ومستواي</h2>
   </div>
   <div class="card">
     <div style="text-align:center;margin-bottom:14px;">
-      <span id="p-emo" style="font-size:54px;display:block;margin-bottom:6px;">🐧</span>
+      <span id="p-emo" style="font-size:58px;display:block;margin-bottom:6px;">🐧</span>
       <div id="p-name" style="font-size:18px;font-weight:700;"></div>
-      <span class="level-badge" id="p-level-name" style="margin-top:6px;display:inline-block;">البطريق</span>
+      <span id="p-level-name" style="display:inline-block;margin-top:6px;background:var(--blue);color:#fff;border-radius:20px;padding:3px 14px;font-size:13px;font-weight:600;"></span>
     </div>
     <div class="progress-wrap">
-      <div class="progress-label">
-        <span id="p-score-label">0 نقطة</span>
-        <span id="p-next-label">المستوى التالي: 501</span>
-      </div>
+      <div class="progress-label"><span id="p-score-label">0 نقطة</span><span id="p-next-label"></span></div>
       <div class="progress-bar"><div class="progress-fill" id="p-bar" style="width:0%"></div></div>
     </div>
     <div class="info-grid">
-      <div class="info-item"><div class="ilabel">البريد</div><div class="ivalue" id="p-email" style="font-size:12px;"></div></div>
+      <div class="info-item"><div class="ilabel">البريد</div><div class="ivalue" id="p-email" style="font-size:11px;"></div></div>
       <div class="info-item"><div class="ilabel">الجنس</div><div class="ivalue" id="p-gender"></div></div>
-      <div class="info-item"><div class="ilabel">تاريخ الميلاد</div><div class="ivalue" id="p-dob" style="font-size:12px;"></div></div>
-      <div class="info-item"><div class="ilabel">الهاتف</div><div class="ivalue" id="p-phone" style="font-size:12px;" dir="ltr"></div></div>
+      <div class="info-item"><div class="ilabel">تاريخ الميلاد</div><div class="ivalue" id="p-dob" style="font-size:11px;"></div></div>
+      <div class="info-item"><div class="ilabel">الهاتف</div><div class="ivalue" id="p-phone" style="font-size:11px;" dir="ltr"></div></div>
     </div>
   </div>
   <div class="card">
@@ -190,9 +283,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 <!-- CREATE ROOM -->
 <div id="s-create" class="screen">
-  <div style="margin-bottom:16px;margin-top:10px;">
-    <h2 style="font-size:20px;margin-bottom:3px;">إنشاء غرفة</h2>
-    <p style="color:var(--muted);font-size:13px;">اختر فئة أو أكثر (حتى 6)</p>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;margin-top:10px;">
+    <button class="back-btn" onclick="show('s-home')">←</button>
+    <div><h2 style="font-size:20px;">إنشاء غرفة</h2><p style="color:var(--muted);font-size:12px;">اختر فئة أو أكثر</p></div>
   </div>
   <div class="card">
     <div class="section-title">اختر الفئات</div>
@@ -206,20 +299,21 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
     </div>
     <div id="cat-hint" style="text-align:center;font-size:12px;color:var(--muted);margin-top:6px;">اختر فئة واحدة على الأقل</div>
     <button class="btn btn-primary mt" id="create-btn" onclick="createRoom()" disabled>إنشاء الغرفة</button>
-    <button class="btn btn-secondary" onclick="show('s-home')">رجوع</button>
   </div>
 </div>
 
 <!-- JOIN ROOM -->
 <div id="s-join" class="screen">
-  <div style="margin-bottom:16px;margin-top:10px;">
-    <h2 style="font-size:20px;margin-bottom:3px;">دخول غرفة</h2>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;margin-top:10px;">
+    <button class="back-btn" onclick="show('s-home')">←</button>
+    <h2 style="font-size:20px;">دخول غرفة</h2>
   </div>
   <div class="card">
     <div id="join-err" class="error-msg"></div>
-    <div class="field"><label>كود الغرفة</label><input id="j-code" type="text" maxlength="4" placeholder="1234" dir="ltr" style="font-size:26px;text-align:center;letter-spacing:8px;"></div>
+    <div class="field"><label>كود الغرفة</label>
+      <input id="j-code" type="text" maxlength="4" placeholder="1234" dir="ltr" style="font-size:28px;text-align:center;letter-spacing:10px;font-weight:800;">
+    </div>
     <button class="btn btn-primary" onclick="joinRoom()">دخول</button>
-    <button class="btn btn-secondary" onclick="show('s-home')">رجوع</button>
   </div>
 </div>
 
@@ -244,7 +338,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 <!-- LOADING -->
 <div id="s-loading" class="screen">
-  <div style="margin-top:60px;text-align:center;">
+  <div style="margin-top:80px;text-align:center;">
     <span class="spinner-big"></span>
     <h2 style="margin-top:14px;" id="loading-msg">جاري تحضير الأسئلة...</h2>
     <p style="color:var(--muted);margin-top:6px;font-size:13px;">يرجى الانتظار</p>
@@ -253,10 +347,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 <!-- PHASE START -->
 <div id="s-phase" class="screen">
-  <div style="margin-top:80px;text-align:center;">
-    <div style="font-size:62px;" id="phase-emo">⚡</div>
-    <h1 style="font-size:30px;margin-top:14px;">المرحلة <span id="phase-num">1</span> من 3</h1>
-    <h2 style="margin-top:7px;color:var(--primary);" id="phase-name">سهل</h2>
+  <div style="text-align:center;margin-top:40px;">
+    <span class="phase-icon" id="phase-emo">⚡</span>
+    <h1 style="font-size:32px;">المرحلة <span id="phase-num">1</span> من 3</h1>
+    <h2 style="margin-top:8px;font-size:22px;" id="phase-name-big">سهل</h2>
     <p style="color:var(--muted);margin-top:10px;font-size:13px;">12 سؤال • استعد!</p>
   </div>
 </div>
@@ -267,7 +361,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
     <div class="q-meta">
       <div>
         <span class="points-tag" id="q-pts">100 نقطة</span>
-        <span style="margin-right:7px;font-size:12px;" id="q-num">سؤال 1/12</span>
+        <span style="margin-right:7px;font-size:12px;color:var(--muted);" id="q-num">سؤال 1/12</span>
       </div>
       <div class="timer-circle" id="timer-el">15</div>
     </div>
@@ -275,14 +369,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
     <div id="logo-box" style="display:none;"></div>
     <div class="q-text" id="q-text">...</div>
     <div class="options-grid" id="q-opts"></div>
-    <div id="q-result" style="display:none;margin-top:14px;text-align:center;font-size:14px;font-weight:600;"></div>
+    <div id="q-result"></div>
   </div>
 </div>
 
 <!-- LEADERBOARD -->
 <div id="s-leaderboard" class="screen">
   <div style="margin-top:10px;">
-    <h2 style="text-align:center;font-size:20px;margin-bottom:3px;" id="lb-title">نهاية المرحلة 1</h2>
+    <h2 style="text-align:center;font-size:22px;margin-bottom:3px;" id="lb-title">نهاية المرحلة 1</h2>
     <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px;" id="lb-sub"></p>
     <div class="lb-list" id="lb-list"></div>
   </div>
@@ -290,7 +384,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 <!-- GAME OVER -->
 <div id="s-gameover" class="screen">
-  <div style="margin-top:20px;text-align:center;"><div style="font-size:54px;">🏆</div><h1 style="font-size:24px;margin-top:10px;">انتهت اللعبة!</h1></div>
+  <div style="margin-top:20px;text-align:center;">
+    <div style="font-size:60px;">🏆</div>
+    <h1 style="font-size:26px;margin-top:10px;background:linear-gradient(135deg,var(--yellow),var(--red));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">انتهت اللعبة!</h1>
+  </div>
   <div class="lb-list" id="final-lb" style="margin-top:18px;"></div>
   <button class="btn btn-primary mt" onclick="show('s-home')">العب مجدداً</button>
 </div>
@@ -298,21 +395,86 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Audio ──────────────────────────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx;
+function getACtx() { if (!actx) actx = new AudioCtx(); return actx; }
+
+function playSound(type) {
+  try {
+    const ctx = getACtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    const t = ctx.currentTime;
+    if (type === 'click') {
+      o.frequency.setValueAtTime(600, t);
+      g.gain.setValueAtTime(0.15, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      o.start(t); o.stop(t + 0.08);
+    } else if (type === 'correct') {
+      o.type = 'sine';
+      o.frequency.setValueAtTime(523, t);
+      o.frequency.setValueAtTime(659, t + 0.1);
+      o.frequency.setValueAtTime(784, t + 0.2);
+      g.gain.setValueAtTime(0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      o.start(t); o.stop(t + 0.5);
+    } else if (type === 'wrong') {
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(300, t);
+      o.frequency.setValueAtTime(200, t + 0.15);
+      g.gain.setValueAtTime(0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      o.start(t); o.stop(t + 0.3);
+    } else if (type === 'question') {
+      o.type = 'sine';
+      o.frequency.setValueAtTime(440, t);
+      o.frequency.setValueAtTime(550, t + 0.05);
+      g.gain.setValueAtTime(0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      o.start(t); o.stop(t + 0.15);
+    } else if (type === 'leaderboard') {
+      // Fanfare
+      [523,659,784,1047].forEach((f, i) => {
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.connect(g2); g2.connect(ctx.destination);
+        o2.frequency.value = f;
+        g2.gain.setValueAtTime(0.2, t + i*0.1);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + i*0.1 + 0.2);
+        o2.start(t + i*0.1); o2.stop(t + i*0.1 + 0.2);
+      });
+      return;
+    } else if (type === 'enter') {
+      [330, 440, 550].forEach((f, i) => {
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.connect(g2); g2.connect(ctx.destination);
+        o2.frequency.value = f;
+        g2.gain.setValueAtTime(0.15, t + i*0.08);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + i*0.08 + 0.15);
+        o2.start(t + i*0.08); o2.stop(t + i*0.08 + 0.15);
+      });
+      return;
+    }
+  } catch(e) {}
+}
+
+// ── State ──────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('token');
-let me = null;
-let socket = null;
-let selectedCats = [];
-let isHost = false;
+let me = null, socket = null, selectedCats = [], isHost = false;
 
 const LEVELS = [
-  { name:'البطريق', emoji:'🐧', min:0,    max:500  },
-  { name:'الذئب',   emoji:'🐺', min:501,  max:1250 },
-  { name:'الدب',    emoji:'🐻', min:1251, max:2400 },
-  { name:'الأسد',   emoji:'🦁', min:2401, max:4100 },
-  { name:'التنين',  emoji:'🐉', min:4101, max:6650 },
-  { name:'الفلتة!', emoji:'💥', min:6651, max:99999},
+  { name:'البطريق', emoji:'🐧', min:0,    max:500   },
+  { name:'الذئب',   emoji:'🐺', min:501,  max:1250  },
+  { name:'الدب',    emoji:'🐻', min:1251, max:2400  },
+  { name:'الأسد',   emoji:'🦁', min:2401, max:4100  },
+  { name:'التنين',  emoji:'🐉', min:4101, max:6650  },
+  { name:'الفلتة!', emoji:'💥', min:6651, max:99999 },
 ];
 
+// ── Screens ────────────────────────────────────────────────────────────────
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -323,22 +485,24 @@ function showToast(msg, d=2500) {
   setTimeout(() => t.classList.remove('show'), d);
 }
 
+// ── Auth ───────────────────────────────────────────────────────────────────
 async function init() {
   if (!token) { show('s-login'); return; }
-  const res = await fetch('/api/me', { headers: { Authorization: 'Bearer '+token } });
+  const res = await fetch('/api/me', { headers:{ Authorization:'Bearer '+token } });
   if (!res.ok) { localStorage.removeItem('token'); show('s-login'); return; }
   me = await res.json();
-  updateHomeUI(); show('s-home'); connectSocket();
+  updateHomeUI(); show('s-home'); playSound('enter'); connectSocket();
 }
 
 function updateHomeUI() {
-  document.getElementById('home-name').textContent = me.display_name;
-  document.getElementById('home-level').textContent = me.level.name;
   document.getElementById('home-emo').textContent = me.level.emoji;
-  document.getElementById('home-score').textContent = (me.total_score||0).toLocaleString('ar');
+  document.getElementById('home-name').textContent = me.display_name;
+  document.getElementById('home-level-txt').textContent = me.level.name;
+  document.getElementById('home-score').textContent = '⭐ ' + (me.total_score||0).toLocaleString('ar') + ' نقطة';
 }
 
 function showProfile() {
+  playSound('click');
   document.getElementById('p-emo').textContent = me.level.emoji;
   document.getElementById('p-name').textContent = me.display_name;
   document.getElementById('p-level-name').textContent = me.level.name;
@@ -346,29 +510,24 @@ function showProfile() {
   document.getElementById('p-gender').textContent = me.gender === 'male' ? 'ذكر' : 'أنثى';
   document.getElementById('p-dob').textContent = me.dob;
   document.getElementById('p-phone').textContent = me.phone;
-
   const score = me.total_score || 0;
   const lvl = me.level;
-  const range = lvl.max - lvl.min;
-  const progress = lvl.level === 6 ? 100 : Math.round(((score - lvl.min) / range) * 100);
+  const progress = lvl.level === 6 ? 100 : Math.round(((score - lvl.min) / (lvl.max - lvl.min)) * 100);
   document.getElementById('p-score-label').textContent = score.toLocaleString('ar') + ' نقطة';
-  document.getElementById('p-next-label').textContent = lvl.level === 6 ? 'أعلى مستوى!' : 'المستوى التالي: ' + lvl.max.toLocaleString('ar');
-  document.getElementById('p-bar').style.width = Math.min(progress, 100) + '%';
-
-  const list = document.getElementById('level-all-list');
-  list.innerHTML = '';
-  LEVELS.forEach((l, i) => {
+  document.getElementById('p-next-label').textContent = lvl.level === 6 ? 'أعلى مستوى!' : 'التالي: ' + lvl.max.toLocaleString('ar');
+  document.getElementById('p-bar').style.width = Math.min(Math.max(progress, 2), 100) + '%';
+  const list = document.getElementById('level-all-list'); list.innerHTML = '';
+  LEVELS.forEach(l => {
     const isCurrent = me.level.name === l.name;
-    const isPassed = score > l.max && i < 5;
-    list.innerHTML += `
-      <div class="level-row ${isCurrent ? 'current' : ''}">
-        <div class="lemo">${l.emoji}</div>
-        <div class="linfo">
-          <div class="lname">${l.name} ${isPassed ? '✓' : ''}</div>
-          <div class="lrange">${l.min.toLocaleString('ar')} - ${i===5 ? '∞' : l.max.toLocaleString('ar')} نقطة</div>
-        </div>
-        ${isCurrent ? '<div class="lcurrent">مستواك الحالي</div>' : ''}
-      </div>`;
+    const isPassed = score > l.max;
+    list.innerHTML += `<div class="level-row ${isCurrent?'current':''}">
+      <div class="lemo">${l.emoji}</div>
+      <div class="linfo">
+        <div class="lname">${l.name} ${isPassed&&l.level<6?'✓':''}</div>
+        <div class="lrange">${l.min.toLocaleString('ar')} - ${l.level===6?'∞':l.max.toLocaleString('ar')} نقطة</div>
+      </div>
+      ${isCurrent?'<div class="lcurrent">مستواك الحالي</div>':''}
+    </div>`;
   });
   show('s-profile');
 }
@@ -377,11 +536,11 @@ async function login() {
   const email = document.getElementById('l-email').value.trim();
   const password = document.getElementById('l-pass').value;
   const errEl = document.getElementById('login-err'); errEl.style.display='none';
-  const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email,password}) });
+  const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password}) });
   const data = await res.json();
   if (!res.ok) { errEl.textContent=data.error; errEl.style.display='block'; return; }
   token=data.token; me=data.user; localStorage.setItem('token',token);
-  updateHomeUI(); show('s-home'); connectSocket();
+  updateHomeUI(); show('s-home'); playSound('enter'); connectSocket();
 }
 
 async function register() {
@@ -395,86 +554,97 @@ async function register() {
   const data = await res.json();
   if (!res.ok) { errEl.textContent=data.error; errEl.style.display='block'; return; }
   token=data.token; me=data.user; localStorage.setItem('token',token);
-  updateHomeUI(); show('s-home'); connectSocket();
+  updateHomeUI(); show('s-home'); playSound('enter'); connectSocket();
 }
 
-function logout() { localStorage.removeItem('token'); token=null; me=null; if(socket)socket.disconnect(); show('s-login'); }
+function logout() { localStorage.removeItem('token'); token=null; me=null; if(socket)socket.disconnect(); socket=null; show('s-login'); }
 
+// ── Socket ─────────────────────────────────────────────────────────────────
 function connectSocket() {
   if (socket) return;
-  socket = io({ auth: { token } });
+  socket = io({ auth:{ token } });
   socket.on('connect_error', e => showToast('خطأ: '+e.message));
   socket.on('error_msg', msg => showToast('⚠️ '+msg));
 
   socket.on('room_created', ({ code, categories }) => {
-    isHost = true;
-    document.getElementById('lobby-code').textContent = code;
-    document.getElementById('lobby-cats').textContent = categories.join(' • ');
-    document.getElementById('lobby-host-btn').style.display = 'block';
-    document.getElementById('lobby-ready-btn').style.display = 'none';
-    show('s-lobby');
+    isHost=true;
+    document.getElementById('lobby-code').textContent=code;
+    document.getElementById('lobby-cats').textContent=categories.join(' • ');
+    document.getElementById('lobby-host-btn').style.display='block';
+    document.getElementById('lobby-ready-btn').style.display='none';
+    playSound('click'); show('s-lobby');
   });
 
   socket.on('room_joined', ({ code, categories }) => {
-    isHost = false;
-    document.getElementById('lobby-code').textContent = code;
-    document.getElementById('lobby-cats').textContent = (categories||[]).join(' • ');
-    document.getElementById('lobby-host-btn').style.display = 'none';
-    document.getElementById('lobby-ready-btn').style.display = 'block';
-    document.getElementById('ready-btn').disabled = false;
-    document.getElementById('ready-btn').textContent = '✔ أنا جاهز';
-    show('s-lobby');
+    isHost=false;
+    document.getElementById('lobby-code').textContent=code;
+    document.getElementById('lobby-cats').textContent=(categories||[]).join(' • ');
+    document.getElementById('lobby-host-btn').style.display='none';
+    document.getElementById('lobby-ready-btn').style.display='block';
+    document.getElementById('ready-btn').disabled=false;
+    document.getElementById('ready-btn').textContent='✔ أنا جاهز';
+    playSound('enter'); show('s-lobby');
   });
 
   socket.on('players_update', players => {
-    const el = document.getElementById('lobby-players'); el.innerHTML='';
+    const el=document.getElementById('lobby-players'); el.innerHTML='';
     players.forEach(p => {
-      const lvl = p.level||{emoji:'🐧',name:'البطريق'};
-      el.innerHTML += `<div class="player-card"><div class="emo">${lvl.emoji}</div><div class="info"><div class="name">${p.display_name}</div><div class="lvl">${lvl.name} • ${(p.total_score||0).toLocaleString('ar')} نقطة</div></div>${p.isHost?'<span class="badge-host">مضيف</span>':(p.ready?'<span class="badge-ready">جاهز ✓</span>':'')}</div>`;
+      const lvl=p.level||{emoji:'🐧',name:'البطريق'};
+      el.innerHTML+=`<div class="player-card"><div class="emo">${lvl.emoji}</div><div class="info"><div class="name">${p.display_name}</div><div class="lvl">${lvl.name}</div></div>${p.isHost?'<span class="badge-host">مضيف</span>':(p.ready?'<span class="badge-ready">جاهز ✓</span>':'')}</div>`;
     });
   });
 
   socket.on('all_ready', () => { if(isHost) showToast('الجميع جاهز! اضغط ابدأ'); });
-
   socket.on('game_loading', ({ message }) => { document.getElementById('loading-msg').textContent=message; show('s-loading'); });
 
   socket.on('phase_start', ({ phase, name }) => {
-    const emos=['⚡','🔥','💀'];
+    const emos=['💚','💙','❤️'];
     document.getElementById('phase-emo').textContent=emos[phase-1]||'⚡';
     document.getElementById('phase-num').textContent=phase;
-    document.getElementById('phase-name').textContent=name;
-    show('s-phase');
+    document.getElementById('phase-name-big').textContent=name;
+    playSound('leaderboard'); show('s-phase');
   });
 
   socket.on('question', ({ index, total, question, options, points, phase, is_logo }) => {
+    playSound('question');
     const phaseNames=['سهل','متوسط','صعب'];
+    const phaseColors=['var(--green)','var(--blue)','var(--red)'];
     document.getElementById('q-num').textContent=`سؤال ${index}/${total}`;
     document.getElementById('q-pts').textContent=`${points} نقطة`;
-    document.getElementById('q-phase-banner').textContent=`المرحلة ${phase} - ${phaseNames[phase-1]||''}`;
-    document.getElementById('q-result').style.display='none';
+    const banner=document.getElementById('q-phase-banner');
+    banner.textContent=`المرحلة ${phase} - ${phaseNames[phase-1]||''}`;
+    banner.style.background=phaseColors[phase-1]||'var(--blue)';
+    banner.style.color='#fff';
 
-    // FIX #3: Logo question special display
-    const logoBox = document.getElementById('logo-box');
-    const qTextEl = document.getElementById('q-text');
+    const logoBox=document.getElementById('logo-box');
+    const qTextEl=document.getElementById('q-text');
     if (is_logo) {
       logoBox.style.display='block';
-      logoBox.innerHTML=`<div style="background:var(--card2);border-radius:var(--radius-sm);padding:18px;margin-bottom:14px;text-align:center;">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">وصف الشعار:</div>
-        <div style="font-size:15px;line-height:1.6;color:var(--text);">${question}</div>
+      logoBox.innerHTML=`<div style="background:var(--card2);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px;text-align:center;border:1px solid var(--border);">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">وصف الشعار</div>
+        <div style="font-size:14px;line-height:1.6;">${question}</div>
       </div>`;
-      qTextEl.textContent='ما هي الشركة التي يعود لها هذا الشعار؟';
+      qTextEl.textContent='ما هي الشركة صاحبة هذا الشعار؟';
     } else {
       logoBox.style.display='none';
       qTextEl.textContent=question;
     }
 
+    document.getElementById('q-result').style.display='none';
+    document.getElementById('q-result').textContent='';
+
+    const colors=['opt-0','opt-1','opt-2','opt-3'];
     const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
-    options.forEach(opt => {
+    options.forEach((opt, i) => {
       const btn=document.createElement('button');
-      btn.className='opt'; btn.textContent=opt;
+      btn.className=`opt ${colors[i]}`;
+      // FIX #5: Remove letter prefix (أ. ب. etc)
+      btn.textContent=opt.replace(/^[أبجد]\. /,'');
+      btn.dataset.value=opt;
       btn.onclick=()=>submitAnswer(opt);
       optsEl.appendChild(btn);
     });
+
     const timerEl=document.getElementById('timer-el');
     timerEl.textContent=15; timerEl.className='timer-circle';
     show('s-question');
@@ -486,43 +656,54 @@ function connectSocket() {
     el.className='timer-circle'+(seconds<=5?' urgent':'');
   });
 
-  // FIX #1: Only show player's own result, not the correct answer yet
   socket.on('answer_result', ({ correct, points }) => {
-    document.querySelectorAll('.opt').forEach(b => b.disabled=true);
+    document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
     const res=document.getElementById('q-result'); res.style.display='block';
-    if(correct) { res.style.color='var(--success)'; res.textContent=`✅ إجابة صحيحة! +${points} نقطة`; }
-    else { res.style.color='var(--danger)'; res.textContent='❌ إجابة خاطئة — انتظر انتهاء الجميع...'; }
-  });
-
-  // Reveal correct answer to everyone at the same time
-  socket.on('reveal_answer', ({ correct_answer }) => {
-    document.querySelectorAll('.opt').forEach(b => {
-      b.disabled=true;
-      if(b.textContent===correct_answer) b.classList.add('correct');
-    });
-    const res=document.getElementById('q-result');
-    // Update message if they got it wrong
-    if(res.style.color==='var(--danger)' || res.textContent.includes('خاطئة')) {
-      res.textContent='❌ إجابة خاطئة';
+    if(correct) {
+      playSound('correct');
+      res.style.background='rgba(91,189,78,0.2)';
+      res.style.color='#86EFAC';
+      res.textContent=`✅ إجابة صحيحة! +${points} نقطة`;
+    } else {
+      playSound('wrong');
+      res.style.background='rgba(232,71,42,0.2)';
+      res.style.color='#FCA5A5';
+      res.textContent='❌ إجابة خاطئة — انتظر الجميع...';
     }
   });
 
+  socket.on('reveal_answer', ({ correct_answer }) => {
+    document.querySelectorAll('.opt').forEach(b => {
+      b.disabled=true;
+      if(b.dataset.value===correct_answer) b.classList.add('correct');
+      else b.classList.add('wrong');
+    });
+    const res=document.getElementById('q-result');
+    if(res.textContent.includes('خاطئة')) res.textContent='❌ إجابة خاطئة';
+  });
+
   socket.on('time_up', ({ correct_answer }) => {
-    document.querySelectorAll('.opt').forEach(b => { b.disabled=true; if(b.textContent===correct_answer) b.classList.add('correct'); });
+    document.querySelectorAll('.opt').forEach(b => {
+      b.disabled=true;
+      if(b.dataset.value===correct_answer) b.classList.add('correct');
+      else b.classList.add('wrong');
+    });
     const res=document.getElementById('q-result'); res.style.display='block';
-    res.style.color='var(--warning)'; res.textContent='⏰ انتهى الوقت!';
+    res.style.background='rgba(245,194,0,0.2)'; res.style.color='var(--yellow)';
+    res.textContent='⏰ انتهى الوقت!';
+    playSound('wrong');
   });
 
   socket.on('phase_end', ({ leaderboard, phase }) => {
     document.getElementById('lb-title').textContent=`نهاية المرحلة ${phase}`;
     document.getElementById('lb-sub').textContent=phase<3?'المرحلة التالية تبدأ قريباً...':'';
     renderLB('lb-list', leaderboard);
-    show('s-leaderboard');
+    playSound('leaderboard'); show('s-leaderboard');
   });
 
   socket.on('game_end', ({ leaderboard }) => {
     renderLB('final-lb', leaderboard);
-    show('s-gameover');
+    playSound('leaderboard'); show('s-gameover');
     fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(u=>{me=u;updateHomeUI();});
   });
 
@@ -541,28 +722,23 @@ function renderLB(elId, players) {
 }
 
 function toggleCat(el, cat) {
-  if (el.classList.contains('selected')) {
-    el.classList.remove('selected');
-    selectedCats = selectedCats.filter(c => c !== cat);
-  } else {
-    el.classList.add('selected');
-    selectedCats.push(cat);
-  }
-  const hint = document.getElementById('cat-hint');
-  const btn = document.getElementById('create-btn');
-  if (selectedCats.length === 0) { hint.textContent='اختر فئة واحدة على الأقل'; btn.disabled=true; }
-  else { hint.textContent=`${selectedCats.length} فئة محددة`; btn.disabled=false; }
+  if(el.classList.contains('selected')){ el.classList.remove('selected'); selectedCats=selectedCats.filter(c=>c!==cat); }
+  else { el.classList.add('selected'); selectedCats.push(cat); }
+  const hint=document.getElementById('cat-hint');
+  const btn=document.getElementById('create-btn');
+  hint.textContent=selectedCats.length===0?'اختر فئة واحدة على الأقل':`${selectedCats.length} فئة محددة`;
+  btn.disabled=selectedCats.length===0;
 }
 
-function createRoom() { if(!socket||selectedCats.length===0) return; socket.emit('create_room',{categories:selectedCats}); }
+function createRoom() { if(!socket||selectedCats.length===0) return; playSound('click'); socket.emit('create_room',{categories:selectedCats}); }
 function joinRoom() {
   const code=document.getElementById('j-code').value.trim();
   const errEl=document.getElementById('join-err'); errEl.style.display='none';
   if(code.length!==4){errEl.textContent='الكود يجب أن يكون 4 أرقام';errEl.style.display='block';return;}
-  socket.emit('join_room',{code});
+  playSound('click'); socket.emit('join_room',{code});
 }
-function setReady() { socket.emit('player_ready'); document.getElementById('ready-btn').disabled=true; document.getElementById('ready-btn').textContent='✔ جاهز!'; }
-function startGame() { socket.emit('start_game'); document.getElementById('loading-msg').textContent='جاري تحضير الأسئلة...'; show('s-loading'); }
+function setReady() { socket.emit('player_ready'); document.getElementById('ready-btn').disabled=true; document.getElementById('ready-btn').textContent='✔ جاهز!'; playSound('click'); }
+function startGame() { socket.emit('start_game'); show('s-loading'); playSound('click'); }
 function submitAnswer(answer) { document.querySelectorAll('.opt').forEach(b=>b.disabled=true); socket.emit('submit_answer',{answer}); }
 function leaveRoom() { if(socket){socket.disconnect();socket=null;} connectSocket(); show('s-home'); }
 
