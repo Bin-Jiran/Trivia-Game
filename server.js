@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const path = require('path');
 
 const app = express();
@@ -15,33 +15,43 @@ const JWT_SECRET = process.env.JWT_SECRET || 'trivia_secret_key_2024';
 const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 
-const db = new sqlite3.Database('./trivia.db');
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    first_name TEXT NOT NULL, last_name TEXT NOT NULL,
-    phone TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL,
-    dob TEXT NOT NULL, gender TEXT NOT NULL, password TEXT NOT NULL,
-    total_score INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-  db.run(`CREATE TABLE IF NOT EXISTS game_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER,
-    room_code TEXT, score INTEGER, played_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+// ── PostgreSQL ────────────────────────────────────────────────────────────────
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-function getLevel(score) {
-  if (score <= 500)  return { name: 'البطريق', emoji: '🐧', level: 1, min: 0,    max: 500  };
-  if (score <= 1250) return { name: 'الذئب',   emoji: '🐺', level: 2, min: 501,  max: 1250 };
-  if (score <= 2400) return { name: 'الدب',    emoji: '🐻', level: 3, min: 1251, max: 2400 };
-  if (score <= 4100) return { name: 'الأسد',   emoji: '🦁', level: 4, min: 2401, max: 4100 };
-  if (score <= 6650) return { name: 'التنين',  emoji: '🐉', level: 5, min: 4101, max: 6650 };
-  return { name: 'الفلتة!', emoji: '💥', level: 6, min: 6651, max: 9999 };
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      first_name TEXT NOT NULL, last_name TEXT NOT NULL,
+      phone TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL,
+      dob TEXT NOT NULL, gender TEXT NOT NULL, password TEXT NOT NULL,
+      total_score INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS game_history (
+      id SERIAL PRIMARY KEY, user_id INTEGER,
+      room_code TEXT, score INTEGER,
+      played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  console.log('✅ Database ready');
 }
+initDB().catch(console.error);
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getLevel(score) {
+  if (score <= 500)  return { name: 'البطريق', emoji: '🐧', level: 1, min: 0,    max: 500   };
+  if (score <= 1250) return { name: 'الذئب',   emoji: '🐺', level: 2, min: 501,  max: 1250  };
+  if (score <= 2400) return { name: 'الدب',    emoji: '🐻', level: 3, min: 1251, max: 2400  };
+  if (score <= 4100) return { name: 'الأسد',   emoji: '🦁', level: 4, min: 2401, max: 4100  };
+  if (score <= 6650) return { name: 'التنين',  emoji: '🐉', level: 5, min: 4101, max: 6650  };
+  return { name: 'الفلتة!', emoji: '💥', level: 6, min: 6651, max: 99999 };
+}
 function displayName(u) { return `${u.first_name} ${u.last_name.substring(0,3)}`; }
 function verifyToken(t) { try { return jwt.verify(t, JWT_SECRET); } catch { return null; } }
-
 function safeUser(u) {
   const level = getLevel(u.total_score || 0);
   return { id: u.id, first_name: u.first_name, last_name: u.last_name,
@@ -49,36 +59,34 @@ function safeUser(u) {
     total_score: u.total_score || 0, display_name: displayName(u), level };
 }
 
-function dbGet(sql, params) {
-  return new Promise((res, rej) => db.get(sql, params, (e, r) => e ? rej(e) : res(r)));
-}
-function dbRun(sql, params) {
-  return new Promise((res, rej) => db.run(sql, params, function(e) { e ? rej(e) : res(this); }));
-}
-
+// ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Auth Routes ───────────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
   const { first_name, last_name, phone, email, dob, gender, password } = req.body;
   if (!first_name||!last_name||!phone||!email||!dob||!gender||!password)
     return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
   try {
     const hash = await bcrypt.hash(password, 10);
-    const r = await dbRun('INSERT INTO users (first_name,last_name,phone,email,dob,gender,password) VALUES (?,?,?,?,?,?,?)',
-      [first_name,last_name,phone,email,dob,gender,hash]);
-    const user = await dbGet('SELECT * FROM users WHERE id=?', [r.lastID]);
+    const result = await pool.query(
+      'INSERT INTO users (first_name,last_name,phone,email,dob,gender,password) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [first_name,last_name,phone,email,dob,gender,hash]
+    );
+    const user = result.rows[0];
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: safeUser(user) });
   } catch(e) {
-    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'البريد أو الهاتف مسجل مسبقاً' });
+    if (e.code === '23505') return res.status(400).json({ error: 'البريد أو الهاتف مسجل مسبقاً' });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = await dbGet('SELECT * FROM users WHERE email=?', [email]);
+  const result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+  const user = result.rows[0];
   if (!user) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
@@ -90,23 +98,24 @@ app.get('/api/me', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
-  const user = await dbGet('SELECT * FROM users WHERE id=?', [payload.id]);
+  const result = await pool.query('SELECT * FROM users WHERE id=$1', [payload.id]);
+  const user = result.rows[0];
   if (!user) return res.status(404).json({ error: 'غير موجود' });
   res.json(safeUser(user));
 });
 
-// ── AI Question Generation ────────────────────────────────────────────────────
+// ── AI Questions ──────────────────────────────────────────────────────────────
 async function generateQuestions(categories, difficulty, count = 12) {
   const diffAr = { easy: 'متوسط', medium: 'صعب', hard: 'صعب جداً' }[difficulty];
   const catStr = Array.isArray(categories) ? categories.join(' و ') : categories;
   const prompt = `أنت مولّد أسئلة تريفيا متخصص. اطرح ${count} سؤال من فئة/فئات "${catStr}" بمستوى صعوبة "${diffAr}" باللغة العربية.
 
-قواعد مهمة جداً:
+قواعد مهمة:
 - الأسئلة يجب أن تكون غير متوقعة وتحتاج معرفة حقيقية
-- الإجابات الخاطئة (المموهات) يجب أن تكون منطقية ومقنعة وليست واضحة
-- لا تضع اسم الشيء نفسه ضمن إجاباته (مثلاً: سؤال عن عملة الكويت لا تضع "الدينار الكويتي" كإجابة واضحة)
-- تنوع في أسلوب الأسئلة: من، ماذا، متى، أين، كم، أي
-- المموهات يجب أن تكون من نفس الفئة المنطقية للإجابة الصحيحة
+- الإجابات الخاطئة يجب أن تكون منطقية ومقنعة وليست واضحة
+- لا تضع اسم الشيء نفسه ضمن إجاباته
+- تنوع في أسلوب الأسئلة
+- المموهات من نفس الفئة المنطقية للإجابة الصحيحة
 
 رد فقط بـ JSON array:
 [{"question":"نص السؤال","options":["أ. خيار1","ب. خيار2","ج. خيار3","د. خيار4"],"answer":"أ. خيار1"}]
@@ -129,9 +138,9 @@ function generateCode() { return String(Math.floor(1000+Math.random()*9000)); }
 io.use((socket, next) => {
   const payload = verifyToken(socket.handshake.auth.token);
   if (!payload) return next(new Error('غير مصرح'));
-  dbGet('SELECT * FROM users WHERE id=?', [payload.id]).then(user => {
-    if (!user) return next(new Error('غير موجود'));
-    socket.user = safeUser(user); next();
+  pool.query('SELECT * FROM users WHERE id=$1', [payload.id]).then(r => {
+    if (!r.rows[0]) return next(new Error('غير موجود'));
+    socket.user = safeUser(r.rows[0]); next();
   }).catch(() => next(new Error('خطأ')));
 });
 
@@ -139,11 +148,8 @@ io.on('connection', socket => {
   socket.on('create_room', ({ categories }) => {
     const code = generateCode();
     const cats = Array.isArray(categories) && categories.length > 0 ? categories : ['معلومات عامة'];
-    rooms[code] = {
-      code, host: socket.id, categories: cats,
-      players: {}, phase: 0, phaseNames: ['easy','medium','hard'],
-      qIndex: 0, timer: null, status: 'waiting', answered: {}
-    };
+    rooms[code] = { code, host: socket.id, categories: cats, players: {}, phase: 0,
+      phaseNames: ['easy','medium','hard'], qIndex: 0, timer: null, status: 'waiting', answered: {} };
     rooms[code].players[socket.id] = { ...socket.user, sessionScore: 0, ready: false };
     socket.join(code); socket.roomCode = code;
     socket.emit('room_created', { code, categories: cats });
@@ -165,8 +171,7 @@ io.on('connection', socket => {
     room.players[socket.id].ready = true;
     io.to(socket.roomCode).emit('players_update', getPlayers(socket.roomCode));
     const nonHost = Object.entries(room.players).filter(([id]) => id !== room.host);
-    if (nonHost.length > 0 && nonHost.every(([,p]) => p.ready))
-      io.to(socket.roomCode).emit('all_ready');
+    if (nonHost.length > 0 && nonHost.every(([,p]) => p.ready)) io.to(socket.roomCode).emit('all_ready');
   });
 
   socket.on('start_game', async () => {
@@ -200,11 +205,9 @@ io.on('connection', socket => {
     if (correct) room.players[socket.id].sessionScore += pts;
     socket.emit('answer_result', { correct, correct_answer: q.answer, points: correct ? pts : 0 });
     io.to(code).emit('players_update', getPlayers(code));
-
-    // FIX #1: Stop timer if all players answered
-    const totalPlayers = Object.keys(room.players).length;
-    const answeredCount = Object.keys(room.answered).length;
-    if (answeredCount >= totalPlayers) {
+    // Stop timer when all answered
+    const total = Object.keys(room.players).length;
+    if (Object.keys(room.answered).length >= total) {
       clearInterval(room.timer);
       io.to(code).emit('timer', { seconds: 0 });
       room.qIndex++;
@@ -216,9 +219,7 @@ io.on('connection', socket => {
     const code = socket.roomCode;
     if (!code || !rooms[code]) return;
     delete rooms[code].players[socket.id];
-    if (Object.keys(rooms[code].players).length === 0) {
-      clearInterval(rooms[code].timer); delete rooms[code]; return;
-    }
+    if (Object.keys(rooms[code].players).length === 0) { clearInterval(rooms[code].timer); delete rooms[code]; return; }
     if (rooms[code].host === socket.id) {
       rooms[code].host = Object.keys(rooms[code].players)[0];
       io.to(code).emit('host_changed', { host: rooms[code].host });
@@ -228,18 +229,17 @@ io.on('connection', socket => {
 });
 
 function getPlayers(code) {
-  const room = rooms[code];
-  return Object.entries(room.players).map(([id,p]) => ({
-    ...p, socketId: id, isHost: id === room.host
+  return Object.entries(rooms[code].players).map(([id,p]) => ({
+    ...p, socketId: id, isHost: id === rooms[code].host
   })).sort((a,b) => b.sessionScore - a.sessionScore);
 }
 
 function startPhase(code) {
   const room = rooms[code];
   const phaseName = room.phaseNames[room.phase];
-  const phaseAr = { easy: 'سهل', medium: 'متوسط', hard: 'صعب' }[phaseName];
   room.questions = room.allQuestions[phaseName];
   room.qIndex = 0; room.answered = {};
+  const phaseAr = { easy:'سهل', medium:'متوسط', hard:'صعب' }[phaseName];
   io.to(code).emit('phase_start', { phase: room.phase+1, name: phaseAr, total: 3 });
   setTimeout(() => askQuestion(code), 3000);
 }
@@ -250,11 +250,9 @@ function askQuestion(code) {
   if (room.qIndex >= room.questions.length) { endPhase(code); return; }
   const q = room.questions[room.qIndex];
   room.currentQuestion = q; room.answered = {};
-  const pts = { easy: 100, medium: 200, hard: 300 }[room.phaseNames[room.phase]];
-  io.to(code).emit('question', {
-    index: room.qIndex+1, total: room.questions.length,
-    question: q.question, options: q.options, points: pts, phase: room.phase+1
-  });
+  const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
+  io.to(code).emit('question', { index:room.qIndex+1, total:room.questions.length,
+    question:q.question, options:q.options, points:pts, phase:room.phase+1 });
   let timeLeft = 15;
   io.to(code).emit('timer', { seconds: timeLeft });
   room.timer = setInterval(() => {
@@ -277,14 +275,14 @@ function endPhase(code) {
   else setTimeout(() => startPhase(code), 8000);
 }
 
-function endGame(code) {
+async function endGame(code) {
   const room = rooms[code];
   const leaderboard = getPlayers(code);
-  leaderboard.forEach(p => {
+  for (const p of leaderboard) {
     const pts = Math.floor(p.sessionScore / 100);
-    dbRun('UPDATE users SET total_score = total_score + ? WHERE id = ?', [pts, p.id]);
-    dbRun('INSERT INTO game_history (user_id, room_code, score) VALUES (?,?,?)', [p.id, code, p.sessionScore]);
-  });
+    await pool.query('UPDATE users SET total_score = total_score + $1 WHERE id = $2', [pts, p.id]);
+    await pool.query('INSERT INTO game_history (user_id, room_code, score) VALUES ($1,$2,$3)', [p.id, code, p.sessionScore]);
+  }
   io.to(code).emit('game_end', { leaderboard });
   setTimeout(() => delete rooms[code], 30000);
 }
