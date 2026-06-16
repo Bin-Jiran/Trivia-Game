@@ -7,124 +7,106 @@
 <script src="/socket.io/socket.io.js"></script>
 <style>
 :root {
-  --primary: #6C63FF;
-  --primary-dark: #5A52D5;
-  --success: #22C55E;
-  --danger: #EF4444;
-  --warning: #F59E0B;
-  --bg: #0F0F1A;
-  --card: #1A1A2E;
-  --card2: #222240;
-  --border: #2E2E4A;
-  --text: #F0F0FF;
-  --muted: #8888AA;
-  --font: 'Segoe UI', Tahoma, sans-serif;
-  --radius: 16px;
-  --radius-sm: 10px;
+  --primary: #6C63FF; --primary-dark: #5A52D5;
+  --success: #22C55E; --danger: #EF4444; --warning: #F59E0B;
+  --bg: #0F0F1A; --card: #1A1A2E; --card2: #222240; --border: #2E2E4A;
+  --text: #F0F0FF; --muted: #8888AA; --font: 'Segoe UI', Tahoma, sans-serif; --radius: 16px; --radius-sm: 10px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; direction: rtl; }
-
-/* ── Screens ── */
 .screen { display: none; min-height: 100vh; padding: 20px; max-width: 520px; margin: auto; }
 .screen.active { display: flex; flex-direction: column; }
-
-/* ── Logo ── */
-.logo { text-align: center; margin: 30px 0 24px; }
-.logo h1 { font-size: 32px; font-weight: 800; background: linear-gradient(135deg,#6C63FF,#A78BFA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.logo p { color: var(--muted); font-size: 14px; margin-top: 4px; }
-
-/* ── Cards ── */
-.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
-
-/* ── Inputs ── */
-.field { margin-bottom: 14px; }
-.field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-.field input, .field select { width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; color: var(--text); font-size: 15px; font-family: var(--font); outline: none; transition: border 0.2s; }
+.logo { text-align: center; margin: 24px 0 20px; }
+.logo h1 { font-size: 30px; font-weight: 800; background: linear-gradient(135deg,#6C63FF,#A78BFA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+.field input, .field select { width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 13px; color: var(--text); font-size: 15px; font-family: var(--font); outline: none; transition: border 0.2s; }
 .field input:focus, .field select:focus { border-color: var(--primary); }
 .field input::placeholder { color: var(--muted); }
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-/* ── Buttons ── */
-.btn { width: 100%; padding: 14px; border-radius: var(--radius-sm); font-size: 16px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.2s, transform 0.1s; font-family: var(--font); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.2s, transform 0.1s; font-family: var(--font); }
 .btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: var(--primary-dark); }
-.btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); margin-top: 10px; }
+.btn-secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); margin-top: 8px; }
 .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
 .btn-success { background: var(--success); color: #fff; }
-.btn-danger { background: var(--danger); color: #fff; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* ── Error ── */
-.error-msg { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #FCA5A5; border-radius: var(--radius-sm); padding: 10px 14px; font-size: 14px; margin-bottom: 14px; display: none; }
-
-/* ── Avatar / Level ── */
-.avatar { font-size: 52px; display: block; text-align: center; margin-bottom: 8px; }
-.level-badge { display: inline-block; background: var(--primary); color: #fff; border-radius: 20px; padding: 4px 14px; font-size: 13px; font-weight: 600; }
-
-/* ── Lobby ── */
-.room-code-display { text-align: center; margin: 16px 0; }
-.room-code-display .code { font-size: 48px; font-weight: 800; letter-spacing: 8px; color: var(--primary); }
-.room-code-display small { color: var(--muted); font-size: 13px; }
-.players-list { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
-.player-card { background: var(--card2); border-radius: var(--radius-sm); padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
-.player-card .emo { font-size: 28px; }
+.error-msg { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #FCA5A5; border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
+.avatar { font-size: 50px; display: block; text-align: center; margin-bottom: 6px; }
+.level-badge { display: inline-block; background: var(--primary); color: #fff; border-radius: 20px; padding: 3px 13px; font-size: 13px; font-weight: 600; }
+.room-code-display { text-align: center; margin: 12px 0; }
+.room-code-display .code { font-size: 46px; font-weight: 800; letter-spacing: 8px; color: var(--primary); }
+.players-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0; }
+.player-card { background: var(--card2); border-radius: var(--radius-sm); padding: 11px 14px; display: flex; align-items: center; gap: 10px; }
+.player-card .emo { font-size: 26px; }
 .player-card .info { flex: 1; }
-.player-card .name { font-size: 15px; font-weight: 600; }
+.player-card .name { font-size: 14px; font-weight: 600; }
 .player-card .lvl { font-size: 12px; color: var(--muted); }
-.player-card .badge-host { background: var(--warning); color: #000; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
-.player-card .badge-ready { background: var(--success); color: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; }
-
-/* ── Question ── */
-.phase-banner { text-align: center; background: var(--primary); border-radius: var(--radius-sm); padding: 10px; font-weight: 700; font-size: 15px; margin-bottom: 16px; }
-.q-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: var(--muted); font-size: 13px; }
-.timer-circle { width: 52px; height: 52px; border-radius: 50%; border: 3px solid var(--primary); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: var(--text); transition: border-color 0.3s; flex-shrink: 0; }
+.badge-host { background: var(--warning); color: #000; border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700; }
+.badge-ready { background: var(--success); color: #fff; border-radius: 6px; padding: 2px 7px; font-size: 11px; }
+.phase-banner { text-align: center; background: var(--primary); border-radius: var(--radius-sm); padding: 9px; font-weight: 700; font-size: 14px; margin-bottom: 14px; }
+.q-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: var(--muted); font-size: 13px; }
+.timer-circle { width: 50px; height: 50px; border-radius: 50%; border: 3px solid var(--primary); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: var(--text); flex-shrink: 0; transition: border-color 0.3s; }
 .timer-circle.urgent { border-color: var(--danger); color: var(--danger); animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-.q-text { font-size: 19px; font-weight: 700; text-align: center; line-height: 1.5; margin-bottom: 20px; min-height: 60px; }
-.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.opt { background: var(--card2); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 16px 14px; cursor: pointer; font-size: 15px; font-family: var(--font); color: var(--text); text-align: center; transition: all 0.2s; font-weight: 500; line-height: 1.4; }
+.q-text { font-size: 18px; font-weight: 700; text-align: center; line-height: 1.5; margin-bottom: 18px; min-height: 56px; }
+.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.opt { background: var(--card2); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 14px 12px; cursor: pointer; font-size: 14px; font-family: var(--font); color: var(--text); text-align: center; transition: all 0.2s; font-weight: 500; line-height: 1.4; }
 .opt:hover:not(:disabled) { border-color: var(--primary); background: rgba(108,99,255,0.15); }
 .opt.correct { background: rgba(34,197,94,0.2); border-color: var(--success); color: #86EFAC; }
 .opt.wrong   { background: rgba(239,68,68,0.2);  border-color: var(--danger);  color: #FCA5A5; }
 .opt:disabled { cursor: default; }
-.points-tag { display: inline-block; background: var(--warning); color: #000; border-radius: 6px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
-
-/* ── Leaderboard ── */
-.lb-list { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
-.lb-card { background: var(--card2); border-radius: var(--radius-sm); padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
-.lb-rank { font-size: 22px; width: 36px; text-align: center; }
+.points-tag { display: inline-block; background: var(--warning); color: #000; border-radius: 6px; padding: 2px 9px; font-size: 12px; font-weight: 700; }
+.lb-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0; }
+.lb-card { background: var(--card2); border-radius: var(--radius-sm); padding: 11px 14px; display: flex; align-items: center; gap: 10px; }
+.lb-rank { font-size: 20px; width: 34px; text-align: center; }
 .lb-info { flex: 1; }
-.lb-name { font-size: 15px; font-weight: 600; }
-.lb-score { font-size: 13px; color: var(--muted); }
-.lb-emo { font-size: 28px; }
-
-/* ── Misc ── */
-.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
-.center { text-align: center; }
-.mt { margin-top: 12px; }
-.spinner-big { display: block; width: 48px; height: 48px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 30px auto; }
+.lb-name { font-size: 14px; font-weight: 600; }
+.lb-score { font-size: 12px; color: var(--muted); }
+.lb-emo { font-size: 26px; }
+.spinner-big { display: block; width: 46px; height: 46px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 28px auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.toast { position: fixed; bottom: 24px; right: 50%; transform: translateX(50%); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 24px; font-size: 14px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.toast { position: fixed; bottom: 20px; right: 50%; transform: translateX(50%); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 22px; font-size: 13px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
 .toast.show { opacity: 1; }
-.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
-.cat-opt { background: var(--card2); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 14px; cursor: pointer; text-align: center; transition: all 0.2s; }
+.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 10px 0; }
+.cat-opt { background: var(--card2); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 12px; cursor: pointer; text-align: center; transition: all 0.2s; position: relative; }
 .cat-opt:hover { border-color: var(--primary); }
 .cat-opt.selected { border-color: var(--primary); background: rgba(108,99,255,0.15); }
-.cat-opt .cicon { font-size: 26px; margin-bottom: 4px; }
-.cat-opt .cname { font-size: 13px; font-weight: 600; }
-.profile-header { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 20px; }
-.section-title { font-size: 13px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.cat-opt.selected::after { content: '✓'; position: absolute; top: 6px; left: 8px; background: var(--primary); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.cat-opt .cicon { font-size: 24px; margin-bottom: 3px; }
+.cat-opt .cname { font-size: 12px; font-weight: 600; }
+.section-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+.mt { margin-top: 10px; }
+
+/* ── Profile / Level meter ── */
+.profile-header { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 18px; margin-top: 10px; }
+.level-all { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.level-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--card2); border-radius: var(--radius-sm); border: 1px solid transparent; transition: border 0.2s; }
+.level-row.current { border-color: var(--primary); background: rgba(108,99,255,0.12); }
+.level-row .lemo { font-size: 26px; width: 34px; text-align: center; }
+.level-row .linfo { flex: 1; }
+.level-row .lname { font-size: 14px; font-weight: 600; }
+.level-row .lrange { font-size: 11px; color: var(--muted); }
+.level-row .lcurrent { font-size: 11px; color: var(--primary); font-weight: 600; }
+.progress-wrap { margin: 14px 0; }
+.progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.progress-bar { height: 10px; background: var(--card2); border-radius: 10px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #A78BFA); border-radius: 10px; transition: width 0.5s ease; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.info-item { background: var(--card2); border-radius: var(--radius-sm); padding: 10px 13px; }
+.info-item .ilabel { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.info-item .ivalue { font-size: 14px; font-weight: 600; }
 </style>
 </head>
 <body>
 
-<!-- ───────────── LOGIN ───────────── -->
+<!-- LOGIN -->
 <div id="s-login" class="screen active">
-  <div class="logo"><h1>🎯 لعبة المعلومات</h1><p>تريفيا متعدد اللاعبين بالعربي</p></div>
+  <div class="logo"><h1>🎯 لعبة المعلومات</h1><p style="color:var(--muted);font-size:13px;">تريفيا متعدد اللاعبين</p></div>
   <div class="card">
-    <h2 style="margin-bottom:20px;font-size:20px;">تسجيل الدخول</h2>
+    <h2 style="margin-bottom:16px;font-size:19px;">تسجيل الدخول</h2>
     <div id="login-err" class="error-msg"></div>
     <div class="field"><label>البريد الإلكتروني</label><input id="l-email" type="email" placeholder="example@email.com" dir="ltr"></div>
     <div class="field"><label>كلمة المرور</label><input id="l-pass" type="password" placeholder="••••••••" dir="ltr"></div>
@@ -133,11 +115,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
   </div>
 </div>
 
-<!-- ───────────── REGISTER ───────────── -->
+<!-- REGISTER -->
 <div id="s-register" class="screen">
-  <div class="logo"><h1>🎯 لعبة المعلومات</h1><p>حساب جديد</p></div>
+  <div class="logo"><h1>🎯 لعبة المعلومات</h1></div>
   <div class="card">
-    <h2 style="margin-bottom:20px;font-size:20px;">إنشاء حساب</h2>
+    <h2 style="margin-bottom:16px;font-size:19px;">إنشاء حساب</h2>
     <div id="reg-err" class="error-msg"></div>
     <div class="row2">
       <div class="field"><label>الاسم الأول</label><input id="r-fname" type="text" placeholder="محمد"></div>
@@ -148,11 +130,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
     <div class="row2">
       <div class="field"><label>تاريخ الميلاد</label><input id="r-dob" type="date" dir="ltr"></div>
       <div class="field"><label>الجنس</label>
-        <select id="r-gender">
-          <option value="">اختر...</option>
-          <option value="male">ذكر</option>
-          <option value="female">أنثى</option>
-        </select>
+        <select id="r-gender"><option value="">اختر...</option><option value="male">ذكر</option><option value="female">أنثى</option></select>
       </div>
     </div>
     <div class="field"><label>كلمة المرور</label><input id="r-pass" type="password" placeholder="8 أحرف على الأقل" dir="ltr"></div>
@@ -162,263 +140,284 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
   </div>
 </div>
 
-<!-- ───────────── HOME ───────────── -->
+<!-- HOME -->
 <div id="s-home" class="screen">
   <div class="profile-header" style="margin-top:20px;">
     <span id="home-emo" class="avatar">🐧</span>
-    <div id="home-name" style="font-size:20px;font-weight:700;"></div>
+    <div id="home-name" style="font-size:19px;font-weight:700;"></div>
     <span class="level-badge" id="home-level">البطريق</span>
-    <div style="color:var(--muted);font-size:13px;margin-top:4px;">النقاط الكلية: <b id="home-score">0</b></div>
+    <div style="color:var(--muted);font-size:12px;margin-top:3px;">النقاط الكلية: <b id="home-score">0</b></div>
   </div>
   <div class="card">
-    <button class="btn btn-primary" onclick="show('s-create')" style="margin-bottom:10px;">🏠 إنشاء غرفة</button>
-    <button class="btn btn-secondary" onclick="show('s-join')">🔑 دخول غرفة</button>
+    <button class="btn btn-primary" onclick="show('s-create')" style="margin-bottom:8px;">🏠 إنشاء غرفة</button>
+    <button class="btn btn-secondary" onclick="show('s-join')" style="margin-top:0;margin-bottom:8px;">🔑 دخول غرفة</button>
+    <button class="btn btn-secondary" onclick="showProfile()" style="margin-top:0;">👤 حسابي ومستواي</button>
   </div>
-  <button class="btn btn-secondary" onclick="logout()" style="margin-top:8px;">تسجيل الخروج</button>
+  <button class="btn btn-secondary" onclick="logout()">تسجيل الخروج</button>
 </div>
 
-<!-- ───────────── CREATE ROOM ───────────── -->
-<div id="s-create" class="screen">
-  <div style="margin-bottom:20px;margin-top:10px;">
-    <h2 style="font-size:22px;margin-bottom:4px;">إنشاء غرفة</h2>
-    <p style="color:var(--muted);font-size:14px;">اختر الفئة وابدأ</p>
+<!-- PROFILE -->
+<div id="s-profile" class="screen">
+  <div style="margin-top:10px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
+    <button onclick="show('s-home')" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:22px;">←</button>
+    <h2 style="font-size:20px;">حسابي ومستواي</h2>
   </div>
   <div class="card">
-    <div class="section-title">اختر فئة الأسئلة</div>
-    <div class="cat-grid">
-      <div class="cat-opt selected" onclick="selectCat(this,'الكويت')"><div class="cicon">🇰🇼</div><div class="cname">الكويت</div></div>
-      <div class="cat-opt" onclick="selectCat(this,'التكنولوجيا')"><div class="cicon">💻</div><div class="cname">التكنولوجيا</div></div>
-      <div class="cat-opt" onclick="selectCat(this,'معلومات عامة')"><div class="cicon">🌍</div><div class="cname">معلومات عامة</div></div>
-      <div class="cat-opt" onclick="selectCat(this,'شعارات الشركات')"><div class="cicon">🏷️</div><div class="cname">شعارات الشركات</div></div>
-      <div class="cat-opt" onclick="selectCat(this,'عواصم الدول')"><div class="cicon">🏛️</div><div class="cname">عواصم الدول</div></div>
-      <div class="cat-opt" onclick="selectCat(this,'خرائط وجغرافيا')"><div class="cicon">🗺️</div><div class="cname">خرائط وجغرافيا</div></div>
+    <div style="text-align:center;margin-bottom:14px;">
+      <span id="p-emo" style="font-size:54px;display:block;margin-bottom:6px;">🐧</span>
+      <div id="p-name" style="font-size:18px;font-weight:700;"></div>
+      <span class="level-badge" id="p-level-name" style="margin-top:6px;display:inline-block;">البطريق</span>
     </div>
-    <button class="btn btn-primary mt" onclick="createRoom()">إنشاء الغرفة</button>
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span id="p-score-label">0 نقطة</span>
+        <span id="p-next-label">المستوى التالي: 501</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="p-bar" style="width:0%"></div></div>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="ilabel">البريد</div><div class="ivalue" id="p-email" style="font-size:12px;"></div></div>
+      <div class="info-item"><div class="ilabel">الجنس</div><div class="ivalue" id="p-gender"></div></div>
+      <div class="info-item"><div class="ilabel">تاريخ الميلاد</div><div class="ivalue" id="p-dob" style="font-size:12px;"></div></div>
+      <div class="info-item"><div class="ilabel">الهاتف</div><div class="ivalue" id="p-phone" style="font-size:12px;" dir="ltr"></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-title">جميع المستويات</div>
+    <div class="level-all" id="level-all-list"></div>
+  </div>
+</div>
+
+<!-- CREATE ROOM -->
+<div id="s-create" class="screen">
+  <div style="margin-bottom:16px;margin-top:10px;">
+    <h2 style="font-size:20px;margin-bottom:3px;">إنشاء غرفة</h2>
+    <p style="color:var(--muted);font-size:13px;">اختر فئة أو أكثر (حتى 6)</p>
+  </div>
+  <div class="card">
+    <div class="section-title">اختر الفئات</div>
+    <div class="cat-grid">
+      <div class="cat-opt" onclick="toggleCat(this,'الكويت')"><div class="cicon">🇰🇼</div><div class="cname">الكويت</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'التكنولوجيا')"><div class="cicon">💻</div><div class="cname">التكنولوجيا</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'معلومات عامة')"><div class="cicon">🌍</div><div class="cname">معلومات عامة</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'شعارات الشركات')"><div class="cicon">🏷️</div><div class="cname">شعارات الشركات</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'عواصم الدول')"><div class="cicon">🏛️</div><div class="cname">عواصم الدول</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'خرائط وجغرافيا')"><div class="cicon">🗺️</div><div class="cname">خرائط وجغرافيا</div></div>
+    </div>
+    <div id="cat-hint" style="text-align:center;font-size:12px;color:var(--muted);margin-top:6px;">اختر فئة واحدة على الأقل</div>
+    <button class="btn btn-primary mt" id="create-btn" onclick="createRoom()" disabled>إنشاء الغرفة</button>
     <button class="btn btn-secondary" onclick="show('s-home')">رجوع</button>
   </div>
 </div>
 
-<!-- ───────────── JOIN ROOM ───────────── -->
+<!-- JOIN ROOM -->
 <div id="s-join" class="screen">
-  <div style="margin-bottom:20px;margin-top:10px;">
-    <h2 style="font-size:22px;margin-bottom:4px;">دخول غرفة</h2>
-    <p style="color:var(--muted);font-size:14px;">أدخل الكود المكون من 4 أرقام</p>
+  <div style="margin-bottom:16px;margin-top:10px;">
+    <h2 style="font-size:20px;margin-bottom:3px;">دخول غرفة</h2>
   </div>
   <div class="card">
     <div id="join-err" class="error-msg"></div>
-    <div class="field"><label>كود الغرفة</label><input id="j-code" type="text" maxlength="4" placeholder="1234" dir="ltr" style="font-size:28px;text-align:center;letter-spacing:8px;"></div>
+    <div class="field"><label>كود الغرفة</label><input id="j-code" type="text" maxlength="4" placeholder="1234" dir="ltr" style="font-size:26px;text-align:center;letter-spacing:8px;"></div>
     <button class="btn btn-primary" onclick="joinRoom()">دخول</button>
     <button class="btn btn-secondary" onclick="show('s-home')">رجوع</button>
   </div>
 </div>
 
-<!-- ───────────── LOBBY ───────────── -->
+<!-- LOBBY -->
 <div id="s-lobby" class="screen">
-  <div style="margin-top:10px;margin-bottom:16px;">
+  <div style="margin-top:10px;margin-bottom:14px;">
     <div class="room-code-display">
-      <small>كود الغرفة</small>
+      <small style="color:var(--muted);font-size:12px;">كود الغرفة</small>
       <div class="code" id="lobby-code">----</div>
-      <small style="color:var(--muted);">شاركه مع أصدقائك</small>
+      <small style="color:var(--muted);font-size:12px;">شاركه مع أصدقائك</small>
     </div>
-    <div style="text-align:center;color:var(--muted);font-size:13px;">الفئة: <b id="lobby-cat" style="color:var(--text)">-</b></div>
+    <div style="text-align:center;color:var(--muted);font-size:12px;">الفئات: <b id="lobby-cats" style="color:var(--text)">-</b></div>
   </div>
   <div class="card">
     <div class="section-title">اللاعبون</div>
     <div class="players-list" id="lobby-players"></div>
   </div>
-  <div id="lobby-host-btn" style="display:none;">
-    <button class="btn btn-success" onclick="startGame()">▶ ابدأ اللعبة</button>
-  </div>
-  <div id="lobby-ready-btn" style="display:none;">
-    <button class="btn btn-primary" id="ready-btn" onclick="setReady()">✔ أنا جاهز</button>
-  </div>
+  <div id="lobby-host-btn" style="display:none;"><button class="btn btn-success" onclick="startGame()">▶ ابدأ اللعبة</button></div>
+  <div id="lobby-ready-btn" style="display:none;"><button class="btn btn-primary" id="ready-btn" onclick="setReady()">✔ أنا جاهز</button></div>
   <button class="btn btn-secondary mt" onclick="leaveRoom()">مغادرة الغرفة</button>
 </div>
 
-<!-- ───────────── LOADING ───────────── -->
+<!-- LOADING -->
 <div id="s-loading" class="screen">
   <div style="margin-top:60px;text-align:center;">
     <span class="spinner-big"></span>
-    <h2 style="margin-top:16px;" id="loading-msg">جاري تحضير الأسئلة...</h2>
-    <p style="color:var(--muted);margin-top:8px;font-size:14px;">يرجى الانتظار</p>
+    <h2 style="margin-top:14px;" id="loading-msg">جاري تحضير الأسئلة...</h2>
+    <p style="color:var(--muted);margin-top:6px;font-size:13px;">يرجى الانتظار</p>
   </div>
 </div>
 
-<!-- ───────────── PHASE START ───────────── -->
+<!-- PHASE START -->
 <div id="s-phase" class="screen">
   <div style="margin-top:80px;text-align:center;">
-    <div style="font-size:64px;" id="phase-emo">⚡</div>
-    <h1 style="font-size:32px;margin-top:16px;">المرحلة <span id="phase-num">1</span> من 3</h1>
-    <h2 style="margin-top:8px;color:var(--primary);" id="phase-name">سهل</h2>
-    <p style="color:var(--muted);margin-top:12px;font-size:14px;">12 سؤال • استعد!</p>
+    <div style="font-size:62px;" id="phase-emo">⚡</div>
+    <h1 style="font-size:30px;margin-top:14px;">المرحلة <span id="phase-num">1</span> من 3</h1>
+    <h2 style="margin-top:7px;color:var(--primary);" id="phase-name">سهل</h2>
+    <p style="color:var(--muted);margin-top:10px;font-size:13px;">12 سؤال • استعد!</p>
   </div>
 </div>
 
-<!-- ───────────── QUESTION ───────────── -->
+<!-- QUESTION -->
 <div id="s-question" class="screen">
   <div style="margin-top:8px;">
     <div class="q-meta">
       <div>
         <span class="points-tag" id="q-pts">100 نقطة</span>
-        <span style="margin-right:8px;font-size:13px;" id="q-num">سؤال 1/12</span>
+        <span style="margin-right:7px;font-size:12px;" id="q-num">سؤال 1/12</span>
       </div>
       <div class="timer-circle" id="timer-el">15</div>
     </div>
     <div class="phase-banner" id="q-phase-banner">المرحلة 1 - سهل</div>
     <div class="q-text" id="q-text">...</div>
     <div class="options-grid" id="q-opts"></div>
-    <div id="q-result" style="display:none;margin-top:16px;text-align:center;font-size:15px;font-weight:600;"></div>
+    <div id="q-result" style="display:none;margin-top:14px;text-align:center;font-size:14px;font-weight:600;"></div>
   </div>
 </div>
 
-<!-- ───────────── PHASE END / LEADERBOARD ───────────── -->
+<!-- LEADERBOARD -->
 <div id="s-leaderboard" class="screen">
   <div style="margin-top:10px;">
-    <h2 style="text-align:center;font-size:22px;margin-bottom:4px;" id="lb-title">نهاية المرحلة 1</h2>
-    <p style="text-align:center;color:var(--muted);font-size:14px;margin-bottom:16px;" id="lb-sub">المرحلة التالية تبدأ قريباً...</p>
+    <h2 style="text-align:center;font-size:20px;margin-bottom:3px;" id="lb-title">نهاية المرحلة 1</h2>
+    <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px;" id="lb-sub"></p>
     <div class="lb-list" id="lb-list"></div>
   </div>
 </div>
 
-<!-- ───────────── GAME OVER ───────────── -->
+<!-- GAME OVER -->
 <div id="s-gameover" class="screen">
-  <div style="margin-top:20px;text-align:center;">
-    <div style="font-size:56px;">🏆</div>
-    <h1 style="font-size:26px;margin-top:12px;">انتهت اللعبة!</h1>
-  </div>
-  <div class="lb-list" id="final-lb" style="margin-top:20px;"></div>
+  <div style="margin-top:20px;text-align:center;"><div style="font-size:54px;">🏆</div><h1 style="font-size:24px;margin-top:10px;">انتهت اللعبة!</h1></div>
+  <div class="lb-list" id="final-lb" style="margin-top:18px;"></div>
   <button class="btn btn-primary mt" onclick="show('s-home')">العب مجدداً</button>
 </div>
 
-<!-- toast -->
 <div class="toast" id="toast"></div>
 
 <script>
-// ──────────────────────────────────────────────────────
-// State
-// ──────────────────────────────────────────────────────
 let token = localStorage.getItem('token');
 let me = null;
 let socket = null;
-let selectedCat = 'الكويت';
+let selectedCats = [];
 let isHost = false;
-let timerInterval = null;
 
 const LEVELS = [
-  { name:'البطريق', emoji:'🐧' },
-  { name:'الذئب',   emoji:'🐺' },
-  { name:'الدب',    emoji:'🐻' },
-  { name:'الأسد',   emoji:'🦁' },
-  { name:'التنين',  emoji:'🐉' },
-  { name:'الفلتة!', emoji:'💥' },
+  { name:'البطريق', emoji:'🐧', min:0,    max:500  },
+  { name:'الذئب',   emoji:'🐺', min:501,  max:1250 },
+  { name:'الدب',    emoji:'🐻', min:1251, max:2400 },
+  { name:'الأسد',   emoji:'🦁', min:2401, max:4100 },
+  { name:'التنين',  emoji:'🐉', min:4101, max:6650 },
+  { name:'الفلتة!', emoji:'💥', min:6651, max:99999},
 ];
 
-// ──────────────────────────────────────────────────────
-// Screen Management
-// ──────────────────────────────────────────────────────
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
-
-function showToast(msg, duration=2500) {
+function showToast(msg, d=2500) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), d);
 }
 
-// ──────────────────────────────────────────────────────
-// Auth
-// ──────────────────────────────────────────────────────
 async function init() {
   if (!token) { show('s-login'); return; }
-  const res = await fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } });
+  const res = await fetch('/api/me', { headers: { Authorization: 'Bearer '+token } });
   if (!res.ok) { localStorage.removeItem('token'); show('s-login'); return; }
   me = await res.json();
-  updateHomeUI();
-  show('s-home');
-  connectSocket();
+  updateHomeUI(); show('s-home'); connectSocket();
 }
 
 function updateHomeUI() {
   document.getElementById('home-name').textContent = me.display_name;
   document.getElementById('home-level').textContent = me.level.name;
   document.getElementById('home-emo').textContent = me.level.emoji;
-  document.getElementById('home-score').textContent = me.total_score.toLocaleString('ar');
+  document.getElementById('home-score').textContent = (me.total_score||0).toLocaleString('ar');
+}
+
+function showProfile() {
+  document.getElementById('p-emo').textContent = me.level.emoji;
+  document.getElementById('p-name').textContent = me.display_name;
+  document.getElementById('p-level-name').textContent = me.level.name;
+  document.getElementById('p-email').textContent = me.email;
+  document.getElementById('p-gender').textContent = me.gender === 'male' ? 'ذكر' : 'أنثى';
+  document.getElementById('p-dob').textContent = me.dob;
+  document.getElementById('p-phone').textContent = me.phone;
+
+  const score = me.total_score || 0;
+  const lvl = me.level;
+  const range = lvl.max - lvl.min;
+  const progress = lvl.level === 6 ? 100 : Math.round(((score - lvl.min) / range) * 100);
+  document.getElementById('p-score-label').textContent = score.toLocaleString('ar') + ' نقطة';
+  document.getElementById('p-next-label').textContent = lvl.level === 6 ? 'أعلى مستوى!' : 'المستوى التالي: ' + lvl.max.toLocaleString('ar');
+  document.getElementById('p-bar').style.width = Math.min(progress, 100) + '%';
+
+  const list = document.getElementById('level-all-list');
+  list.innerHTML = '';
+  LEVELS.forEach((l, i) => {
+    const isCurrent = me.level.name === l.name;
+    const isPassed = score > l.max && i < 5;
+    list.innerHTML += `
+      <div class="level-row ${isCurrent ? 'current' : ''}">
+        <div class="lemo">${l.emoji}</div>
+        <div class="linfo">
+          <div class="lname">${l.name} ${isPassed ? '✓' : ''}</div>
+          <div class="lrange">${l.min.toLocaleString('ar')} - ${i===5 ? '∞' : l.max.toLocaleString('ar')} نقطة</div>
+        </div>
+        ${isCurrent ? '<div class="lcurrent">مستواك الحالي</div>' : ''}
+      </div>`;
+  });
+  show('s-profile');
 }
 
 async function login() {
   const email = document.getElementById('l-email').value.trim();
   const password = document.getElementById('l-pass').value;
-  const errEl = document.getElementById('login-err');
-  errEl.style.display = 'none';
-  const res = await fetch('/api/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
-  });
+  const errEl = document.getElementById('login-err'); errEl.style.display='none';
+  const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email,password}) });
   const data = await res.json();
-  if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
-  token = data.token; me = data.user;
-  localStorage.setItem('token', token);
+  if (!res.ok) { errEl.textContent=data.error; errEl.style.display='block'; return; }
+  token=data.token; me=data.user; localStorage.setItem('token',token);
   updateHomeUI(); show('s-home'); connectSocket();
 }
 
 async function register() {
-  const errEl = document.getElementById('reg-err');
-  errEl.style.display = 'none';
+  const errEl = document.getElementById('reg-err'); errEl.style.display='none';
   const pass = document.getElementById('r-pass').value;
-  const pass2 = document.getElementById('r-pass2').value;
-  if (pass !== pass2) { errEl.textContent = 'كلمتا المرور غير متطابقتين'; errEl.style.display = 'block'; return; }
-  const body = {
-    first_name: document.getElementById('r-fname').value.trim(),
-    last_name: document.getElementById('r-lname').value.trim(),
-    phone: document.getElementById('r-phone').value.trim(),
-    email: document.getElementById('r-email').value.trim(),
-    dob: document.getElementById('r-dob').value,
-    gender: document.getElementById('r-gender').value,
-    password: pass
-  };
-  const res = await fetch('/api/register', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  if (pass !== document.getElementById('r-pass2').value) { errEl.textContent='كلمتا المرور غير متطابقتين'; errEl.style.display='block'; return; }
+  const body = { first_name:document.getElementById('r-fname').value.trim(), last_name:document.getElementById('r-lname').value.trim(),
+    phone:document.getElementById('r-phone').value.trim(), email:document.getElementById('r-email').value.trim(),
+    dob:document.getElementById('r-dob').value, gender:document.getElementById('r-gender').value, password:pass };
+  const res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
   const data = await res.json();
-  if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
-  token = data.token; me = data.user;
-  localStorage.setItem('token', token);
+  if (!res.ok) { errEl.textContent=data.error; errEl.style.display='block'; return; }
+  token=data.token; me=data.user; localStorage.setItem('token',token);
   updateHomeUI(); show('s-home'); connectSocket();
 }
 
-function logout() {
-  localStorage.removeItem('token'); token = null; me = null;
-  if (socket) socket.disconnect();
-  show('s-login');
-}
+function logout() { localStorage.removeItem('token'); token=null; me=null; if(socket)socket.disconnect(); show('s-login'); }
 
-// ──────────────────────────────────────────────────────
-// Socket
-// ──────────────────────────────────────────────────────
 function connectSocket() {
   if (socket) return;
   socket = io({ auth: { token } });
+  socket.on('connect_error', e => showToast('خطأ: '+e.message));
+  socket.on('error_msg', msg => showToast('⚠️ '+msg));
 
-  socket.on('connect_error', e => showToast('خطأ في الاتصال: ' + e.message));
-  socket.on('error_msg', msg => showToast('⚠️ ' + msg));
-
-  socket.on('room_created', ({ code, category }) => {
+  socket.on('room_created', ({ code, categories }) => {
     isHost = true;
     document.getElementById('lobby-code').textContent = code;
-    document.getElementById('lobby-cat').textContent = category;
+    document.getElementById('lobby-cats').textContent = categories.join(' • ');
     document.getElementById('lobby-host-btn').style.display = 'block';
     document.getElementById('lobby-ready-btn').style.display = 'none';
     show('s-lobby');
   });
 
-  socket.on('room_joined', ({ code, category }) => {
+  socket.on('room_joined', ({ code, categories }) => {
     isHost = false;
     document.getElementById('lobby-code').textContent = code;
-    document.getElementById('lobby-cat').textContent = category;
+    document.getElementById('lobby-cats').textContent = (categories||[]).join(' • ');
     document.getElementById('lobby-host-btn').style.display = 'none';
     document.getElementById('lobby-ready-btn').style.display = 'block';
     document.getElementById('ready-btn').disabled = false;
@@ -427,186 +426,116 @@ function connectSocket() {
   });
 
   socket.on('players_update', players => {
-    const el = document.getElementById('lobby-players');
-    el.innerHTML = '';
+    const el = document.getElementById('lobby-players'); el.innerHTML='';
     players.forEach(p => {
-      const lvl = p.level || { emoji:'🐧', name:'البطريق' };
-      el.innerHTML += `
-        <div class="player-card">
-          <div class="emo">${lvl.emoji}</div>
-          <div class="info">
-            <div class="name">${p.display_name}</div>
-            <div class="lvl">${lvl.name} • ${(p.total_score||0).toLocaleString('ar')} نقطة</div>
-          </div>
-          ${p.isHost ? '<span class="badge-host">مضيف</span>' : (p.ready ? '<span class="badge-ready">جاهز ✓</span>' : '')}
-        </div>`;
+      const lvl = p.level||{emoji:'🐧',name:'البطريق'};
+      el.innerHTML += `<div class="player-card"><div class="emo">${lvl.emoji}</div><div class="info"><div class="name">${p.display_name}</div><div class="lvl">${lvl.name} • ${(p.total_score||0).toLocaleString('ar')} نقطة</div></div>${p.isHost?'<span class="badge-host">مضيف</span>':(p.ready?'<span class="badge-ready">جاهز ✓</span>':'')}</div>`;
     });
   });
 
-  socket.on('all_ready', () => {
-    if (isHost) showToast('الجميع جاهز! اضغط ابدأ اللعبة');
-  });
+  socket.on('all_ready', () => { if(isHost) showToast('الجميع جاهز! اضغط ابدأ'); });
 
-  socket.on('game_loading', ({ message }) => {
-    document.getElementById('loading-msg').textContent = message;
-    show('s-loading');
-  });
+  socket.on('game_loading', ({ message }) => { document.getElementById('loading-msg').textContent=message; show('s-loading'); });
 
   socket.on('phase_start', ({ phase, name }) => {
-    const emos = ['⚡','🔥','💀'];
-    document.getElementById('phase-emo').textContent = emos[phase-1] || '⚡';
-    document.getElementById('phase-num').textContent = phase;
-    document.getElementById('phase-name').textContent = name;
+    const emos=['⚡','🔥','💀'];
+    document.getElementById('phase-emo').textContent=emos[phase-1]||'⚡';
+    document.getElementById('phase-num').textContent=phase;
+    document.getElementById('phase-name').textContent=name;
     show('s-phase');
   });
 
   socket.on('question', ({ index, total, question, options, points, phase }) => {
-    clearInterval(timerInterval);
-    const phaseNames = ['سهل','متوسط','صعب'];
-    document.getElementById('q-num').textContent = `سؤال ${index}/${total}`;
-    document.getElementById('q-pts').textContent = `${points} نقطة`;
-    document.getElementById('q-phase-banner').textContent = `المرحلة ${phase} - ${phaseNames[phase-1]||''}`;
-    document.getElementById('q-text').textContent = question;
-    document.getElementById('q-result').style.display = 'none';
-    const optsEl = document.getElementById('q-opts');
-    optsEl.innerHTML = '';
+    const phaseNames=['سهل','متوسط','صعب'];
+    document.getElementById('q-num').textContent=`سؤال ${index}/${total}`;
+    document.getElementById('q-pts').textContent=`${points} نقطة`;
+    document.getElementById('q-phase-banner').textContent=`المرحلة ${phase} - ${phaseNames[phase-1]||''}`;
+    document.getElementById('q-text').textContent=question;
+    document.getElementById('q-result').style.display='none';
+    const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
     options.forEach(opt => {
-      const btn = document.createElement('button');
-      btn.className = 'opt';
-      btn.textContent = opt;
-      btn.onclick = () => submitAnswer(opt);
+      const btn=document.createElement('button');
+      btn.className='opt'; btn.textContent=opt;
+      btn.onclick=()=>submitAnswer(opt);
       optsEl.appendChild(btn);
     });
-    const timerEl = document.getElementById('timer-el');
-    timerEl.textContent = 15;
-    timerEl.className = 'timer-circle';
+    const timerEl=document.getElementById('timer-el');
+    timerEl.textContent=15; timerEl.className='timer-circle';
     show('s-question');
   });
 
   socket.on('timer', ({ seconds }) => {
-    const el = document.getElementById('timer-el');
-    el.textContent = seconds;
-    el.className = 'timer-circle' + (seconds <= 5 ? ' urgent' : '');
+    const el=document.getElementById('timer-el');
+    el.textContent=seconds;
+    el.className='timer-circle'+(seconds<=5?' urgent':'');
   });
 
   socket.on('answer_result', ({ correct, correct_answer, points }) => {
-    document.querySelectorAll('.opt').forEach(b => {
-      b.disabled = true;
-      if (b.textContent === correct_answer) b.classList.add('correct');
-    });
-    const res = document.getElementById('q-result');
-    res.style.display = 'block';
-    if (correct) {
-      res.style.color = 'var(--success)';
-      res.textContent = `✅ إجابة صحيحة! +${points} نقطة`;
-    } else {
-      res.style.color = 'var(--danger)';
-      res.textContent = '❌ إجابة خاطئة';
-    }
+    document.querySelectorAll('.opt').forEach(b => { b.disabled=true; if(b.textContent===correct_answer) b.classList.add('correct'); });
+    const res=document.getElementById('q-result'); res.style.display='block';
+    if(correct) { res.style.color='var(--success)'; res.textContent=`✅ إجابة صحيحة! +${points} نقطة`; }
+    else { res.style.color='var(--danger)'; res.textContent='❌ إجابة خاطئة'; }
   });
 
   socket.on('time_up', ({ correct_answer }) => {
-    document.querySelectorAll('.opt').forEach(b => {
-      b.disabled = true;
-      if (b.textContent === correct_answer) b.classList.add('correct');
-    });
-    const res = document.getElementById('q-result');
-    res.style.display = 'block';
-    res.style.color = 'var(--warning)';
-    res.textContent = '⏰ انتهى الوقت!';
+    document.querySelectorAll('.opt').forEach(b => { b.disabled=true; if(b.textContent===correct_answer) b.classList.add('correct'); });
+    const res=document.getElementById('q-result'); res.style.display='block';
+    res.style.color='var(--warning)'; res.textContent='⏰ انتهى الوقت!';
   });
 
   socket.on('phase_end', ({ leaderboard, phase }) => {
-    document.getElementById('lb-title').textContent = `نهاية المرحلة ${phase}`;
-    document.getElementById('lb-sub').textContent = phase < 3 ? 'المرحلة التالية تبدأ قريباً...' : '';
-    renderLeaderboard('lb-list', leaderboard, true);
+    document.getElementById('lb-title').textContent=`نهاية المرحلة ${phase}`;
+    document.getElementById('lb-sub').textContent=phase<3?'المرحلة التالية تبدأ قريباً...':'';
+    renderLB('lb-list', leaderboard);
     show('s-leaderboard');
   });
 
   socket.on('game_end', ({ leaderboard }) => {
-    renderLeaderboard('final-lb', leaderboard, false);
+    renderLB('final-lb', leaderboard);
     show('s-gameover');
-    // Refresh user data
-    fetch('/api/me', { headers: { Authorization: 'Bearer ' + token } })
-      .then(r => r.json()).then(u => { me = u; updateHomeUI(); });
+    fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(u=>{me=u;updateHomeUI();});
   });
 
   socket.on('host_changed', () => {
-    if (!isHost) {
-      isHost = true;
-      document.getElementById('lobby-host-btn').style.display = 'block';
-      document.getElementById('lobby-ready-btn').style.display = 'none';
-      showToast('أصبحت المضيف الجديد');
-    }
+    if(!isHost){ isHost=true; document.getElementById('lobby-host-btn').style.display='block'; document.getElementById('lobby-ready-btn').style.display='none'; showToast('أصبحت المضيف الجديد'); }
   });
 }
 
-function renderLeaderboard(elId, players, showNext) {
-  const medals = ['🥇','🥈','🥉'];
-  const el = document.getElementById(elId);
-  el.innerHTML = '';
-  players.forEach((p, i) => {
-    const lvl = p.level || { emoji:'🐧' };
-    el.innerHTML += `
-      <div class="lb-card">
-        <div class="lb-rank">${medals[i] || (i+1)}</div>
-        <div class="lb-emo">${lvl.emoji}</div>
-        <div class="lb-info">
-          <div class="lb-name">${p.display_name}</div>
-          <div class="lb-score">${(p.sessionScore||0).toLocaleString('ar')} نقطة في هذه الجلسة</div>
-        </div>
-      </div>`;
+function renderLB(elId, players) {
+  const medals=['🥇','🥈','🥉'];
+  const el=document.getElementById(elId); el.innerHTML='';
+  players.forEach((p,i) => {
+    const lvl=p.level||{emoji:'🐧'};
+    el.innerHTML+=`<div class="lb-card"><div class="lb-rank">${medals[i]||(i+1)}</div><div class="lb-emo">${lvl.emoji}</div><div class="lb-info"><div class="lb-name">${p.display_name}</div><div class="lb-score">${(p.sessionScore||0).toLocaleString('ar')} نقطة</div></div></div>`;
   });
 }
 
-// ──────────────────────────────────────────────────────
-// Game Actions
-// ──────────────────────────────────────────────────────
-function selectCat(el, cat) {
-  document.querySelectorAll('.cat-opt').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-  selectedCat = cat;
+function toggleCat(el, cat) {
+  if (el.classList.contains('selected')) {
+    el.classList.remove('selected');
+    selectedCats = selectedCats.filter(c => c !== cat);
+  } else {
+    el.classList.add('selected');
+    selectedCats.push(cat);
+  }
+  const hint = document.getElementById('cat-hint');
+  const btn = document.getElementById('create-btn');
+  if (selectedCats.length === 0) { hint.textContent='اختر فئة واحدة على الأقل'; btn.disabled=true; }
+  else { hint.textContent=`${selectedCats.length} فئة محددة`; btn.disabled=false; }
 }
 
-function createRoom() {
-  if (!socket) return;
-  socket.emit('create_room', { category: selectedCat });
-}
-
+function createRoom() { if(!socket||selectedCats.length===0) return; socket.emit('create_room',{categories:selectedCats}); }
 function joinRoom() {
-  const code = document.getElementById('j-code').value.trim();
-  const errEl = document.getElementById('join-err');
-  errEl.style.display = 'none';
-  if (code.length !== 4) { errEl.textContent = 'الكود يجب أن يكون 4 أرقام'; errEl.style.display = 'block'; return; }
-  if (!socket) return;
-  socket.emit('join_room', { code });
+  const code=document.getElementById('j-code').value.trim();
+  const errEl=document.getElementById('join-err'); errEl.style.display='none';
+  if(code.length!==4){errEl.textContent='الكود يجب أن يكون 4 أرقام';errEl.style.display='block';return;}
+  socket.emit('join_room',{code});
 }
+function setReady() { socket.emit('player_ready'); document.getElementById('ready-btn').disabled=true; document.getElementById('ready-btn').textContent='✔ جاهز!'; }
+function startGame() { socket.emit('start_game'); document.getElementById('loading-msg').textContent='جاري تحضير الأسئلة...'; show('s-loading'); }
+function submitAnswer(answer) { document.querySelectorAll('.opt').forEach(b=>b.disabled=true); socket.emit('submit_answer',{answer}); }
+function leaveRoom() { if(socket){socket.disconnect();socket=null;} connectSocket(); show('s-home'); }
 
-function setReady() {
-  socket.emit('player_ready');
-  document.getElementById('ready-btn').disabled = true;
-  document.getElementById('ready-btn').textContent = '✔ جاهز!';
-}
-
-function startGame() {
-  socket.emit('start_game');
-  document.getElementById('loading-msg').textContent = 'جاري تحضير الأسئلة...';
-  show('s-loading');
-}
-
-function submitAnswer(answer) {
-  document.querySelectorAll('.opt').forEach(b => b.disabled = true);
-  socket.emit('submit_answer', { answer });
-}
-
-function leaveRoom() {
-  if (socket) socket.disconnect();
-  socket = null;
-  connectSocket();
-  show('s-home');
-}
-
-// ──────────────────────────────────────────────────────
 init();
 </script>
 </body>
