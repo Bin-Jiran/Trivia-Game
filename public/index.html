@@ -510,9 +510,9 @@ function connectSocket() {
     document.getElementById('lobby-cats').textContent=categories.join(' • ');
     document.getElementById('lobby-host-btn').style.display='block';
     document.getElementById('lobby-ready-btn').style.display='none';
-    // FIX #4: start disabled by default
-    document.getElementById('start-btn').disabled=true;
-    document.getElementById('start-btn').textContent='▶ ابدأ اللعبة (انتظر جاهز الجميع)';
+    // FIX: if alone, enable start immediately
+    document.getElementById('start-btn').disabled=false;
+    document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
     playSound('click');show('s-lobby');
   });
 
@@ -533,10 +533,9 @@ function connectSocket() {
       const lvl=p.level||{emoji:'🐧',name:'البطريق'};
       el.innerHTML+=`<div class="player-card"><div class="emo">${lvl.emoji}</div><div class="info"><div class="name">${p.display_name}</div><div class="lvl">${lvl.name}</div></div>${p.isHost?'<span class="badge-host">مضيف</span>':(p.ready?'<span class="badge-ready">جاهز ✓</span>':'')}</div>`;
     });
-    // FIX #4: enable start only when ALL non-host are ready
     if (isHost) {
       const nonHost=players.filter(p=>!p.isHost);
-      const allReady=nonHost.length>0&&nonHost.every(p=>p.ready);
+      const allReady=nonHost.length===0||nonHost.every(p=>p.ready);
       const startBtn=document.getElementById('start-btn');
       if (startBtn) {
         startBtn.disabled=!allReady;
