@@ -35,12 +35,12 @@ async function initDB() {
 initDB().catch(console.error);
 
 function getLevel(score) {
-  if (score <= 500)  return { name:'البطريق', emoji:'🐧', level:1, min:0,    max:500   };
-  if (score <= 1250) return { name:'الذئب',   emoji:'🐺', level:2, min:501,  max:1250  };
-  if (score <= 2400) return { name:'الدب',    emoji:'🐻', level:3, min:1251, max:2400  };
-  if (score <= 4100) return { name:'الأسد',   emoji:'🦁', level:4, min:2401, max:4100  };
-  if (score <= 6650) return { name:'التنين',  emoji:'🐉', level:5, min:4101, max:6650  };
-  return { name:'الفلتة!', emoji:'💥', level:6, min:6651, max:99999 };
+  if (score <= 500)  return { name:'البطريق', emoji:'🐧', img:'/levels/penguin.png', level:1, min:0,    max:500   };
+  if (score <= 1250) return { name:'الذئب',   emoji:'🐺', img:'/levels/wolf.png',    level:2, min:501,  max:1250  };
+  if (score <= 2400) return { name:'الدب',    emoji:'🐻', img:'/levels/bear.png',    level:3, min:1251, max:2400  };
+  if (score <= 4100) return { name:'الأسد',   emoji:'🦁', img:'/levels/lion.png',    level:4, min:2401, max:4100  };
+  if (score <= 6650) return { name:'التنين',  emoji:'🐉', img:'/levels/dragon.png',  level:5, min:4101, max:6650  };
+  return { name:'الفلتة!', emoji:'💥', img:'/levels/falta.png', level:6, min:6651, max:99999 };
 }
 function displayName(u) { return `${u.first_name} ${u.last_name.substring(0,3)}`; }
 function verifyToken(t) { try { return jwt.verify(t, JWT_SECRET); } catch { return null; } }
