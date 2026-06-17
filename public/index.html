@@ -60,7 +60,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
   padding: 20px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.2s;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .home-profile:hover { border-color: var(--blue); }
-.home-profile .hp-emo { font-size: 52px; }
+.home-profile .hp-emo { display:block; margin:0 auto 4px; }
 .home-profile .hp-name { font-size: 18px; font-weight: 700; text-align: center; }
 .home-profile .hp-level { font-size: 13px; color: var(--muted); text-align: center; }
 .home-profile .hp-score { font-size: 14px; font-weight: 700; color: var(--orange); text-align: center; }
@@ -108,8 +108,22 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .timer-circle.urgent { border-color:var(--red); color:var(--red); animation:pulse 0.5s infinite; box-shadow: 0 2px 8px rgba(232,71,42,0.3); }
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 
+/* Question box — 4-color gradient border matching logo */
+.q-box {
+  position: relative;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  margin-bottom: 4px;
+  border: 4px solid transparent;
+  background-image: linear-gradient(var(--card), var(--card)), linear-gradient(135deg, var(--red) 0%, var(--red) 25%, var(--yellow) 25%, var(--yellow) 50%, var(--green) 50%, var(--green) 75%, var(--blue) 75%, var(--blue) 100%);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
 /* Question text */
-.q-text { font-size:18px; font-weight:700; text-align:center; line-height:1.5; margin-bottom:16px; min-height:52px; color:var(--text); }
+.q-text { font-size:18px; font-weight:700; text-align:center; line-height:1.5; min-height:52px; color:var(--text); }
 
 /* Answer options */
 .options-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -222,11 +236,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 <!-- HOME -->
 <div id="s-home" class="screen">
   <div class="game-logo" style="margin-top:16px;">
-    <img src="/logo.jpg" alt="الفلته" onerror="this.style.display='none'">
-    <h1>الفلته!</h1>
+    <img src="/logo.jpg" alt="الفلته" style="width:140px;height:140px;" onerror="this.style.display='none'">
   </div>
   <div class="home-profile" onclick="showProfile()">
-    <div class="hp-emo" id="home-emo">🐧</div>
+    <img class="hp-emo" id="home-emo" style="width:80px;height:80px;" src="" alt="">
     <div class="hp-name" id="home-name"></div>
     <div class="hp-level" id="home-level-txt"></div>
     <div class="hp-score" id="home-score"></div>
@@ -247,7 +260,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
   </div>
   <div class="card">
     <div style="text-align:center;margin-bottom:14px;">
-      <span id="p-emo" style="font-size:58px;display:block;margin-bottom:6px;">🐧</span>
+      <img id="p-emo" style="width:100px;height:100px;display:block;margin:0 auto 6px;" src="" alt="">
       <div id="p-name" style="font-size:18px;font-weight:700;"></div>
       <span id="p-level-name" style="display:inline-block;margin-top:6px;background:var(--blue);color:#fff;border-radius:20px;padding:3px 14px;font-size:13px;font-weight:600;"></span>
     </div>
@@ -340,8 +353,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 <!-- PHASE START -->
 <div id="s-phase" class="screen">
   <div style="text-align:center;margin-top:60px;">
-    <span id="phase-emo" style="font-size:72px;display:block;margin-bottom:16px;">⚡</span>
-    <h1 style="font-size:32px;color:var(--text);">المرحلة <span id="phase-num">1</span> من 3</h1>
+    <img src="/logo.jpg" style="width:90px;height:90px;border-radius:20px;display:block;margin:0 auto 16px;box-shadow:0 6px 20px rgba(0,0,0,0.15);" alt="">
+    <h1 style="font-size:32px;color:var(--text);">الجولة <span id="phase-num">1</span> من 3</h1>
     <h2 style="margin-top:8px;font-size:24px;" id="phase-name-big">سهل</h2>
     <p style="color:var(--muted);margin-top:10px;font-size:13px;">12 سؤال • استعد!</p>
   </div>
@@ -351,7 +364,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 <div id="s-question" class="screen">
   <div class="q-wrapper">
     <!-- Phase banner -->
-    <div class="phase-banner" id="q-phase-banner" style="background:var(--green);">المرحلة 1 - سهل</div>
+    <div class="phase-banner" id="q-phase-banner" style="background:var(--green);">الجولة 1 - سهل</div>
 
     <!-- Question number + points top row -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -361,11 +374,16 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
     <div id="logo-box" style="display:none;"></div>
 
-    <!-- Timer LEFT, question text RIGHT side by side -->
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
-      <div class="timer-circle" id="timer-el" style="flex-shrink:0;">15</div>
-      <div class="q-text" id="q-text" style="margin-bottom:0;text-align:right;flex:1;">...</div>
+    <!-- Question inside 4-color bordered box -->
+    <div class="q-box">
+      <div class="q-text" id="q-text" style="margin-bottom:0;">...</div>
     </div>
+
+    <!-- Timer centered below question box -->
+    <div style="display:flex;justify-content:center;margin:14px 0;">
+      <div class="timer-circle" id="timer-el">15</div>
+    </div>
+
     <div class="options-grid" id="q-opts"></div>
     <div id="q-result"></div>
   </div>
@@ -374,7 +392,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 <!-- LEADERBOARD -->
 <div id="s-leaderboard" class="screen">
   <div style="margin-top:10px;">
-    <h2 style="text-align:center;font-size:22px;margin-bottom:3px;color:var(--text);" id="lb-title">نهاية المرحلة 1</h2>
+    <h2 style="text-align:center;font-size:22px;margin-bottom:3px;color:var(--text);" id="lb-title">نهاية الجولة 1</h2>
     <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px;" id="lb-sub"></p>
     <div class="lb-list" id="lb-list"></div>
   </div>
@@ -414,6 +432,10 @@ function playSound(type) {
     } else if (type==='question') {
       o.type='sine'; o.frequency.setValueAtTime(440,t); o.frequency.setValueAtTime(550,t+0.05);
       g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.15); o.start(t); o.stop(t+0.15);
+    } else if (type==='tick') {
+      o.type='square'; o.frequency.setValueAtTime(1000,t);
+      g.gain.setValueAtTime(0.1,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.06);
+      o.start(t); o.stop(t+0.06);
     } else if (type==='leaderboard') {
       [523,659,784,1047].forEach((f,i)=>{ const o2=ctx.createOscillator(),g2=ctx.createGain(); o2.connect(g2); g2.connect(ctx.destination); o2.frequency.value=f; g2.gain.setValueAtTime(0.2,t+i*0.1); g2.gain.exponentialRampToValueAtTime(0.001,t+i*0.1+0.2); o2.start(t+i*0.1); o2.stop(t+i*0.1+0.2); }); return;
     } else if (type==='enter') {
@@ -425,12 +447,12 @@ function playSound(type) {
 // ── State ──────────────────────────────────────────────────────────────────
 let token=localStorage.getItem('token'), me=null, socket=null, selectedCats=[], isHost=false;
 const LEVELS=[
-  {name:'البطريق',emoji:'🐧',min:0,   max:500  },
-  {name:'الذئب',  emoji:'🐺',min:501, max:1250 },
-  {name:'الدب',   emoji:'🐻',min:1251,max:2400 },
-  {name:'الأسد',  emoji:'🦁',min:2401,max:4100 },
-  {name:'التنين', emoji:'🐉',min:4101,max:6650 },
-  {name:'الفلتة!',emoji:'💥',min:6651,max:99999},
+  {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',min:0,   max:500  },
+  {name:'الذئب',  emoji:'🐺',img:'/levels/wolf.png',   min:501, max:1250 },
+  {name:'الدب',   emoji:'🐻',img:'/levels/bear.png',   min:1251,max:2400 },
+  {name:'الأسد',  emoji:'🦁',img:'/levels/lion.png',   min:2401,max:4100 },
+  {name:'التنين', emoji:'🐉',img:'/levels/dragon.png', min:4101,max:6650 },
+  {name:'الفلتة!',emoji:'💥',img:'/levels/falta.png',  min:6651,max:99999},
 ];
 
 function show(id) { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
@@ -444,7 +466,7 @@ async function init() {
 }
 
 function updateHomeUI() {
-  document.getElementById('home-emo').textContent=me.level.emoji;
+  document.getElementById('home-emo').src=me.level.img||'';
   document.getElementById('home-name').textContent=me.display_name;
   document.getElementById('home-level-txt').textContent=me.level.name;
   document.getElementById('home-score').textContent='⭐ '+(me.total_score||0).toLocaleString('ar')+' نقطة';
@@ -452,7 +474,7 @@ function updateHomeUI() {
 
 function showProfile() {
   playSound('click');
-  document.getElementById('p-emo').textContent=me.level.emoji;
+  document.getElementById('p-emo').src=me.level.img||'';
   document.getElementById('p-name').textContent=me.display_name;
   document.getElementById('p-level-name').textContent=me.level.name;
   document.getElementById('p-email').textContent=me.email;
@@ -466,7 +488,7 @@ function showProfile() {
   document.getElementById('p-bar').style.width=Math.min(Math.max(progress,2),100)+'%';
   const list=document.getElementById('level-all-list'); list.innerHTML='';
   LEVELS.forEach(l=>{ const isCurrent=me.level.name===l.name, isPassed=score>l.max&&l.level<6;
-    list.innerHTML+=`<div class="level-row ${isCurrent?'current':''}"><div class="lemo">${l.emoji}</div><div class="linfo"><div class="lname">${l.name}${isPassed?' ✓':''}</div><div class="lrange">${l.min.toLocaleString('ar')} - ${l.level===6?'∞':l.max.toLocaleString('ar')} نقطة</div></div>${isCurrent?'<div class="lcurrent">مستواك الحالي</div>':''}</div>`;
+    list.innerHTML+=`<div class="level-row ${isCurrent?'current':''}"><img src="${l.img}" style="width:36px;height:36px;flex-shrink:0;" alt=""><div class="linfo"><div class="lname">${l.name}${isPassed?' ✓':''}</div><div class="lrange">${l.min.toLocaleString('ar')} - ${l.level===6?'∞':l.max.toLocaleString('ar')} نقطة</div></div>${isCurrent?'<div class="lcurrent">مستواك الحالي</div>':''}</div>`;
   });
   show('s-profile');
 }
@@ -530,8 +552,8 @@ function connectSocket() {
   socket.on('players_update',players=>{
     const el=document.getElementById('lobby-players'); el.innerHTML='';
     players.forEach(p=>{
-      const lvl=p.level||{emoji:'🐧',name:'البطريق'};
-      el.innerHTML+=`<div class="player-card"><div class="emo">${lvl.emoji}</div><div class="info"><div class="name">${p.display_name}</div><div class="lvl">${lvl.name}</div></div>${p.isHost?'<span class="badge-host">مضيف</span>':(p.ready?'<span class="badge-ready">جاهز ✓</span>':'')}</div>`;
+      const lvl=p.level||{emoji:'🐧',name:'البطريق',img:'/levels/penguin.png'};
+      el.innerHTML+=`<div class="player-card"><img src="${lvl.img}" style="width:32px;height:32px;flex-shrink:0;" alt=""><div class="info"><div class="name">${p.display_name}</div><div class="lvl">${lvl.name}</div></div>${p.isHost?'<span class="badge-host">مضيف</span>':(p.ready?'<span class="badge-ready">جاهز ✓</span>':'')}</div>`;
     });
     if (isHost) {
       const nonHost=players.filter(p=>!p.isHost);
@@ -548,8 +570,6 @@ function connectSocket() {
   socket.on('game_loading',({message})=>{document.getElementById('loading-msg').textContent=message;show('s-loading');});
 
   socket.on('phase_start',({phase,name})=>{
-    const emos=['💚','💙','❤️'];
-    document.getElementById('phase-emo').textContent=emos[phase-1]||'⚡';
     document.getElementById('phase-num').textContent=phase;
     document.getElementById('phase-name-big').textContent=name;
     playSound('leaderboard');show('s-phase');
@@ -562,7 +582,7 @@ function connectSocket() {
     document.getElementById('q-num').textContent=`سؤال ${index}/${total}`;
     document.getElementById('q-pts').textContent=`${points} نقطة`;
     const banner=document.getElementById('q-phase-banner');
-    banner.textContent=`المرحلة ${phase} - ${phaseNames[phase-1]||''}`;
+    banner.textContent=`الجولة ${phase} - ${phaseNames[phase-1]||''}`;
     banner.style.background=phaseColors[phase-1]||'var(--green)';
 
     const logoBox=document.getElementById('logo-box'), qEl=document.getElementById('q-text');
@@ -594,6 +614,7 @@ function connectSocket() {
     const el=document.getElementById('timer-el');
     el.textContent=seconds;
     el.className='timer-circle'+(seconds<=5?' urgent':'');
+    if (seconds<=5 && seconds>=0) playSound('tick');
   });
 
   socket.on('answer_result',({correct,points})=>{
@@ -628,8 +649,8 @@ function connectSocket() {
   });
 
   socket.on('phase_end',({leaderboard,phase})=>{
-    document.getElementById('lb-title').textContent=`نهاية المرحلة ${phase}`;
-    document.getElementById('lb-sub').textContent=phase<3?'المرحلة التالية تبدأ قريباً...':'';
+    document.getElementById('lb-title').textContent=`نهاية الجولة ${phase}`;
+    document.getElementById('lb-sub').textContent=phase<3?'الجولة التالية تبدأ قريباً...':'';
     renderLB('lb-list',leaderboard); playSound('leaderboard'); show('s-leaderboard');
   });
 
@@ -646,8 +667,8 @@ function connectSocket() {
 function renderLB(elId,players){
   const medals=['🥇','🥈','🥉'];
   const el=document.getElementById(elId); el.innerHTML='';
-  players.forEach((p,i)=>{const lvl=p.level||{emoji:'🐧'};
-    el.innerHTML+=`<div class="lb-card"><div class="lb-rank">${medals[i]||(i+1)}</div><div class="lb-emo">${lvl.emoji}</div><div class="lb-info"><div class="lb-name">${p.display_name}</div><div class="lb-score">${(p.sessionScore||0).toLocaleString('ar')} نقطة</div></div></div>`;
+  players.forEach((p,i)=>{const lvl=p.level||{emoji:'🐧',img:'/levels/penguin.png'};
+    el.innerHTML+=`<div class="lb-card"><div class="lb-rank">${medals[i]||(i+1)}</div><img src="${lvl.img}" style="width:32px;height:32px;flex-shrink:0;" alt=""><div class="lb-info"><div class="lb-name">${p.display_name}</div><div class="lb-score">${(p.sessionScore||0).toLocaleString('ar')} نقطة</div></div></div>`;
   });
 }
 
