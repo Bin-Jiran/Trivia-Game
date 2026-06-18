@@ -302,10 +302,14 @@ function askQuestion(code) {
 
 function endPhase(code) {
   const room = rooms[code];
-  io.to(code).emit('phase_end', { leaderboard:getPlayers(code), phase:room.phase+1 });
   room.phase++;
-  if (room.phase >= 3) endGame(code);
-  else setTimeout(() => startPhase(code), 8000);
+  if (room.phase >= 3) {
+    endGame(code);
+  } else {
+    // Brief transition message instead of full leaderboard
+    io.to(code).emit('phase_transition', { nextPhase: room.phase + 1 });
+    setTimeout(() => startPhase(code), 3000);
+  }
 }
 
 async function endGame(code) {
