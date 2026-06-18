@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>الفلته</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
 <script src="/socket.io/socket.io.js"></script>
 <style>
 :root {
@@ -57,42 +58,61 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .error-msg { background: rgba(232,71,42,0.1); border: 1px solid rgba(232,71,42,0.3); color: var(--red-d); border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
 
-/* ── Home profile card — centered, no arrow ── */
-.home-profile { display: flex; flex-direction: column; align-items: center; gap: 6px;
-  background: var(--card); border: 2px solid var(--border); border-radius: var(--radius);
-  padding: 20px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.home-profile:hover { border-color: var(--blue); }
-.home-profile .hp-emo { display:block; margin:0 auto 4px; }
-.home-profile .hp-name { font-size: 18px; font-weight: 700; text-align: center; }
-.home-profile .hp-level { font-size: 13px; color: var(--muted); text-align: center; }
-
-/* Progress meter on home */
-.home-progress-wrap { width: 100%; margin-top: 10px; cursor: pointer; }
-.home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.home-next-wrap { display: flex; align-items: center; gap: 5px; }
-.home-next-img { width: 22px; height: 22px; }
-
-/* Wide rectangular icon buttons (create / join) — full width, stacked */
-.home-actions-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; margin-bottom: 0; }
-.icon-btn-wide {
-  display: flex; align-items: center; justify-content: center; gap: 14px;
-  background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 12px 16px; cursor: pointer; transition: transform 0.1s, border-color 0.2s;
-  font-family: var(--font); width: 100%;
+/* ── Home hero card — gradient background like logo ── */
+.home-hero {
+  background: linear-gradient(135deg, var(--red) 0%, var(--yellow) 33%, var(--green) 66%, var(--blue) 100%);
+  border-radius: 28px;
+  padding: 22px 16px 14px;
+  margin: 14px 0;
 }
-.icon-btn-wide:hover { border-color: var(--blue); }
-.icon-btn-wide:active { transform: scale(0.98); }
-.icon-btn-wide img { width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0; }
-.icon-btn-wide span { font-size: 15px; font-weight: 700; color: var(--text); }
+.hero-logo { text-align: center; margin-top: 2px; }
+.hero-logo img { width: 92px; height: 92px; border-radius: 22px; box-shadow: 0 6px 0 rgba(0,0,0,0.15); }
+.hero-title { text-align: center; color: #fff; font-size: 24px; font-weight: 800; margin-top: 8px; text-shadow: 0 2px 4px rgba(0,0,0,0.15); }
 
-.home-levels-card { padding: 14px; margin-bottom: 0; }
-.home-levels-card .level-all { margin: 8px 0 0; }
-.home-levels-card .level-row { padding: 8px 12px; }
-.home-levels-card .level-row .lname { font-size: 13px; }
-.home-levels-card .level-row .lrange { font-size: 11px; }
-.home-levels-card .lcurrent { display: none; }
+/* Profile card sitting inside hero, white surface */
+.hero-profile {
+  background: rgba(255,255,255,0.97); border-radius: 18px; padding: 16px;
+  margin-top: 16px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.hero-profile .hp-emo { width: 72px; height: 72px; display: block; margin: 0 auto 4px; }
+.hero-profile .hp-name { font-size: 17px; font-weight: 700; color: var(--text); text-align: center; }
+.hero-profile .hp-level { font-size: 12px; color: var(--muted); text-align: center; }
+.home-progress-wrap { width: 100%; margin-top: 8px; cursor: pointer; }
+.home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+.home-next-wrap { display: flex; align-items: center; gap: 5px; }
+.home-next-img { width: 20px; height: 20px; }
 
+/* 3D pressed action buttons */
+.hero-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.hero-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: none; border-radius: 16px; padding: 14px; cursor: pointer;
+  font-family: var(--font); font-size: 15px; font-weight: 700; color: #fff;
+  transition: transform 0.1s;
+}
+.hero-btn:active { transform: translateY(2px); }
+.hero-btn img { width: 36px; height: 36px; border-radius: 9px; }
+.hero-btn-blue { background: var(--blue); box-shadow: 0 5px 0 var(--blue-d); }
+.hero-btn-green { background: var(--green); box-shadow: 0 5px 0 var(--green-d); }
+
+/* Bottom nav bar inside hero */
+.hero-navbar {
+  margin-top: 18px; background: rgba(255,255,255,0.96); border-radius: 18px;
+  padding: 10px 6px; display: flex; justify-content: space-around;
+}
+.nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; transition: transform 0.1s; flex: 1; }
+.nav-item:active { transform: scale(0.92); }
+.nav-item span { font-size: 10px; color: var(--text); font-weight: 700; text-align: center; }
+.nav-icon { width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 21px; }
+.nav-icon-blue   { background: var(--blue); }
+.nav-icon-yellow { background: var(--yellow); }
+.nav-icon-green  { background: var(--green); }
+.nav-icon-red    { background: var(--red); }
+
+/* How to play */
+.howto-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
+.howto-item:last-child { border-bottom: none; }
+.howto-num { width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
 /* ── Room code ── */
 .room-code-display { text-align: center; margin: 12px 0; }
@@ -289,40 +309,97 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 <!-- HOME -->
 <div id="s-home" class="screen">
-  <div class="game-logo" style="margin-top:16px;">
-    <img src="/logo.jpg" alt="الفلته" style="width:140px;height:140px;" onerror="this.style.display='none'">
-  </div>
-  <div class="home-profile" onclick="showProfile()">
-    <img class="hp-emo" id="home-emo" style="width:80px;height:80px;" src="" alt="">
-    <div class="hp-name" id="home-name"></div>
-    <div class="hp-level" id="home-level-txt"></div>
-    <!-- Progress meter with next-level badge -->
-    <div class="home-progress-wrap" onclick="event.stopPropagation();showProfile()">
-      <div class="home-progress-label">
-        <span id="home-score-label">0 نقطة</span>
-        <span class="home-next-wrap">
-          <img id="home-next-img" class="home-next-img" src="" alt="">
-          <span id="home-next-label">التالي: 500</span>
-        </span>
+  <div class="home-hero">
+    <div class="hero-logo">
+      <img src="/logo.jpg" alt="الفلته" onerror="this.style.display='none'">
+    </div>
+    <div class="hero-title">الفلتة!</div>
+
+    <div class="hero-profile" onclick="showProfile()">
+      <img class="hp-emo" id="home-emo" src="" alt="">
+      <div class="hp-name" id="home-name"></div>
+      <div class="hp-level" id="home-level-txt"></div>
+      <div class="home-progress-wrap" onclick="event.stopPropagation();showProfile()">
+        <div class="home-progress-label">
+          <span id="home-score-label">0 نقطة</span>
+          <span class="home-next-wrap">
+            <img id="home-next-img" class="home-next-img" src="" alt="">
+            <span id="home-next-label">التالي: 500</span>
+          </span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="home-bar" style="width:0%"></div></div>
       </div>
-      <div class="progress-bar"><div class="progress-fill" id="home-bar" style="width:0%"></div></div>
+    </div>
+
+    <div class="hero-actions">
+      <button class="hero-btn hero-btn-blue" onclick="playSound('click');show('s-create')">
+        <img src="/icons/icon-plus.svg" alt="">
+        <span>إنشاء غرفة</span>
+      </button>
+      <button class="hero-btn hero-btn-green" onclick="playSound('click');show('s-join')">
+        <img src="/icons/icon-arrow.svg" alt="">
+        <span>دخول غرفة</span>
+      </button>
+    </div>
+
+    <div class="hero-navbar">
+      <div class="nav-item" onclick="playSound('click');showHowToPlay()">
+        <div class="nav-icon nav-icon-blue"><i class="ti ti-question-mark" aria-hidden="true"></i></div>
+        <span>طريقة اللعب</span>
+      </div>
+      <div class="nav-item" onclick="playSound('click');showShop()">
+        <div class="nav-icon nav-icon-yellow"><i class="ti ti-shopping-bag" aria-hidden="true"></i></div>
+        <span>المتجر</span>
+      </div>
+      <div class="nav-item" onclick="playSound('click');showLevelsScreen()">
+        <div class="nav-icon nav-icon-green"><i class="ti ti-trophy" aria-hidden="true"></i></div>
+        <span>المستويات</span>
+      </div>
+      <div class="nav-item" onclick="playSound('click');showProfile()">
+        <div class="nav-icon nav-icon-red"><i class="ti ti-user" aria-hidden="true"></i></div>
+        <span>ملفي الشخصي</span>
+      </div>
     </div>
   </div>
+</div>
 
-  <!-- Action buttons stacked, then levels below -->
-  <div class="card home-actions-card">
-    <button class="icon-btn-wide" onclick="playSound('click');show('s-create')">
-      <img src="/icons/icon-plus.svg" alt="">
-      <span>إنشاء غرفة</span>
-    </button>
-    <button class="icon-btn-wide" onclick="playSound('click');show('s-join')">
-      <img src="/icons/icon-arrow.svg" alt="">
-      <span>دخول غرفة</span>
-    </button>
+<!-- LEVELS (المستويات) -->
+<div id="s-levels" class="screen">
+  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:14px;">
+    <button class="back-btn" onclick="show('s-home')">←</button>
+    <h2 style="font-size:20px;">جميع المستويات</h2>
   </div>
-  <div class="card home-levels-card">
-    <div class="section-title" style="text-align:center;">جميع المستويات</div>
-    <div class="level-all" id="level-all-list-home"></div>
+  <div class="card">
+    <div class="level-all" id="level-all-list-page"></div>
+  </div>
+</div>
+
+<!-- SHOP (placeholder) -->
+<div id="s-shop" class="screen">
+  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:14px;">
+    <button class="back-btn" onclick="show('s-home')">←</button>
+    <h2 style="font-size:20px;">المتجر</h2>
+  </div>
+  <div class="card" style="text-align:center;padding:40px 20px;">
+    <i class="ti ti-shopping-bag" style="font-size:48px;color:var(--muted);" aria-hidden="true"></i>
+    <h3 style="margin-top:14px;font-size:18px;">قريباً!</h3>
+    <p style="color:var(--muted);font-size:13px;margin-top:6px;">المتجر قيد التطوير، تابعنا للمزيد</p>
+  </div>
+</div>
+
+<!-- HOW TO PLAY -->
+<div id="s-howto" class="screen">
+  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:14px;">
+    <button class="back-btn" onclick="show('s-home')">←</button>
+    <h2 style="font-size:20px;">طريقة اللعب</h2>
+  </div>
+  <div class="card">
+    <div class="howto-item"><div class="howto-num">1</div><div>أنشئ غرفة واختر فئة أو أكثر للأسئلة</div></div>
+    <div class="howto-item"><div class="howto-num">2</div><div>شارك كود الغرفة مع أصدقائك ليدخلوا</div></div>
+    <div class="howto-item"><div class="howto-num">3</div><div>عندما يصبح الجميع جاهزاً، يبدأ المضيف اللعبة</div></div>
+    <div class="howto-item"><div class="howto-num">4</div><div>أجب على الأسئلة بسرعة قبل انتهاء الوقت</div></div>
+    <div class="howto-item"><div class="howto-num">5</div><div>اللعبة فيها 3 جولات: سهل، متوسط، صعب</div></div>
+    <div class="howto-item"><div class="howto-num">6</div><div>كل ما زادت نقاطك، رفعت مستواك من البطريق إلى الفلتة!</div></div>
   </div>
 </div>
 
@@ -597,7 +674,7 @@ function updateHomeUI() {
     nextLabelEl.textContent='أعلى مستوى!';
   }
 
-  renderLevelsList('level-all-list-home', score, lvl);
+  // Levels list now lives on its own page, rendered on-demand in showLevelsScreen()
 }
 
 function renderLevelsList(elId, score, currentLvl) {
@@ -606,6 +683,15 @@ function renderLevelsList(elId, score, currentLvl) {
     list.innerHTML+=`<div class="level-row ${isCurrent?'current':''}"><img src="${l.img}" alt=""><div class="linfo"><div class="lname">${l.name}${isPassed?' ✓':''}</div><div class="lrange">${l.min.toLocaleString('ar')} - ${l.level===6?'∞':l.max.toLocaleString('ar')} نقطة</div></div>${isCurrent?'<div class="lcurrent">مستواك الحالي</div>':''}</div>`;
   });
 }
+
+function showLevelsScreen() {
+  const score=me.total_score||0, lvl=me.level;
+  renderLevelsList('level-all-list-page', score, lvl);
+  show('s-levels');
+}
+
+function showShop() { show('s-shop'); }
+function showHowToPlay() { show('s-howto'); }
 
 function showProfile() {
   playSound('click');
