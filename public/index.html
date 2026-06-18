@@ -74,12 +74,12 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .hero-profile .hp-emo { width: 96px; height: 96px; display: block; margin: 0 auto 4px; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.3)); }
 .hero-profile .hp-name { font-size: 17px; font-weight: 800; color: #fff; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 .hero-profile .hp-level { font-size: 12px; color: rgba(255,255,255,0.9); text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-.home-progress-wrap { width: 100%; margin-top: 8px; cursor: default; }
-.home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.2); margin-bottom: 5px; }
-.home-next-wrap { display: flex; align-items: center; gap: 5px; }
-.home-next-img { width: 20px; height: 20px; }
+.home-progress-wrap { width: 100%; margin-top: 10px; cursor: default; }
+.home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.2); margin-bottom: 7px; }
+.home-next-wrap { display: flex; align-items: center; gap: 6px; }
+.home-next-img { width: 26px; height: 26px; }
 /* White border on home progress bar (#1) */
-.home-progress-wrap .progress-bar { border: 2px solid #fff; }
+.home-progress-wrap .progress-bar { border: 2px solid #fff; height: 18px; }
 
 /* 3D pressed action buttons */
 .hero-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
@@ -92,30 +92,34 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .hero-btn:active { transform: translateY(2px); }
 .hero-btn img { width: 46px; height: 46px; }
 .hero-btn-blue   { background: var(--blue);   box-shadow: 0 5px 0 var(--blue-d); }
-.hero-btn-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); color: #4A3800; }
+.hero-btn-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); color: #fff; }
 
-/* Fixed global nav bar (#2) */
+
+/* Fixed global nav bar */
 .global-navbar {
   position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: 100%; max-width: 520px;
-  background: #1a1a1a; border-top: 2px solid #1a1a1a;
+  width: calc(100% - 40px); max-width: 480px;
+  background: #fff; border: 3px solid #fff; border-bottom: none; border-radius: 18px 18px 0 0;
   display: flex; z-index: 1000;
-  box-shadow: 0 -4px 16px rgba(0,0,0,0.35);
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.2);
+  overflow: hidden;
 }
 .gnav-item {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  padding: 14px 0; cursor: pointer;
-  border-right: 2px solid #1a1a1a;
+  padding: 13px 0; cursor: pointer;
+  border-right: 2px solid #fff;
   transition: transform 0.15s, filter 0.15s;
 }
 .gnav-item:last-child { border-right: none; }
 .gnav-item img { width: 28px; height: 28px; display: block; }
+.gnav-item.gnav-home img { width: 46px; height: 46px; }
 .gnav-item.gnav-active { transform: translateY(-8px) scale(1.15); border-radius: 12px 12px 0 0; z-index: 2; filter: brightness(1.1); }
 .gnav-item:active { filter: brightness(0.82); }
 .nav-item-red    { background: var(--red); }
 .nav-item-green  { background: var(--green); }
 .nav-item-yellow { background: var(--yellow); }
 .nav-item-blue   { background: var(--blue); }
+.nav-item-white  { background: #fff; }
 
 /* Screens that show the nav need bottom padding */
 .screen.has-nav { padding-bottom: 90px; }
@@ -281,8 +285,8 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <div id="s-login" class="screen active">
   <div class="hero-logo" style="margin-top:24px;">
     <div class="hero-header-row">
-      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
       <img src="/icons/text-falta.png" alt="الفلتة!" class="hero-text-img">
+      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
     </div>
   </div>
   <div class="card" style="margin-top:20px;">
@@ -299,8 +303,8 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <div id="s-register" class="screen">
   <div class="hero-logo" style="margin-top:16px;">
     <div class="hero-header-row">
-      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
       <img src="/icons/text-falta.png" alt="الفلتة!" class="hero-text-img">
+      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
     </div>
   </div>
   <div class="card" style="margin-top:14px;">
@@ -329,8 +333,8 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <div id="s-home" class="screen">
   <div class="home-hero">
     <div class="hero-header-row">
-      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
       <img src="/icons/text-falta.png" alt="الفلتة!" class="hero-text-img">
+      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
     </div>
 
     <div class="hero-profile">
@@ -625,7 +629,7 @@ const LEVELS=[
   {name:'الفلتة!',emoji:'💥',img:'/levels/falta.png',  level:6,min:6651,max:99999},
 ];
 
-const NAV_SCREENS = { 's-home':'', 's-profile':'gnav-profile', 's-levels':'gnav-levels', 's-shop':'gnav-shop', 's-howto':'gnav-howto' };
+const NAV_SCREENS = { 's-home':'gnav-home', 's-profile':'gnav-profile', 's-levels':'gnav-levels', 's-shop':'gnav-shop', 's-howto':'gnav-howto' };
 
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -954,6 +958,9 @@ init();
   </div>
   <div class="gnav-item nav-item-green" id="gnav-levels" onclick="playSound('click');showLevelsScreen()">
     <img src="/icons/nav-trophy.svg" alt="المستويات">
+  </div>
+  <div class="gnav-item gnav-home nav-item-white" id="gnav-home" onclick="playSound('click');show('s-home')">
+    <img src="/icons/nav-home.png" alt="الرئيسية">
   </div>
   <div class="gnav-item nav-item-yellow" id="gnav-shop" onclick="playSound('click');showShop()">
     <img src="/icons/nav-shop.svg" alt="المتجر">
