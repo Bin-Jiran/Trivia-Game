@@ -25,6 +25,7 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; direction: rtl; }
+body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var(--green) 65%, var(--blue) 100%); }
 .screen { display: none; min-height: 100vh; padding: 20px; max-width: 520px; margin: auto; }
 .screen.active { display: flex; flex-direction: column; }
 
@@ -58,16 +59,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .error-msg { background: rgba(232,71,42,0.1); border: 1px solid rgba(232,71,42,0.3); color: var(--red-d); border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
 
-/* ── Home hero card — gradient background like logo ── */
+/* ── Home hero — body provides gradient, this is just a transparent layout wrapper ── */
 .home-hero {
-  background: linear-gradient(135deg, var(--red) 0%, var(--yellow) 33%, var(--green) 66%, var(--blue) 100%);
-  border-radius: 28px;
-  padding: 22px 16px 14px;
-  margin: 14px 0;
+  background: transparent;
+  padding: 10px 4px 14px;
 }
 .hero-logo { text-align: center; margin-top: 2px; }
-.hero-logo img { width: 92px; height: 92px; border-radius: 22px; box-shadow: 0 6px 0 rgba(0,0,0,0.15); }
-.hero-title { text-align: center; color: #fff; font-size: 24px; font-weight: 800; margin-top: 8px; text-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+.hero-logo img { width: 92px; height: 92px; display: block; margin: 0 auto; }
+.hero-title { text-align: center; margin-top: 6px; }
+.hero-title img { height: 30px; }
 
 /* Profile card sitting inside hero, white surface */
 .hero-profile {
@@ -91,7 +91,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
   transition: transform 0.1s;
 }
 .hero-btn:active { transform: translateY(2px); }
-.hero-btn img { width: 36px; height: 36px; border-radius: 9px; }
+.hero-btn img { width: 30px; height: 30px; }
 .hero-btn-blue { background: var(--blue); box-shadow: 0 5px 0 var(--blue-d); }
 .hero-btn-green { background: var(--green); box-shadow: 0 5px 0 var(--green-d); }
 
@@ -102,8 +102,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 }
 .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; transition: transform 0.1s; flex: 1; }
 .nav-item:active { transform: scale(0.92); }
-.nav-item span { font-size: 10px; color: var(--text); font-weight: 700; text-align: center; }
-.nav-icon { width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 21px; }
+.nav-icon { width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+.nav-icon img { width: 26px; height: 26px; }
 .nav-icon-blue   { background: var(--blue); }
 .nav-icon-yellow { background: var(--yellow); }
 .nav-icon-green  { background: var(--green); }
@@ -311,9 +311,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 <div id="s-home" class="screen">
   <div class="home-hero">
     <div class="hero-logo">
-      <img src="/logo.jpg" alt="الفلته" onerror="this.style.display='none'">
+      <img src="/icons/light-pulp.png" alt="الفلته" onerror="this.style.display='none'">
     </div>
-    <div class="hero-title">الفلتة!</div>
+    <div class="hero-title">
+      <img src="/icons/text-falta.png" alt="الفلتة!" onerror="this.style.display='none'">
+    </div>
 
     <div class="hero-profile" onclick="showProfile()">
       <img class="hp-emo" id="home-emo" src="" alt="">
@@ -333,31 +335,27 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
     <div class="hero-actions">
       <button class="hero-btn hero-btn-blue" onclick="playSound('click');show('s-create')">
-        <img src="/icons/icon-plus.svg" alt="">
+        <img src="/icons/sign-plus.svg" alt="">
         <span>إنشاء غرفة</span>
       </button>
       <button class="hero-btn hero-btn-green" onclick="playSound('click');show('s-join')">
-        <img src="/icons/icon-arrow.svg" alt="">
+        <img src="/icons/sign-join.svg" alt="">
         <span>دخول غرفة</span>
       </button>
     </div>
 
     <div class="hero-navbar">
-      <div class="nav-item" onclick="playSound('click');showHowToPlay()">
-        <div class="nav-icon nav-icon-blue"><i class="ti ti-question-mark" aria-hidden="true"></i></div>
-        <span>طريقة اللعب</span>
-      </div>
-      <div class="nav-item" onclick="playSound('click');showShop()">
-        <div class="nav-icon nav-icon-yellow"><i class="ti ti-shopping-bag" aria-hidden="true"></i></div>
-        <span>المتجر</span>
+      <div class="nav-item" onclick="playSound('click');showProfile()">
+        <div class="nav-icon nav-icon-red"><img src="/icons/nav-profile.svg" alt="ملفي الشخصي"></div>
       </div>
       <div class="nav-item" onclick="playSound('click');showLevelsScreen()">
-        <div class="nav-icon nav-icon-green"><i class="ti ti-trophy" aria-hidden="true"></i></div>
-        <span>المستويات</span>
+        <div class="nav-icon nav-icon-green"><img src="/icons/nav-trophy.svg" alt="المستويات"></div>
       </div>
-      <div class="nav-item" onclick="playSound('click');showProfile()">
-        <div class="nav-icon nav-icon-red"><i class="ti ti-user" aria-hidden="true"></i></div>
-        <span>ملفي الشخصي</span>
+      <div class="nav-item" onclick="playSound('click');showShop()">
+        <div class="nav-icon nav-icon-yellow"><img src="/icons/nav-shop.svg" alt="المتجر"></div>
+      </div>
+      <div class="nav-item" onclick="playSound('click');showHowToPlay()">
+        <div class="nav-icon nav-icon-blue"><img src="/icons/nav-howto.svg" alt="طريقة اللعب"></div>
       </div>
     </div>
   </div>
@@ -638,7 +636,11 @@ const LEVELS=[
   {name:'الفلتة!',emoji:'💥',img:'/levels/falta.png',  level:6,min:6651,max:99999},
 ];
 
-function show(id) { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.body.classList.toggle('home-active', id==='s-home');
+}
 function showToast(msg,d=2500) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),d); }
 
 async function init() {
