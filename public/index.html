@@ -71,7 +71,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 /* Profile card sitting inside hero — transparent, no white surface */
 .hero-profile {
   background: transparent; border-radius: 18px; padding: 16px 10px;
-  margin-top: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  margin-top: 10px; cursor: default; display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 .hero-profile .hp-emo { width: 72px; height: 72px; display: block; margin: 0 auto 4px; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.25)); }
 .hero-profile .hp-name { font-size: 17px; font-weight: 800; color: #fff; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
@@ -80,34 +80,40 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.2); margin-bottom: 5px; }
 .home-next-wrap { display: flex; align-items: center; gap: 5px; }
 .home-next-img { width: 20px; height: 20px; }
-.home-progress-wrap .progress-bar { background: rgba(255,255,255,0.35); border: none; }
 
 /* 3D pressed action buttons */
 .hero-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .hero-btn {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  border: none; border-radius: 16px; padding: 14px; cursor: pointer;
-  font-family: var(--font); font-size: 15px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  border: none; border-radius: 16px; padding: 15px; cursor: pointer;
+  font-family: var(--font); font-size: 16px; font-weight: 700; color: #fff;
   transition: transform 0.1s;
 }
 .hero-btn:active { transform: translateY(2px); }
-.hero-btn img { width: 30px; height: 30px; }
-.hero-btn-blue { background: var(--blue); box-shadow: 0 5px 0 var(--blue-d); }
-.hero-btn-green { background: var(--green); box-shadow: 0 5px 0 var(--green-d); }
+.hero-btn img { width: 46px; height: 46px; }
+.hero-btn-blue   { background: var(--blue);   box-shadow: 0 5px 0 var(--blue-d); }
+.hero-btn-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); color: #4A3800; }
 
-/* Bottom nav bar — transparent, bigger 3D buttons, closer together */
+/* Bottom nav — connected strip, full width, black dividers, each cell fills with its color */
 .hero-navbar {
-  margin-top: 16px; background: transparent;
-  padding: 4px 2px; display: flex; justify-content: center; gap: 10px;
+  margin-top: 16px; background: #1a1a1a;
+  border-radius: 16px; overflow: hidden;
+  display: flex; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 2px solid #1a1a1a;
 }
-.nav-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.1s; }
-.nav-item:active { transform: translateY(3px); }
-.nav-icon { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; }
-.nav-icon img { width: 34px; height: 34px; }
-.nav-icon-blue   { background: var(--blue);   box-shadow: 0 5px 0 var(--blue-d); }
-.nav-icon-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); }
-.nav-icon-green  { background: var(--green);  box-shadow: 0 5px 0 var(--green-d); }
-.nav-icon-red    { background: var(--red);    box-shadow: 0 5px 0 var(--red-d); }
+.nav-item {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 14px 0;
+  border-right: 2px solid #1a1a1a;
+  transition: filter 0.1s;
+}
+.nav-item:last-child { border-right: none; }
+.nav-item:active { filter: brightness(0.82); transform: none; }
+.nav-item img { width: 30px; height: 30px; display: block; }
+.nav-item-red    { background: var(--red); }
+.nav-item-green  { background: var(--green); }
+.nav-item-yellow { background: var(--yellow); }
+.nav-item-blue   { background: var(--blue); }
 
 /* How to play */
 .howto-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
@@ -218,7 +224,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .level-row .lcurrent { font-size:11px; color:var(--blue); font-weight:700; }
 .progress-wrap { margin:14px 0; }
 .progress-label { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:6px; }
-.progress-bar { height:12px; background:var(--card2); border-radius:10px; overflow:hidden; border:1px solid var(--border); }
+.progress-bar { height:12px; background:rgba(255,255,255,0.35); border-radius:10px; overflow:hidden; border:2px solid #1a1a1a; }
 .progress-fill { height:100%; border-radius:10px; background:linear-gradient(90deg,var(--red),var(--yellow),var(--green),var(--blue)); transition:width 0.6s ease; }
 .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
 .info-item { background:rgba(255,255,255,0.65); border-radius:var(--radius-sm); padding:10px 13px; border:1px solid rgba(255,255,255,0.5); }
@@ -317,11 +323,11 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
       <img src="/icons/text-falta.png" alt="الفلتة!" onerror="this.style.display='none'">
     </div>
 
-    <div class="hero-profile" onclick="showProfile()">
+    <div class="hero-profile">
       <img class="hp-emo" id="home-emo" src="" alt="">
       <div class="hp-name" id="home-name"></div>
       <div class="hp-level" id="home-level-txt"></div>
-      <div class="home-progress-wrap" onclick="event.stopPropagation();showProfile()">
+      <div class="home-progress-wrap">
         <div class="home-progress-label">
           <span id="home-score-label">0 نقطة</span>
           <span class="home-next-wrap">
@@ -338,24 +344,24 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
         <img src="/icons/sign-plus.svg" alt="">
         <span>إنشاء غرفة</span>
       </button>
-      <button class="hero-btn hero-btn-green" onclick="playSound('click');show('s-join')">
+      <button class="hero-btn hero-btn-yellow" onclick="playSound('click');show('s-join')">
         <img src="/icons/sign-join.svg" alt="">
         <span>دخول غرفة</span>
       </button>
     </div>
 
     <div class="hero-navbar">
-      <div class="nav-item" onclick="playSound('click');showProfile()">
-        <div class="nav-icon nav-icon-red"><img src="/icons/nav-profile.svg" alt="ملفي الشخصي"></div>
+      <div class="nav-item nav-item-red" onclick="playSound('click');showProfile()">
+        <img src="/icons/nav-profile.svg" alt="ملفي الشخصي">
       </div>
-      <div class="nav-item" onclick="playSound('click');showLevelsScreen()">
-        <div class="nav-icon nav-icon-green"><img src="/icons/nav-trophy.svg" alt="المستويات"></div>
+      <div class="nav-item nav-item-green" onclick="playSound('click');showLevelsScreen()">
+        <img src="/icons/nav-trophy.svg" alt="المستويات">
       </div>
-      <div class="nav-item" onclick="playSound('click');showShop()">
-        <div class="nav-icon nav-icon-yellow"><img src="/icons/nav-shop.svg" alt="المتجر"></div>
+      <div class="nav-item nav-item-yellow" onclick="playSound('click');showShop()">
+        <img src="/icons/nav-shop.svg" alt="المتجر">
       </div>
-      <div class="nav-item" onclick="playSound('click');showHowToPlay()">
-        <div class="nav-icon nav-icon-blue"><img src="/icons/nav-howto.svg" alt="طريقة اللعب"></div>
+      <div class="nav-item nav-item-blue" onclick="playSound('click');showHowToPlay()">
+        <img src="/icons/nav-howto.svg" alt="طريقة اللعب">
       </div>
     </div>
   </div>
