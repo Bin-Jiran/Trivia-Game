@@ -65,25 +65,26 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
   padding: 10px 4px 14px;
 }
 .hero-logo { text-align: center; margin-top: 2px; }
-.hero-logo img { width: 92px; height: 92px; display: block; margin: 0 auto; }
-.hero-title { text-align: center; margin-top: 6px; }
-.hero-title img { height: 30px; }
+.hero-logo img { width: 130px; height: 130px; display: block; margin: 0 auto; }
+.hero-title { text-align: center; margin-top: 4px; }
+.hero-title img { height: 46px; }
 
-/* Profile card sitting inside hero, white surface */
+/* Profile card sitting inside hero — transparent, no white surface */
 .hero-profile {
-  background: rgba(255,255,255,0.97); border-radius: 18px; padding: 16px;
-  margin-top: 16px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: transparent; border-radius: 18px; padding: 16px 10px;
+  margin-top: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
-.hero-profile .hp-emo { width: 72px; height: 72px; display: block; margin: 0 auto 4px; }
-.hero-profile .hp-name { font-size: 17px; font-weight: 700; color: var(--text); text-align: center; }
-.hero-profile .hp-level { font-size: 12px; color: var(--muted); text-align: center; }
+.hero-profile .hp-emo { width: 72px; height: 72px; display: block; margin: 0 auto 4px; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.25)); }
+.hero-profile .hp-name { font-size: 17px; font-weight: 800; color: #fff; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.hero-profile .hp-level { font-size: 12px; color: rgba(255,255,255,0.9); text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .home-progress-wrap { width: 100%; margin-top: 8px; cursor: pointer; }
-.home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+.home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.2); margin-bottom: 5px; }
 .home-next-wrap { display: flex; align-items: center; gap: 5px; }
 .home-next-img { width: 20px; height: 20px; }
+.home-progress-wrap .progress-bar { background: rgba(255,255,255,0.35); border: none; }
 
 /* 3D pressed action buttons */
-.hero-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.hero-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .hero-btn {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   border: none; border-radius: 16px; padding: 14px; cursor: pointer;
@@ -95,19 +96,19 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 .hero-btn-blue { background: var(--blue); box-shadow: 0 5px 0 var(--blue-d); }
 .hero-btn-green { background: var(--green); box-shadow: 0 5px 0 var(--green-d); }
 
-/* Bottom nav bar inside hero */
+/* Bottom nav bar — transparent, bigger 3D buttons, closer together */
 .hero-navbar {
-  margin-top: 18px; background: rgba(255,255,255,0.96); border-radius: 18px;
-  padding: 10px 6px; display: flex; justify-content: space-around;
+  margin-top: 16px; background: transparent;
+  padding: 4px 2px; display: flex; justify-content: center; gap: 10px;
 }
-.nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; transition: transform 0.1s; flex: 1; }
-.nav-item:active { transform: scale(0.92); }
-.nav-icon { width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
-.nav-icon img { width: 26px; height: 26px; }
-.nav-icon-blue   { background: var(--blue); }
-.nav-icon-yellow { background: var(--yellow); }
-.nav-icon-green  { background: var(--green); }
-.nav-icon-red    { background: var(--red); }
+.nav-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.1s; }
+.nav-item:active { transform: translateY(3px); }
+.nav-icon { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; }
+.nav-icon img { width: 34px; height: 34px; }
+.nav-icon-blue   { background: var(--blue);   box-shadow: 0 5px 0 var(--blue-d); }
+.nav-icon-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); }
+.nav-icon-green  { background: var(--green);  box-shadow: 0 5px 0 var(--green-d); }
+.nav-icon-red    { background: var(--red);    box-shadow: 0 5px 0 var(--red-d); }
 
 /* How to play */
 .howto-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
