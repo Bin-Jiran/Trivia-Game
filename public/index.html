@@ -51,6 +51,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .btn-secondary { background: var(--card2); color: var(--muted); border: 1px solid var(--border); margin-top: 8px; }
 .btn-secondary:hover { border-color: var(--blue); color: var(--blue); }
 .btn-success { background: linear-gradient(135deg, var(--green), var(--green-d)); color: #fff; box-shadow: 0 3px 10px rgba(91,189,78,0.3); }
+.btn-logout { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: var(--red); color: #fff; box-shadow: 0 3px 10px rgba(232,71,42,0.3); margin-top: 14px; font-family: var(--font); transition: transform 0.1s; }
+.btn-logout:active { transform: scale(0.97); }
+.btn-logout:hover { background: var(--red-d); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .error-msg { background: rgba(232,71,42,0.1); border: 1px solid rgba(232,71,42,0.3); color: var(--red-d); border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
 
@@ -326,10 +329,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
         <img src="/icons/icon-arrow.svg" alt="">
         <span>دخول غرفة</span>
       </button>
-      <button class="icon-btn" onclick="logout()">
-        <img src="/icons/icon-logout.svg" alt="">
-        <span>تسجيل الخروج</span>
-      </button>
     </div>
     <div class="card home-levels-card">
       <div class="section-title" style="text-align:center;">جميع المستويات</div>
@@ -367,6 +366,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
       <div class="info-item"><div class="ilabel">الهاتف</div><div class="ivalue" id="p-phone" style="font-size:11px;" dir="ltr"></div></div>
     </div>
   </div>
+  <button class="btn btn-logout" onclick="logout()">
+    <img src="/icons/icon-logout-red.svg" alt="" style="width:20px;height:20px;vertical-align:-4px;margin-left:8px;">
+    تسجيل الخروج
+  </button>
 </div>
 
 <!-- CREATE ROOM -->
