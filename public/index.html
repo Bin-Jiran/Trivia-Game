@@ -73,34 +73,25 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .home-next-wrap { display: flex; align-items: center; gap: 5px; }
 .home-next-img { width: 22px; height: 22px; }
 
-/* Icon buttons (create / join / logout) */
-.home-actions-card { display: flex; flex-direction: column; gap: 10px; }
-.icon-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+/* Wide rectangular icon buttons (create / join) — full width, stacked */
+.home-actions-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; margin-bottom: 0; }
+.icon-btn-wide {
+  display: flex; align-items: center; gap: 14px;
   background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 12px 8px; cursor: pointer; transition: transform 0.1s, border-color 0.2s;
-  font-family: var(--font);
+  padding: 12px 16px; cursor: pointer; transition: transform 0.1s, border-color 0.2s;
+  font-family: var(--font); width: 100%;
 }
-.icon-btn:hover { border-color: var(--blue); }
-.icon-btn:active { transform: scale(0.96); }
-.icon-btn img { width: 44px; height: 44px; border-radius: 12px; }
-.icon-btn span { font-size: 13px; font-weight: 700; color: var(--text); }
+.icon-btn-wide:hover { border-color: var(--blue); }
+.icon-btn-wide:active { transform: scale(0.98); }
+.icon-btn-wide img { width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0; }
+.icon-btn-wide span { font-size: 15px; font-weight: 700; color: var(--text); }
 
-/* Home split: actions on right, levels on left (RTL) */
-.home-split { display: grid; grid-template-columns: 1fr 1.3fr; gap: 10px; }
-.home-actions-card, .home-levels-card { margin-bottom: 0; padding: 14px; }
+.home-levels-card { padding: 14px; margin-bottom: 0; }
 .home-levels-card .level-all { margin: 8px 0 0; }
-.home-levels-card .level-row { padding: 7px 8px; }
-.home-levels-card .level-row .lname { font-size: 12px; }
-.home-levels-card .level-row .lrange { font-size: 10px; }
-.home-levels-card .level-row img { width: 26px; height: 26px; }
+.home-levels-card .level-row { padding: 8px 12px; }
+.home-levels-card .level-row .lname { font-size: 13px; }
+.home-levels-card .level-row .lrange { font-size: 11px; }
 .home-levels-card .lcurrent { display: none; }
-
-@media (max-width: 380px) {
-  .home-split { grid-template-columns: 1fr 1.1fr; gap: 6px; }
-  .icon-btn img { width: 36px; height: 36px; }
-  .icon-btn span { font-size: 11px; }
-}
 
 
 /* ── Room code ── */
@@ -318,22 +309,20 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
     </div>
   </div>
 
-  <!-- Home + Levels side by side -->
-  <div class="home-split">
-    <div class="card home-actions-card">
-      <button class="icon-btn" onclick="playSound('click');show('s-create')">
-        <img src="/icons/icon-plus.svg" alt="">
-        <span>إنشاء غرفة</span>
-      </button>
-      <button class="icon-btn" onclick="playSound('click');show('s-join')">
-        <img src="/icons/icon-arrow.svg" alt="">
-        <span>دخول غرفة</span>
-      </button>
-    </div>
-    <div class="card home-levels-card">
-      <div class="section-title" style="text-align:center;">جميع المستويات</div>
-      <div class="level-all" id="level-all-list-home"></div>
-    </div>
+  <!-- Action buttons stacked, then levels below -->
+  <div class="card home-actions-card">
+    <button class="icon-btn-wide" onclick="playSound('click');show('s-create')">
+      <img src="/icons/icon-plus.svg" alt="">
+      <span>إنشاء غرفة</span>
+    </button>
+    <button class="icon-btn-wide" onclick="playSound('click');show('s-join')">
+      <img src="/icons/icon-arrow.svg" alt="">
+      <span>دخول غرفة</span>
+    </button>
+  </div>
+  <div class="card home-levels-card">
+    <div class="section-title" style="text-align:center;">جميع المستويات</div>
+    <div class="level-all" id="level-all-list-home"></div>
   </div>
 </div>
 
@@ -341,7 +330,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 <div id="s-profile" class="screen">
   <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:4px;">
     <button class="back-btn" onclick="show('s-home')">←</button>
-    <h2 style="font-size:20px;">حسابي ومستواي</h2>
+    <h2 style="font-size:20px;">الرجوع</h2>
   </div>
   <div class="card">
     <div style="text-align:center;margin-bottom:14px;">
@@ -367,7 +356,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
     </div>
   </div>
   <button class="btn btn-logout" onclick="logout()">
-    <img src="/icons/icon-logout-red.svg" alt="" style="width:20px;height:20px;vertical-align:-4px;margin-left:8px;">
+    <svg width="20" height="20" viewBox="0 0 100 100" style="vertical-align:-4px;margin-left:8px;">
+      <path d="M42 28 L42 36 L30 36 L30 64 L42 64 L42 72 L22 72 L22 28 Z" fill="#fff"/>
+      <rect x="42" y="46" width="34" height="8" rx="4" fill="#fff"/>
+      <path d="M62 36 L80 50 L62 64 Z" fill="#fff"/>
+    </svg>
     تسجيل الخروج
   </button>
 </div>
