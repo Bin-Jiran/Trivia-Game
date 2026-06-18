@@ -187,6 +187,32 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 
 .mt { margin-top:10px; }
 .back-btn { background:none; border:none; color:var(--blue); cursor:pointer; font-size:22px; padding:0; }
+
+/* ── Podium (Game Over) ── */
+.podium-bg {
+  background: linear-gradient(160deg, var(--blue) 0%, var(--green) 50%, var(--yellow) 100%);
+  border-radius: var(--radius);
+  padding: 28px 16px 0;
+  text-align: center;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+.podium-title { color: #fff; font-size: 26px; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.podium-winner-name { color: #fff; font-size: 20px; font-weight: 700; margin: 10px 0 24px; text-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.podium-stage { display: flex; align-items: flex-end; justify-content: center; gap: 8px; }
+.podium-col { display: flex; flex-direction: column; align-items: center; width: 31%; }
+.podium-player { color: #fff; font-size: 13px; font-weight: 700; margin-bottom: 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.2); max-width: 100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.podium-player-1 { font-size: 14px; }
+.podium-block { width: 100%; border-radius: 10px 10px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 10px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1) inset; }
+.podium-block-1 { height: 130px; background: var(--yellow); }
+.podium-block-2 { height: 95px; background: var(--red); }
+.podium-block-3 { height: 70px; background: var(--blue); }
+.podium-medal { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+.podium-medal-1 { background: #fff; color: var(--yellow-d); width: 46px; height: 46px; font-size: 22px; }
+.podium-medal-2 { background: #fff; color: var(--red-d); }
+.podium-medal-3 { background: #fff; color: var(--blue-d); }
+.podium-score { color: #fff; font-size: 16px; font-weight: 800; text-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+
 </style>
 </head>
 <body>
@@ -388,22 +414,44 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
   </div>
 </div>
 
-<!-- LEADERBOARD -->
+<!-- ROUND TRANSITION (brief, no scores shown) -->
 <div id="s-leaderboard" class="screen">
-  <div style="margin-top:10px;">
-    <h2 style="text-align:center;font-size:22px;margin-bottom:3px;color:var(--text);" id="lb-title">نهاية الجولة 1</h2>
-    <p style="text-align:center;color:var(--muted);font-size:13px;margin-bottom:14px;" id="lb-sub"></p>
-    <div class="lb-list" id="lb-list"></div>
+  <div style="text-align:center;margin-top:100px;">
+    <span class="spinner-big"></span>
+    <h2 style="margin-top:14px;color:var(--text);">جاري تحضير الجولة التالية...</h2>
   </div>
 </div>
 
-<!-- GAME OVER -->
+<!-- GAME OVER — PODIUM -->
 <div id="s-gameover" class="screen">
-  <div style="margin-top:20px;text-align:center;">
-    <div style="font-size:60px;">🏆</div>
-    <h1 style="font-size:26px;margin-top:10px;background:linear-gradient(135deg,var(--yellow),var(--red));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">انتهت اللعبة!</h1>
+  <div class="podium-bg">
+    <h1 class="podium-title">🏆 المنصة! 🏆</h1>
+    <div class="podium-winner-name" id="podium-winner-name">—</div>
+    <div class="podium-stage">
+      <div class="podium-col podium-2">
+        <div class="podium-player" id="podium-name-2">—</div>
+        <div class="podium-block podium-block-2">
+          <div class="podium-medal podium-medal-2">2</div>
+          <div class="podium-score" id="podium-score-2">0</div>
+        </div>
+      </div>
+      <div class="podium-col podium-1">
+        <div class="podium-player podium-player-1" id="podium-name-1">—</div>
+        <div class="podium-block podium-block-1">
+          <div class="podium-medal podium-medal-1">1</div>
+          <div class="podium-score" id="podium-score-1">0</div>
+        </div>
+      </div>
+      <div class="podium-col podium-3">
+        <div class="podium-player" id="podium-name-3">—</div>
+        <div class="podium-block podium-block-3">
+          <div class="podium-medal podium-medal-3">3</div>
+          <div class="podium-score" id="podium-score-3">0</div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="lb-list" id="final-lb" style="margin-top:18px;"></div>
+  <div class="lb-list" id="final-lb-rest" style="margin-top:18px;"></div>
   <button class="btn btn-primary mt" onclick="show('s-home')">العب مجدداً</button>
 </div>
 
@@ -647,19 +695,38 @@ function connectSocket() {
     playSound('wrong');
   });
 
-  socket.on('phase_end',({leaderboard,phase})=>{
-    document.getElementById('lb-title').textContent=`نهاية الجولة ${phase}`;
-    document.getElementById('lb-sub').textContent=phase<3?'الجولة التالية تبدأ قريباً...':'';
-    renderLB('lb-list',leaderboard); playSound('leaderboard'); show('s-leaderboard');
+  socket.on('phase_transition',()=>{
+    show('s-leaderboard'); // shows the "preparing next round" spinner screen
   });
 
   socket.on('game_end',({leaderboard})=>{
-    renderLB('final-lb',leaderboard); playSound('leaderboard'); show('s-gameover');
+    renderPodium(leaderboard);
+    playSound('leaderboard'); show('s-gameover');
     fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(u=>{me=u;updateHomeUI();});
   });
 
   socket.on('host_changed',()=>{
     if(!isHost){isHost=true;document.getElementById('lobby-host-btn').style.display='block';document.getElementById('lobby-ready-btn').style.display='none';showToast('أصبحت المضيف الجديد');}
+  });
+}
+
+function renderPodium(players) {
+  const slots = [players[0], players[1], players[2]];
+  const winner = players[0];
+  document.getElementById('podium-winner-name').textContent = winner ? `🎉 ${winner.display_name} 🎉` : '';
+
+  for (let i = 1; i <= 3; i++) {
+    const p = slots[i-1];
+    document.getElementById(`podium-name-${i}`).textContent = p ? p.display_name : '—';
+    document.getElementById(`podium-score-${i}`).textContent = p ? (p.sessionScore||0).toLocaleString('ar') : '0';
+  }
+
+  // Rest of the players (4th place onward)
+  const rest = players.slice(3);
+  const el = document.getElementById('final-lb-rest'); el.innerHTML = '';
+  rest.forEach((p, i) => {
+    const lvl = p.level || { img:'/levels/penguin.png' };
+    el.innerHTML += `<div class="lb-card"><div class="lb-rank">${i+4}</div><img src="${lvl.img}" style="width:32px;height:32px;flex-shrink:0;" alt=""><div class="lb-info"><div class="lb-name">${p.display_name}</div><div class="lb-score">${(p.sessionScore||0).toLocaleString('ar')} نقطة</div></div></div>`;
   });
 }
 
