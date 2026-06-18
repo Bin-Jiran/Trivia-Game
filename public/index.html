@@ -24,8 +24,7 @@
   --radius: 16px; --radius-sm: 12px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; direction: rtl; }
-body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var(--green) 65%, var(--blue) 100%); }
+body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var(--green) 65%, var(--blue) 100%); background-attachment: fixed; color: var(--text); font-family: var(--font); min-height: 100vh; direction: rtl; }
 .screen { display: none; min-height: 100vh; padding: 20px; max-width: 520px; margin: auto; }
 .screen.active { display: flex; flex-direction: column; }
 
@@ -38,7 +37,7 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 .game-logo p { color: var(--muted); font-size: 13px; margin-top: 3px; }
 
 /* ── Cards ── */
-.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.card { background: rgba(255,255,255,0.94); border: 1px solid rgba(255,255,255,0.5); border-radius: var(--radius); padding: 20px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
 .field { margin-bottom: 12px; }
 .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
 .field input, .field select { width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 13px; color: var(--text); font-size: 15px; font-family: var(--font); outline: none; transition: border 0.2s; }
@@ -50,7 +49,7 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 .btn { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700; cursor: pointer; border: none; transition: transform 0.1s, opacity 0.2s; font-family: var(--font); }
 .btn:active { transform: scale(0.97); }
 .btn-primary { background: linear-gradient(135deg, var(--blue), #5B6BFF); color: #fff; box-shadow: 0 3px 10px rgba(58,171,219,0.3); }
-.btn-secondary { background: var(--card2); color: var(--muted); border: 1px solid var(--border); margin-top: 8px; }
+.btn-secondary { background: rgba(255,255,255,0.5); color: var(--text); border: 1px solid rgba(255,255,255,0.6); margin-top: 8px; }
 .btn-secondary:hover { border-color: var(--blue); color: var(--blue); }
 .btn-success { background: linear-gradient(135deg, var(--green), var(--green-d)); color: #fff; box-shadow: 0 3px 10px rgba(91,189,78,0.3); }
 .btn-logout { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: var(--red); color: #fff; box-shadow: 0 3px 10px rgba(232,71,42,0.3); margin-top: 14px; font-family: var(--font); transition: transform 0.1s; }
@@ -123,7 +122,7 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 
 /* ── Players list ── */
 .players-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0; }
-.player-card { background: var(--card2); border-radius: var(--radius-sm); padding: 11px 14px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); }
+.player-card { background: rgba(255,255,255,0.7); border-radius: var(--radius-sm); padding: 11px 14px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.6); }
 .player-card .emo { font-size: 26px; }
 .player-card .info { flex: 1; }
 .player-card .name { font-size: 14px; font-weight: 600; }
@@ -133,7 +132,7 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 
 /* ── Category grid ── */
 .cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 10px 0; }
-.cat-opt { background: var(--card2); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 12px; cursor: pointer; text-align: center; transition: all 0.2s; position: relative; }
+.cat-opt { background: rgba(255,255,255,0.6); border: 2px solid rgba(255,255,255,0.5); border-radius: var(--radius-sm); padding: 12px; cursor: pointer; text-align: center; transition: all 0.2s; position: relative; }
 .cat-opt:hover { border-color: var(--blue); }
 .cat-opt.selected { border-color: var(--blue); background: rgba(58,171,219,0.1); }
 .cat-opt.selected::after { content:'✓'; position:absolute; top:6px; left:8px; background:var(--blue); color:#fff; border-radius:50%; width:18px; height:18px; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:700; }
@@ -153,19 +152,19 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 /* Timer LEFT + question number RIGHT */
 .q-top-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
 .q-num-label { font-size:13px; color:var(--muted); font-weight:600; }
-.timer-circle { width:52px; height:52px; border-radius:50%; border:3px solid var(--blue); background:var(--card); display:flex; align-items:center; justify-content:center; font-size:21px; font-weight:800; color:var(--text); flex-shrink:0; transition:all 0.3s; box-shadow: 0 2px 8px rgba(58,171,219,0.2); }
+.timer-circle { width:52px; height:52px; border-radius:50%; border:3px solid var(--blue); background:rgba(255,255,255,0.95); display:flex; align-items:center; justify-content:center; font-size:21px; font-weight:800; color:var(--text); flex-shrink:0; transition:all 0.3s; box-shadow: 0 2px 8px rgba(58,171,219,0.2); }
 .timer-circle.urgent { border-color:var(--red); color:var(--red); animation:pulse 0.5s infinite; box-shadow: 0 2px 8px rgba(232,71,42,0.3); }
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 
 /* Question box — 4-color gradient border matching logo */
 .q-box {
   position: relative;
-  background: var(--card);
+  background: rgba(255,255,255,0.95);
   border-radius: var(--radius);
   padding: 20px 16px;
   margin-bottom: 4px;
   border: 4px solid transparent;
-  background-image: linear-gradient(var(--card), var(--card)), linear-gradient(135deg, var(--red) 0%, var(--red) 25%, var(--yellow) 25%, var(--yellow) 50%, var(--green) 50%, var(--green) 75%, var(--blue) 75%, var(--blue) 100%);
+  background-image: linear-gradient(rgba(255,255,255,0.95), rgba(255,255,255,0.95)), linear-gradient(135deg, var(--red) 0%, var(--red) 25%, var(--yellow) 25%, var(--yellow) 50%, var(--green) 50%, var(--green) 75%, var(--blue) 75%, var(--blue) 100%);
   background-origin: border-box;
   background-clip: padding-box, border-box;
   box-shadow: 0 4px 16px rgba(0,0,0,0.1);
@@ -200,7 +199,7 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 .lb-card:nth-child(1) { background:linear-gradient(135deg,rgba(245,194,0,0.2),rgba(245,194,0,0.05)); border:1.5px solid var(--yellow); }
 .lb-card:nth-child(2) { background:linear-gradient(135deg,rgba(58,171,219,0.15),rgba(58,171,219,0.03)); border:1.5px solid var(--blue); }
 .lb-card:nth-child(3) { background:linear-gradient(135deg,rgba(232,71,42,0.15),rgba(232,71,42,0.03)); border:1.5px solid var(--red); }
-.lb-card:nth-child(n+4) { background:var(--card2); border:1px solid var(--border); }
+.lb-card:nth-child(n+4) { background:rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.6); }
 .lb-rank { font-size:22px; width:36px; text-align:center; }
 .lb-info { flex:1; }
 .lb-name { font-size:14px; font-weight:600; }
@@ -209,7 +208,7 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 
 /* ── Profile ── */
 .level-all { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
-.level-row { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--card2); border-radius:var(--radius-sm); border:1.5px solid transparent; }
+.level-row { display:flex; align-items:center; gap:10px; padding:10px 14px; background:rgba(255,255,255,0.65); border-radius:var(--radius-sm); border:1.5px solid transparent; }
 .level-row.current { border-color:var(--blue); background:rgba(58,171,219,0.08); }
 .level-row img { width:36px; height:36px; flex-shrink:0; }
 .level-row .lemo { font-size:26px; width:34px; text-align:center; }
@@ -222,7 +221,7 @@ body.home-active { background: linear-gradient(160deg, var(--red) 0%, var(--yell
 .progress-bar { height:12px; background:var(--card2); border-radius:10px; overflow:hidden; border:1px solid var(--border); }
 .progress-fill { height:100%; border-radius:10px; background:linear-gradient(90deg,var(--red),var(--yellow),var(--green),var(--blue)); transition:width 0.6s ease; }
 .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
-.info-item { background:var(--card2); border-radius:var(--radius-sm); padding:10px 13px; border:1px solid var(--border); }
+.info-item { background:rgba(255,255,255,0.65); border-radius:var(--radius-sm); padding:10px 13px; border:1px solid rgba(255,255,255,0.5); }
 .info-item .ilabel { font-size:11px; color:var(--muted); margin-bottom:3px; }
 .info-item .ivalue { font-size:13px; font-weight:600; }
 .section-title { font-size:12px; color:var(--muted); margin-bottom:8px; letter-spacing:1px; font-weight:600; }
@@ -818,7 +817,7 @@ function connectSocket() {
     const logoBox=document.getElementById('logo-box'), qEl=document.getElementById('q-text');
     if (is_logo) {
       logoBox.style.display='block';
-      logoBox.innerHTML=`<div style="background:var(--card2);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;text-align:center;border:1px solid var(--border);"><div style="font-size:11px;color:var(--muted);margin-bottom:5px;">وصف الشعار</div><div style="font-size:14px;line-height:1.6;color:var(--text);">${question}</div></div>`;
+      logoBox.innerHTML=`<div style="background:rgba(255,255,255,0.8);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;text-align:center;border:1px solid rgba(255,255,255,0.5);"><div style="font-size:11px;color:var(--muted);margin-bottom:5px;">وصف الشعار</div><div style="font-size:14px;line-height:1.6;color:var(--text);">${question}</div></div>`;
       qEl.textContent='ما هي الشركة صاحبة هذا الشعار؟';
     } else { logoBox.style.display='none'; qEl.textContent=question; }
 
