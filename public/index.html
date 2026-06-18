@@ -63,8 +63,42 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .home-profile .hp-emo { display:block; margin:0 auto 4px; }
 .home-profile .hp-name { font-size: 18px; font-weight: 700; text-align: center; }
 .home-profile .hp-level { font-size: 13px; color: var(--muted); text-align: center; }
-.home-profile .hp-score { font-size: 14px; font-weight: 700; color: var(--orange); text-align: center; }
-.home-profile .hp-tap { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* Progress meter on home */
+.home-progress-wrap { width: 100%; margin-top: 10px; cursor: pointer; }
+.home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.home-next-wrap { display: flex; align-items: center; gap: 5px; }
+.home-next-img { width: 22px; height: 22px; }
+
+/* Icon buttons (create / join / logout) */
+.home-actions-card { display: flex; flex-direction: column; gap: 10px; }
+.icon-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 8px; cursor: pointer; transition: transform 0.1s, border-color 0.2s;
+  font-family: var(--font);
+}
+.icon-btn:hover { border-color: var(--blue); }
+.icon-btn:active { transform: scale(0.96); }
+.icon-btn img { width: 44px; height: 44px; border-radius: 12px; }
+.icon-btn span { font-size: 13px; font-weight: 700; color: var(--text); }
+
+/* Home split: actions on right, levels on left (RTL) */
+.home-split { display: grid; grid-template-columns: 1fr 1.3fr; gap: 10px; }
+.home-actions-card, .home-levels-card { margin-bottom: 0; padding: 14px; }
+.home-levels-card .level-all { margin: 8px 0 0; }
+.home-levels-card .level-row { padding: 7px 8px; }
+.home-levels-card .level-row .lname { font-size: 12px; }
+.home-levels-card .level-row .lrange { font-size: 10px; }
+.home-levels-card .level-row img { width: 26px; height: 26px; }
+.home-levels-card .lcurrent { display: none; }
+
+@media (max-width: 380px) {
+  .home-split { grid-template-columns: 1fr 1.1fr; gap: 6px; }
+  .icon-btn img { width: 36px; height: 36px; }
+  .icon-btn span { font-size: 11px; }
+}
+
 
 /* ── Room code ── */
 .room-code-display { text-align: center; margin: 12px 0; }
@@ -162,6 +196,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
 .level-all { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
 .level-row { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--card2); border-radius:var(--radius-sm); border:1.5px solid transparent; }
 .level-row.current { border-color:var(--blue); background:rgba(58,171,219,0.08); }
+.level-row img { width:36px; height:36px; flex-shrink:0; }
 .level-row .lemo { font-size:26px; width:34px; text-align:center; }
 .level-row .linfo { flex:1; }
 .level-row .lname { font-size:14px; font-weight:600; }
@@ -267,14 +302,40 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
     <img class="hp-emo" id="home-emo" style="width:80px;height:80px;" src="" alt="">
     <div class="hp-name" id="home-name"></div>
     <div class="hp-level" id="home-level-txt"></div>
-    <div class="hp-score" id="home-score"></div>
-    <div class="hp-tap">اضغط لعرض ملفك الشخصي</div>
+    <!-- Progress meter with next-level badge -->
+    <div class="home-progress-wrap" onclick="event.stopPropagation();showProfile()">
+      <div class="home-progress-label">
+        <span id="home-score-label">0 نقطة</span>
+        <span class="home-next-wrap">
+          <img id="home-next-img" class="home-next-img" src="" alt="">
+          <span id="home-next-label">التالي: 500</span>
+        </span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="home-bar" style="width:0%"></div></div>
+    </div>
   </div>
-  <div class="card">
-    <button class="btn btn-primary" onclick="playSound('click');show('s-create')" style="margin-bottom:8px;">🏠 إنشاء غرفة</button>
-    <button class="btn btn-secondary" onclick="playSound('click');show('s-join')" style="margin-top:0;">🔑 دخول غرفة</button>
+
+  <!-- Home + Levels side by side -->
+  <div class="home-split">
+    <div class="card home-actions-card">
+      <button class="icon-btn" onclick="playSound('click');show('s-create')">
+        <img src="/icons/icon-plus.svg" alt="">
+        <span>إنشاء غرفة</span>
+      </button>
+      <button class="icon-btn" onclick="playSound('click');show('s-join')">
+        <img src="/icons/icon-arrow.svg" alt="">
+        <span>دخول غرفة</span>
+      </button>
+      <button class="icon-btn" onclick="logout()">
+        <img src="/icons/icon-logout.svg" alt="">
+        <span>تسجيل الخروج</span>
+      </button>
+    </div>
+    <div class="card home-levels-card">
+      <div class="section-title" style="text-align:center;">جميع المستويات</div>
+      <div class="level-all" id="level-all-list-home"></div>
+    </div>
   </div>
-  <button class="btn btn-secondary" onclick="logout()">تسجيل الخروج</button>
 </div>
 
 <!-- PROFILE -->
@@ -290,7 +351,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
       <span id="p-level-name" style="display:inline-block;margin-top:6px;background:var(--blue);color:#fff;border-radius:20px;padding:3px 14px;font-size:13px;font-weight:600;"></span>
     </div>
     <div class="progress-wrap">
-      <div class="progress-label"><span id="p-score-label">0 نقطة</span><span id="p-next-label"></span></div>
+      <div class="progress-label">
+        <span id="p-score-label">0 نقطة</span>
+        <span class="home-next-wrap">
+          <img id="p-next-img" class="home-next-img" src="" alt="">
+          <span id="p-next-label"></span>
+        </span>
+      </div>
       <div class="progress-bar"><div class="progress-fill" id="p-bar" style="width:0%"></div></div>
     </div>
     <div class="info-grid">
@@ -299,10 +366,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); min-
       <div class="info-item"><div class="ilabel">تاريخ الميلاد</div><div class="ivalue" id="p-dob" style="font-size:11px;"></div></div>
       <div class="info-item"><div class="ilabel">الهاتف</div><div class="ivalue" id="p-phone" style="font-size:11px;" dir="ltr"></div></div>
     </div>
-  </div>
-  <div class="card">
-    <div class="section-title">جميع المستويات</div>
-    <div class="level-all" id="level-all-list"></div>
   </div>
 </div>
 
@@ -494,12 +557,12 @@ function playSound(type) {
 // ── State ──────────────────────────────────────────────────────────────────
 let token=localStorage.getItem('token'), me=null, socket=null, selectedCats=[], isHost=false;
 const LEVELS=[
-  {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',min:0,   max:500  },
-  {name:'الذئب',  emoji:'🐺',img:'/levels/wolf.png',   min:501, max:1250 },
-  {name:'الدب',   emoji:'🐻',img:'/levels/bear.png',   min:1251,max:2400 },
-  {name:'الأسد',  emoji:'🦁',img:'/levels/lion.png',   min:2401,max:4100 },
-  {name:'التنين', emoji:'🐉',img:'/levels/dragon.png', min:4101,max:6650 },
-  {name:'الفلتة!',emoji:'💥',img:'/levels/falta.png',  min:6651,max:99999},
+  {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',level:1,min:0,   max:500  },
+  {name:'الذئب',  emoji:'🐺',img:'/levels/wolf.png',   level:2,min:501, max:1250 },
+  {name:'الدب',   emoji:'🐻',img:'/levels/bear.png',   level:3,min:1251,max:2400 },
+  {name:'الأسد',  emoji:'🦁',img:'/levels/lion.png',   level:4,min:2401,max:4100 },
+  {name:'التنين', emoji:'🐉',img:'/levels/dragon.png', level:5,min:4101,max:6650 },
+  {name:'الفلتة!',emoji:'💥',img:'/levels/falta.png',  level:6,min:6651,max:99999},
 ];
 
 function show(id) { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
@@ -512,11 +575,40 @@ async function init() {
   me=await res.json(); updateHomeUI(); show('s-home'); playSound('enter'); connectSocket();
 }
 
+function nextLevelInfo(lvl) {
+  if (lvl.level === 6) return null;
+  return LEVELS[lvl.level]; // next level object (0-indexed array, level is 1-indexed)
+}
+
 function updateHomeUI() {
   document.getElementById('home-emo').src=me.level.img||'';
   document.getElementById('home-name').textContent=me.display_name;
-  document.getElementById('home-level-txt').textContent=me.level.name;
-  document.getElementById('home-score').textContent='⭐ '+(me.total_score||0).toLocaleString('ar')+' نقطة';
+  document.getElementById('home-level-txt').textContent='المستوى الحالي: '+me.level.name;
+
+  const score=me.total_score||0, lvl=me.level;
+  const progress=lvl.level===6?100:Math.round(((score-lvl.min)/(lvl.max-lvl.min))*100);
+  document.getElementById('home-score-label').textContent=score.toLocaleString('ar')+' نقطة';
+  document.getElementById('home-bar').style.width=Math.min(Math.max(progress,2),100)+'%';
+
+  const next=nextLevelInfo(lvl);
+  const nextImgEl=document.getElementById('home-next-img');
+  const nextLabelEl=document.getElementById('home-next-label');
+  if (next) {
+    nextImgEl.src=next.img; nextImgEl.style.display='inline-block';
+    nextLabelEl.textContent='التالي: '+lvl.max.toLocaleString('ar');
+  } else {
+    nextImgEl.style.display='none';
+    nextLabelEl.textContent='أعلى مستوى!';
+  }
+
+  renderLevelsList('level-all-list-home', score, lvl);
+}
+
+function renderLevelsList(elId, score, currentLvl) {
+  const list=document.getElementById(elId); list.innerHTML='';
+  LEVELS.forEach(l=>{ const isCurrent=currentLvl.name===l.name, isPassed=score>l.max&&l.level<6;
+    list.innerHTML+=`<div class="level-row ${isCurrent?'current':''}"><img src="${l.img}" alt=""><div class="linfo"><div class="lname">${l.name}${isPassed?' ✓':''}</div><div class="lrange">${l.min.toLocaleString('ar')} - ${l.level===6?'∞':l.max.toLocaleString('ar')} نقطة</div></div>${isCurrent?'<div class="lcurrent">مستواك الحالي</div>':''}</div>`;
+  });
 }
 
 function showProfile() {
@@ -531,12 +623,18 @@ function showProfile() {
   const score=me.total_score||0, lvl=me.level;
   const progress=lvl.level===6?100:Math.round(((score-lvl.min)/(lvl.max-lvl.min))*100);
   document.getElementById('p-score-label').textContent=score.toLocaleString('ar')+' نقطة';
-  document.getElementById('p-next-label').textContent=lvl.level===6?'أعلى مستوى!':'التالي: '+lvl.max.toLocaleString('ar');
   document.getElementById('p-bar').style.width=Math.min(Math.max(progress,2),100)+'%';
-  const list=document.getElementById('level-all-list'); list.innerHTML='';
-  LEVELS.forEach(l=>{ const isCurrent=me.level.name===l.name, isPassed=score>l.max&&l.level<6;
-    list.innerHTML+=`<div class="level-row ${isCurrent?'current':''}"><img src="${l.img}" style="width:36px;height:36px;flex-shrink:0;" alt=""><div class="linfo"><div class="lname">${l.name}${isPassed?' ✓':''}</div><div class="lrange">${l.min.toLocaleString('ar')} - ${l.level===6?'∞':l.max.toLocaleString('ar')} نقطة</div></div>${isCurrent?'<div class="lcurrent">مستواك الحالي</div>':''}</div>`;
-  });
+
+  const next=nextLevelInfo(lvl);
+  const pNextImg=document.getElementById('p-next-img');
+  const pNextLabel=document.getElementById('p-next-label');
+  if (next) {
+    pNextImg.src=next.img; pNextImg.style.display='inline-block';
+    pNextLabel.textContent='التالي: '+lvl.max.toLocaleString('ar');
+  } else {
+    pNextImg.style.display='none';
+    pNextLabel.textContent='أعلى مستوى!';
+  }
   show('s-profile');
 }
 
