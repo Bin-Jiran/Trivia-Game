@@ -59,27 +59,27 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .error-msg { background: rgba(232,71,42,0.1); border: 1px solid rgba(232,71,42,0.3); color: var(--red-d); border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
 
 /* ── Home hero — body provides gradient, this is just a transparent layout wrapper ── */
-.home-hero {
-  background: transparent;
-  padding: 10px 4px 14px;
-}
-.hero-logo { text-align: center; margin-top: 2px; }
-.hero-logo img { width: 130px; height: 130px; display: block; margin: 0 auto; }
-.hero-title { text-align: center; margin-top: 4px; }
-.hero-title img { height: 46px; }
+.home-hero { background: transparent; padding: 4px 4px 14px; }
 
-/* Profile card sitting inside hero — transparent, no white surface */
+/* Bulb + text side by side (#4) */
+.hero-header-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 14px 0 4px; }
+.hero-pulp { width: 110px; height: 110px; }
+.hero-text-img { height: 52px; }
+
+/* Profile card — transparent, not clickable (#3 & #6) */
 .hero-profile {
-  background: transparent; border-radius: 18px; padding: 16px 10px;
+  background: transparent; border-radius: 18px; padding: 10px 10px;
   margin-top: 10px; cursor: default; display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
-.hero-profile .hp-emo { width: 72px; height: 72px; display: block; margin: 0 auto 4px; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.25)); }
+.hero-profile .hp-emo { width: 96px; height: 96px; display: block; margin: 0 auto 4px; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.3)); }
 .hero-profile .hp-name { font-size: 17px; font-weight: 800; color: #fff; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 .hero-profile .hp-level { font-size: 12px; color: rgba(255,255,255,0.9); text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-.home-progress-wrap { width: 100%; margin-top: 8px; cursor: pointer; }
+.home-progress-wrap { width: 100%; margin-top: 8px; cursor: default; }
 .home-progress-label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.2); margin-bottom: 5px; }
 .home-next-wrap { display: flex; align-items: center; gap: 5px; }
 .home-next-img { width: 20px; height: 20px; }
+/* White border on home progress bar (#1) */
+.home-progress-wrap .progress-bar { border: 2px solid #fff; }
 
 /* 3D pressed action buttons */
 .hero-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
@@ -94,26 +94,31 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .hero-btn-blue   { background: var(--blue);   box-shadow: 0 5px 0 var(--blue-d); }
 .hero-btn-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); color: #4A3800; }
 
-/* Bottom nav — connected strip, full width, black dividers, each cell fills with its color */
-.hero-navbar {
-  margin-top: 16px; background: #1a1a1a;
-  border-radius: 16px; overflow: hidden;
-  display: flex; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  border: 2px solid #1a1a1a;
+/* Fixed global nav bar (#2) */
+.global-navbar {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 520px;
+  background: #1a1a1a; border-top: 2px solid #1a1a1a;
+  display: flex; z-index: 1000;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.35);
 }
-.nav-item {
+.gnav-item {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; padding: 14px 0;
+  padding: 14px 0; cursor: pointer;
   border-right: 2px solid #1a1a1a;
-  transition: filter 0.1s;
+  transition: transform 0.15s, filter 0.15s;
 }
-.nav-item:last-child { border-right: none; }
-.nav-item:active { filter: brightness(0.82); transform: none; }
-.nav-item img { width: 30px; height: 30px; display: block; }
+.gnav-item:last-child { border-right: none; }
+.gnav-item img { width: 28px; height: 28px; display: block; }
+.gnav-item.gnav-active { transform: translateY(-8px) scale(1.15); border-radius: 12px 12px 0 0; z-index: 2; filter: brightness(1.1); }
+.gnav-item:active { filter: brightness(0.82); }
 .nav-item-red    { background: var(--red); }
 .nav-item-green  { background: var(--green); }
 .nav-item-yellow { background: var(--yellow); }
 .nav-item-blue   { background: var(--blue); }
+
+/* Screens that show the nav need bottom padding */
+.screen.has-nav { padding-bottom: 90px; }
 
 /* How to play */
 .howto-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
@@ -274,11 +279,13 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- LOGIN -->
 <div id="s-login" class="screen active">
-  <div class="game-logo">
-    <img src="/logo.jpg" alt="الفلته" style="width:140px;height:140px;" onerror="this.style.display='none'">
-    <p>تريفيا متعدد اللاعبين</p>
+  <div class="hero-logo" style="margin-top:24px;">
+    <div class="hero-header-row">
+      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
+      <img src="/icons/text-falta.png" alt="الفلتة!" class="hero-text-img">
+    </div>
   </div>
-  <div class="card">
+  <div class="card" style="margin-top:20px;">
     <h2 style="margin-bottom:16px;font-size:19px;">تسجيل الدخول</h2>
     <div id="login-err" class="error-msg"></div>
     <div class="field"><label>البريد الإلكتروني</label><input id="l-email" type="email" placeholder="example@email.com" dir="ltr"></div>
@@ -290,8 +297,13 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- REGISTER -->
 <div id="s-register" class="screen">
-  <div class="game-logo"><img src="/logo.jpg" alt="الفلته" onerror="this.style.display='none'"><h1>الفلته!</h1></div>
-  <div class="card">
+  <div class="hero-logo" style="margin-top:16px;">
+    <div class="hero-header-row">
+      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
+      <img src="/icons/text-falta.png" alt="الفلتة!" class="hero-text-img">
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px;">
     <h2 style="margin-bottom:16px;font-size:19px;">إنشاء حساب</h2>
     <div id="reg-err" class="error-msg"></div>
     <div class="row2">
@@ -316,11 +328,9 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <!-- HOME -->
 <div id="s-home" class="screen">
   <div class="home-hero">
-    <div class="hero-logo">
-      <img src="/icons/light-pulp.png" alt="الفلته" onerror="this.style.display='none'">
-    </div>
-    <div class="hero-title">
-      <img src="/icons/text-falta.png" alt="الفلتة!" onerror="this.style.display='none'">
+    <div class="hero-header-row">
+      <img src="/icons/light-pulp.png" alt="" class="hero-pulp">
+      <img src="/icons/text-falta.png" alt="الفلتة!" class="hero-text-img">
     </div>
 
     <div class="hero-profile">
@@ -349,30 +359,12 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
         <span>دخول غرفة</span>
       </button>
     </div>
-
-    <div class="hero-navbar">
-      <div class="nav-item nav-item-red" onclick="playSound('click');showProfile()">
-        <img src="/icons/nav-profile.svg" alt="ملفي الشخصي">
-      </div>
-      <div class="nav-item nav-item-green" onclick="playSound('click');showLevelsScreen()">
-        <img src="/icons/nav-trophy.svg" alt="المستويات">
-      </div>
-      <div class="nav-item nav-item-yellow" onclick="playSound('click');showShop()">
-        <img src="/icons/nav-shop.svg" alt="المتجر">
-      </div>
-      <div class="nav-item nav-item-blue" onclick="playSound('click');showHowToPlay()">
-        <img src="/icons/nav-howto.svg" alt="طريقة اللعب">
-      </div>
-    </div>
   </div>
 </div>
 
 <!-- LEVELS (المستويات) -->
 <div id="s-levels" class="screen">
-  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:14px;">
-    <button class="back-btn" onclick="show('s-home')">←</button>
-    <h2 style="font-size:20px;">جميع المستويات</h2>
-  </div>
+  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">جميع المستويات</h2>
   <div class="card">
     <div class="level-all" id="level-all-list-page"></div>
   </div>
@@ -380,10 +372,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- SHOP (placeholder) -->
 <div id="s-shop" class="screen">
-  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:14px;">
-    <button class="back-btn" onclick="show('s-home')">←</button>
-    <h2 style="font-size:20px;">المتجر</h2>
-  </div>
+  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">المتجر</h2>
   <div class="card" style="text-align:center;padding:40px 20px;">
     <i class="ti ti-shopping-bag" style="font-size:48px;color:var(--muted);" aria-hidden="true"></i>
     <h3 style="margin-top:14px;font-size:18px;">قريباً!</h3>
@@ -393,10 +382,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- HOW TO PLAY -->
 <div id="s-howto" class="screen">
-  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:14px;">
-    <button class="back-btn" onclick="show('s-home')">←</button>
-    <h2 style="font-size:20px;">طريقة اللعب</h2>
-  </div>
+  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">طريقة اللعب</h2>
   <div class="card">
     <div class="howto-item"><div class="howto-num">1</div><div>أنشئ غرفة واختر فئة أو أكثر للأسئلة</div></div>
     <div class="howto-item"><div class="howto-num">2</div><div>شارك كود الغرفة مع أصدقائك ليدخلوا</div></div>
@@ -409,10 +395,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- PROFILE -->
 <div id="s-profile" class="screen">
-  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:4px;">
-    <button class="back-btn" onclick="show('s-home')">←</button>
-    <h2 style="font-size:20px;">الرجوع</h2>
-  </div>
+  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">حسابي ومستواي</h2>
   <div class="card">
     <div style="text-align:center;margin-bottom:14px;">
       <img id="p-emo" style="width:100px;height:100px;display:block;margin:0 auto 6px;" src="" alt="">
@@ -642,10 +625,27 @@ const LEVELS=[
   {name:'الفلتة!',emoji:'💥',img:'/levels/falta.png',  level:6,min:6651,max:99999},
 ];
 
+const NAV_SCREENS = { 's-home':'', 's-profile':'gnav-profile', 's-levels':'gnav-levels', 's-shop':'gnav-shop', 's-howto':'gnav-howto' };
+
 function show(id) {
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  document.body.classList.toggle('home-active', id==='s-home');
+  document.body.classList.toggle('home-active', id === 's-home');
+
+  const nav = document.getElementById('global-nav');
+  const isNavScreen = id in NAV_SCREENS;
+  nav.style.display = isNavScreen ? 'flex' : 'none';
+
+  if (isNavScreen) {
+    document.getElementById(id).classList.add('has-nav');
+    // Highlight active tab
+    document.querySelectorAll('.gnav-item').forEach(el => el.classList.remove('gnav-active'));
+    const activeNavId = NAV_SCREENS[id];
+    if (activeNavId) {
+      const activeEl = document.getElementById(activeNavId);
+      if (activeEl) activeEl.classList.add('gnav-active');
+    }
+  }
 }
 function showToast(msg,d=2500) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),d); }
 
@@ -947,5 +947,21 @@ function leaveRoom(){if(socket){socket.disconnect();socket=null;}connectSocket()
 
 init();
 </script>
+<!-- FIXED GLOBAL NAV BAR -->
+<div id="global-nav" class="global-navbar" style="display:none;">
+  <div class="gnav-item nav-item-red" id="gnav-profile" onclick="playSound('click');showProfile()">
+    <img src="/icons/nav-profile.svg" alt="ملفي الشخصي">
+  </div>
+  <div class="gnav-item nav-item-green" id="gnav-levels" onclick="playSound('click');showLevelsScreen()">
+    <img src="/icons/nav-trophy.svg" alt="المستويات">
+  </div>
+  <div class="gnav-item nav-item-yellow" id="gnav-shop" onclick="playSound('click');showShop()">
+    <img src="/icons/nav-shop.svg" alt="المتجر">
+  </div>
+  <div class="gnav-item nav-item-blue" id="gnav-howto" onclick="playSound('click');showHowToPlay()">
+    <img src="/icons/nav-howto.svg" alt="طريقة اللعب">
+  </div>
+</div>
+
 </body>
 </html>
