@@ -284,6 +284,76 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .podium-medal-3 { background: #fff; color: var(--blue-d); }
 .podium-score { color: #fff; font-size: 16px; font-weight: 800; text-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 
+/* ============================================================
+   GLASS REDESIGN — transparent cards + bigger white text (all screens)
+   ============================================================ */
+:root { --text: #ffffff; --muted: rgba(255,255,255,0.86); }
+
+/* Cards become fully transparent everywhere */
+.card { background: transparent !important; border: none !important; box-shadow: none !important; padding: 12px 6px; }
+
+/* White text + legibility shadow inherited across each screen */
+.screen { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.30); }
+
+/* Centered + bigger screen titles */
+#s-login .card h2, #s-register .card h2 { text-align: center !important; font-size: 24px !important; color: #fff; }
+#s-levels > h2, #s-shop > h2, #s-howto > h2, #s-profile > h2 { text-align: center !important; font-size: 26px !important; }
+
+/* Form fields as glass */
+.field label { font-size: 16px; color: #fff; }
+.field input, .field select {
+  background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.45);
+  color: #fff; font-size: 16px;
+}
+.field input::placeholder { color: rgba(255,255,255,0.70); }
+.field input:focus, .field select:focus { border-color: #fff; }
+.field select option { color: #1A1A2E; background: #fff; text-shadow: none; }
+.error-msg { text-shadow: none; }
+
+/* Secondary button as glass */
+.btn-secondary { background: rgba(0,0,0,0.18); color: #fff; border: 1px solid rgba(255,255,255,0.5); }
+.btn-secondary:hover { border-color: #fff; color: #fff; }
+.btn, .btn-logout { font-size: 17px; }
+
+/* Inner chips -> smoked glass so white text reads clearly */
+.info-item { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22); }
+.info-item .ilabel { font-size: 13px; }
+.info-item .ivalue { font-size: 16px; }
+.level-row { background: rgba(0,0,0,0.16); border-color: transparent; }
+.level-row.current { background: rgba(58,171,219,0.30); border-color: #fff; }
+.level-row img { width: 54px; height: 54px; }            /* bigger level symbols */
+.level-row .lname { font-size: 18px; }
+.level-row .lrange { font-size: 14px; }
+.level-row .lcurrent { font-size: 14px; color: #fff; }
+.section-title { font-size: 14px; color: #fff; }
+
+/* How to play */
+.howto-item { font-size: 17px; border-bottom-color: rgba(255,255,255,0.25); }
+.howto-num { width: 30px; height: 30px; font-size: 15px; text-shadow: none; }
+
+/* Shop placeholder */
+#s-shop h3 { font-size: 22px; color: #fff; }
+#s-shop p { font-size: 15px; color: rgba(255,255,255,0.9); }
+#s-shop .ti { color: rgba(255,255,255,0.9) !important; }
+
+/* Lobby / create / join chips -> glass */
+.cat-opt { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.3); }
+.cat-opt.selected { background: rgba(58,171,219,0.35); border-color: #fff; }
+.cat-opt .cname { color: #fff; }
+.player-card { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.22); }
+.lb-card:nth-child(n+4) { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.22); }
+.lb-score { color: rgba(255,255,255,0.9); }
+
+/* Gameplay readability on transparent */
+.q-box { background-image: none; background: rgba(0,0,0,0.20); border: 1px solid rgba(255,255,255,0.25); }
+.q-text { color: #fff; font-size: 20px; }
+.q-num-label { color: rgba(255,255,255,0.9); }
+.timer-circle { color: #1A1A2E; text-shadow: none; }      /* dark number on light circle */
+.points-tag, .badge-host, .opt-2 { text-shadow: none; }   /* dark text on bright chips */
+
+/* Toast was using --text as a background; keep it dark */
+.toast { background: rgba(20,20,30,0.92); color: #fff; }
+
 </style>
 </head>
 <body>
@@ -397,22 +467,12 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- PROFILE -->
 <div id="s-profile" class="screen">
-  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">حسابي ومستواي</h2>
+  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">حسابي</h2>
   <div class="card">
     <div style="text-align:center;margin-bottom:14px;">
       <img id="p-emo" style="width:100px;height:100px;display:block;margin:0 auto 6px;" src="" alt="">
       <div id="p-name" style="font-size:18px;font-weight:700;"></div>
       <span id="p-level-name" style="display:inline-block;margin-top:6px;background:var(--blue);color:#fff;border-radius:20px;padding:3px 14px;font-size:13px;font-weight:600;"></span>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label">
-        <span id="p-score-label">0 نقطة</span>
-        <span class="home-next-wrap">
-          <span id="p-next-label"></span>
-          <img id="p-next-img" class="home-next-img" src="" alt="">
-        </span>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" id="p-bar" style="width:0%"></div></div>
     </div>
     <div class="info-grid">
       <div class="info-item"><div class="ilabel">البريد</div><div class="ivalue" id="p-email" style="font-size:11px;word-break:break-all;"></div></div>
@@ -422,10 +482,10 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
     </div>
   </div>
   <button class="btn btn-logout" onclick="logout()">
-    <svg width="20" height="20" viewBox="0 0 100 100" style="vertical-align:-4px;margin-left:8px;">
-      <path d="M42 28 L42 36 L30 36 L30 64 L42 64 L42 72 L22 72 L22 28 Z" fill="#fff"/>
-      <rect x="42" y="46" width="34" height="8" rx="4" fill="#fff"/>
-      <path d="M62 36 L80 50 L62 64 Z" fill="#fff"/>
+    <svg width="30" height="30" viewBox="0 0 100 100" style="vertical-align:-8px;margin-left:8px;">
+      <path d="M46 22 L46 34 L32 34 L32 66 L46 66 L46 78 L20 78 L20 22 Z" fill="#fff"/>
+      <rect x="44" y="44" width="34" height="12" rx="6" fill="#fff"/>
+      <path d="M60 32 L86 50 L60 68 Z" fill="#fff"/>
     </svg>
     تسجيل الخروج
   </button>
@@ -712,21 +772,6 @@ function showProfile() {
   document.getElementById('p-gender').textContent=me.gender==='male'?'ذكر':'أنثى';
   document.getElementById('p-dob').textContent=me.dob;
   document.getElementById('p-phone').textContent=me.phone;
-  const score=me.total_score||0, lvl=me.level;
-  const progress=lvl.level===6?100:Math.round(((score-lvl.min)/(lvl.max-lvl.min))*100);
-  document.getElementById('p-score-label').textContent=score.toLocaleString('ar')+' نقطة';
-  document.getElementById('p-bar').style.width=Math.min(Math.max(progress,2),100)+'%';
-
-  const next=nextLevelInfo(lvl);
-  const pNextImg=document.getElementById('p-next-img');
-  const pNextLabel=document.getElementById('p-next-label');
-  if (next) {
-    pNextImg.src=next.img; pNextImg.style.display='inline-block';
-    pNextLabel.textContent='التالي: '+lvl.max.toLocaleString('ar');
-  } else {
-    pNextImg.style.display='none';
-    pNextLabel.textContent='أعلى مستوى!';
-  }
   show('s-profile');
 }
 
