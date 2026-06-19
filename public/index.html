@@ -359,7 +359,10 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .glass-chip { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22); border-radius: 16px; padding: 32px 20px; }
 
 /* How-to steps as smoky-glass chips (same as the rest) */
-.howto-item { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22) !important; border-radius: 12px; padding: 14px 16px; margin-bottom: 9px; }
+/* How-to: one smoky-glass box, white separator line between steps */
+.howto-box { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22); border-radius: 16px; padding: 2px 16px; }
+.howto-item { background: transparent !important; border: none !important; border-bottom: 1px solid rgba(255,255,255,0.40) !important; border-radius: 0 !important; padding: 15px 2px !important; margin: 0 !important; }
+.howto-box .howto-item:last-child { border-bottom: none !important; }
 
 /* Bigger profile info text */
 .info-item .ilabel { font-size: 14px; }
@@ -476,12 +479,14 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <div id="s-howto" class="screen">
   <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">طريقة اللعب</h2>
   <div class="card">
-    <div class="howto-item"><div class="howto-num">1</div><div>أنشئ غرفة واختر فئة أو أكثر للأسئلة</div></div>
-    <div class="howto-item"><div class="howto-num">2</div><div>شارك كود الغرفة مع أصدقائك ليدخلوا</div></div>
-    <div class="howto-item"><div class="howto-num">3</div><div>عندما يصبح الجميع جاهزاً، يبدأ المضيف اللعبة</div></div>
-    <div class="howto-item"><div class="howto-num">4</div><div>أجب على الأسئلة بسرعة قبل انتهاء الوقت</div></div>
-    <div class="howto-item"><div class="howto-num">5</div><div>اللعبة فيها 3 جولات: سهل، متوسط، صعب</div></div>
-    <div class="howto-item"><div class="howto-num">6</div><div>كل ما زادت نقاطك، رفعت مستواك من البطريق إلى الفلتة!</div></div>
+    <div class="howto-box">
+      <div class="howto-item"><div class="howto-num">1</div><div>أنشئ غرفة واختر فئة أو أكثر للأسئلة</div></div>
+      <div class="howto-item"><div class="howto-num">2</div><div>شارك كود الغرفة مع أصدقائك ليدخلوا</div></div>
+      <div class="howto-item"><div class="howto-num">3</div><div>عندما يصبح الجميع جاهزاً، يبدأ المضيف اللعبة</div></div>
+      <div class="howto-item"><div class="howto-num">4</div><div>أجب على الأسئلة بسرعة قبل انتهاء الوقت</div></div>
+      <div class="howto-item"><div class="howto-num">5</div><div>اللعبة فيها 3 جولات: سهل، متوسط، صعب</div></div>
+      <div class="howto-item"><div class="howto-num">6</div><div>كل ما زادت نقاطك، رفعت مستواك من البطريق إلى الفلتة!</div></div>
+    </div>
   </div>
 </div>
 
@@ -517,7 +522,6 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <div id="s-create" class="screen">
   <div class="scr-head">
     <h2>إنشاء غرفة</h2>
-    <p>اختر فئة أو أكثر</p>
   </div>
   <div class="card">
     <div class="section-title">اختر الفئات</div>
