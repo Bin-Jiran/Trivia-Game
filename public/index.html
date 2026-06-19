@@ -375,6 +375,24 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 #s-create > .scr-head h2, #s-join > .scr-head h2 { font-size: 26px; }
 #s-create > .scr-head p { color: rgba(255,255,255,0.9); font-size: 14px; }
 
+/* ---- Round 6: home bulb lights up when active ---- */
+.gnav-item.gnav-home img { transition: opacity .25s ease; }
+.gnav-item.gnav-home:not(.gnav-active) img { opacity: 0.80; }     /* "off" — softly dimmed */
+.gnav-item.gnav-home.gnav-active img {
+  opacity: 1;
+  animation: bulbGlow 1.8s ease-in-out infinite;                  /* "on" — warm pulsing glow */
+}
+@keyframes bulbGlow {
+  0%, 100% { filter: drop-shadow(0 0 5px #FFF3B0) drop-shadow(0 0 12px #FFD54A) drop-shadow(0 0 20px rgba(255,179,0,0.55)); }
+  50%      { filter: drop-shadow(0 0 9px #FFF8D0) drop-shadow(0 0 20px #FFE082) drop-shadow(0 0 32px rgba(255,179,0,0.85)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gnav-item.gnav-home.gnav-active img {
+    animation: none;
+    filter: drop-shadow(0 0 6px #FFF3B0) drop-shadow(0 0 14px #FFD54A) drop-shadow(0 0 22px rgba(255,179,0,0.70));
+  }
+}
+
 </style>
 </head>
 <body>
