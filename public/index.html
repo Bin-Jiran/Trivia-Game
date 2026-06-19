@@ -118,8 +118,8 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 .gnav-item:first-child { border-radius: 14px 0 0 0; overflow: hidden; }
 .gnav-item:last-child  { border-right: none; border-radius: 0 14px 0 0; overflow: hidden; }
 .gnav-item img { width: 28px; height: 28px; display: block; }
-.gnav-item.gnav-home { padding: 0; overflow: hidden; }
-.gnav-item.gnav-home img { width: 100%; height: 100%; object-fit: cover; }
+.gnav-item.gnav-home { padding: 0; overflow: visible; background: transparent; }
+.gnav-item.gnav-home img { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.3)); }
 .gnav-item.gnav-active { transform: translateY(-16px) scale(1.25); border-radius: 14px; z-index: 2; box-shadow: 0 8px 20px rgba(0,0,0,0.35); }
 .gnav-item:active { filter: brightness(0.82); }
 .nav-item-red    { background: var(--red); }
@@ -957,7 +957,7 @@ init();
   <div class="gnav-item nav-item-green" id="gnav-levels" onclick="playSound('click');showLevelsScreen()">
     <img src="/icons/nav-trophy.svg" alt="المستويات">
   </div>
-  <div class="gnav-item gnav-home nav-item-white" id="gnav-home" onclick="playSound('click');show('s-home')">
+  <div class="gnav-item gnav-home" id="gnav-home" onclick="playSound('click');show('s-home')">
     <img src="/icons/nav-home.png" alt="الرئيسية">
   </div>
   <div class="gnav-item nav-item-yellow" id="gnav-shop" onclick="playSound('click');showShop()">
