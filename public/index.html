@@ -354,6 +354,24 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 /* Toast was using --text as a background; keep it dark */
 .toast { background: rgba(20,20,30,0.92); color: #fff; }
 
+/* ---- Round 4 tweaks ---- */
+/* Reusable smoky-glass chip */
+.glass-chip { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22); border-radius: 16px; padding: 32px 20px; }
+
+/* How-to steps as smoky-glass chips (same as the rest) */
+.howto-item { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22) !important; border-radius: 12px; padding: 14px 16px; margin-bottom: 9px; }
+
+/* Bigger profile info text */
+.info-item .ilabel { font-size: 14px; }
+.info-item .ivalue { font-size: 17px; }
+
+/* Create / Join: bigger + centered section title */
+#s-create .section-title { font-size: 18px; text-align: center; margin-bottom: 12px; }
+/* Create / Join: centered headers (back button removed) */
+#s-create > .scr-head, #s-join > .scr-head { text-align: center; margin: 10px 0 14px; }
+#s-create > .scr-head h2, #s-join > .scr-head h2 { font-size: 26px; }
+#s-create > .scr-head p { color: rgba(255,255,255,0.9); font-size: 14px; }
+
 </style>
 </head>
 <body>
@@ -445,10 +463,12 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <!-- SHOP (placeholder) -->
 <div id="s-shop" class="screen">
   <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">المتجر</h2>
-  <div class="card" style="text-align:center;padding:40px 20px;">
-    <i class="ti ti-shopping-bag" style="font-size:48px;color:var(--muted);" aria-hidden="true"></i>
-    <h3 style="margin-top:14px;font-size:18px;">قريباً!</h3>
-    <p style="color:var(--muted);font-size:13px;margin-top:6px;">المتجر قيد التطوير، تابعنا للمزيد</p>
+  <div class="card">
+    <div class="glass-chip" style="text-align:center;">
+      <i class="ti ti-shopping-bag" style="font-size:48px;" aria-hidden="true"></i>
+      <h3 style="margin-top:14px;font-size:18px;">قريباً!</h3>
+      <p style="margin-top:6px;">المتجر قيد التطوير، تابعنا للمزيد</p>
+    </div>
   </div>
 </div>
 
@@ -475,10 +495,12 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
       <span id="p-level-name" style="display:inline-block;margin-top:6px;background:var(--blue);color:#fff;border-radius:20px;padding:3px 14px;font-size:13px;font-weight:600;"></span>
     </div>
     <div class="info-grid">
-      <div class="info-item"><div class="ilabel">البريد</div><div class="ivalue" id="p-email" style="font-size:11px;word-break:break-all;"></div></div>
+      <div class="info-item"><div class="ilabel">الاسم الأول</div><div class="ivalue" id="p-fname"></div></div>
+      <div class="info-item"><div class="ilabel">الاسم الأخير</div><div class="ivalue" id="p-lname"></div></div>
+      <div class="info-item"><div class="ilabel">البريد</div><div class="ivalue" id="p-email" style="font-size:15px;word-break:break-all;"></div></div>
       <div class="info-item"><div class="ilabel">الجنس</div><div class="ivalue" id="p-gender"></div></div>
-      <div class="info-item"><div class="ilabel">تاريخ الميلاد</div><div class="ivalue" id="p-dob" style="font-size:11px;"></div></div>
-      <div class="info-item"><div class="ilabel">الهاتف</div><div class="ivalue" id="p-phone" style="font-size:11px;" dir="ltr"></div></div>
+      <div class="info-item"><div class="ilabel">تاريخ الميلاد</div><div class="ivalue" id="p-dob"></div></div>
+      <div class="info-item"><div class="ilabel">الهاتف</div><div class="ivalue" id="p-phone" dir="ltr" style="text-align:right;"></div></div>
     </div>
   </div>
   <button class="btn btn-logout" onclick="logout()">
@@ -493,9 +515,9 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- CREATE ROOM -->
 <div id="s-create" class="screen">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;margin-top:10px;">
-    <button class="back-btn" onclick="show('s-home')">←</button>
-    <div><h2 style="font-size:20px;">إنشاء غرفة</h2><p style="color:var(--muted);font-size:12px;">اختر فئة أو أكثر</p></div>
+  <div class="scr-head">
+    <h2>إنشاء غرفة</h2>
+    <p>اختر فئة أو أكثر</p>
   </div>
   <div class="card">
     <div class="section-title">اختر الفئات</div>
@@ -514,9 +536,8 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 
 <!-- JOIN ROOM -->
 <div id="s-join" class="screen">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;margin-top:10px;">
-    <button class="back-btn" onclick="show('s-home')">←</button>
-    <h2 style="font-size:20px;">دخول غرفة</h2>
+  <div class="scr-head">
+    <h2>دخول غرفة</h2>
   </div>
   <div class="card">
     <div id="join-err" class="error-msg"></div>
@@ -688,6 +709,7 @@ const LEVELS=[
 ];
 
 const NAV_SCREENS = { 's-home':'gnav-home', 's-profile':'gnav-profile', 's-levels':'gnav-levels', 's-shop':'gnav-shop', 's-howto':'gnav-howto' };
+const NAV_VISIBLE = ['s-home','s-profile','s-levels','s-shop','s-howto','s-create','s-join'];
 
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -695,12 +717,13 @@ function show(id) {
   document.body.classList.toggle('home-active', id === 's-home');
 
   const nav = document.getElementById('global-nav');
-  const isNavScreen = id in NAV_SCREENS;
-  nav.style.display = isNavScreen ? 'flex' : 'none';
+  const showNav = NAV_VISIBLE.includes(id);
+  nav.style.display = showNav ? 'flex' : 'none';
 
-  if (isNavScreen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('has-nav'));
+  if (showNav) {
     document.getElementById(id).classList.add('has-nav');
-    // Highlight active tab
+    // Highlight active tab (sub-screens like create/join have none)
     document.querySelectorAll('.gnav-item').forEach(el => el.classList.remove('gnav-active'));
     const activeNavId = NAV_SCREENS[id];
     if (activeNavId) {
@@ -772,6 +795,9 @@ function showProfile() {
   document.getElementById('p-gender').textContent=me.gender==='male'?'ذكر':'أنثى';
   document.getElementById('p-dob').textContent=me.dob;
   document.getElementById('p-phone').textContent=me.phone;
+  const _nm=(me.display_name||'').trim().split(/\s+/);
+  document.getElementById('p-fname').textContent = me.first_name || _nm[0] || '';
+  document.getElementById('p-lname').textContent = me.last_name || _nm.slice(1).join(' ') || '';
   show('s-profile');
 }
 
