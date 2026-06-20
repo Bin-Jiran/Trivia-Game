@@ -400,10 +400,13 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 #s-create > .scr-head p { color: rgba(255,255,255,0.9); font-size: 14px; }
 
 /* ---- Round 6: home bulb lights up when active ---- */
-.gnav-item.gnav-home img { transition: opacity .25s ease; }
+.gnav-item.gnav-home img { transition: opacity .25s ease, transform .22s cubic-bezier(0.34,1.56,0.64,1); }
 .gnav-item.gnav-home:not(.gnav-active) img { opacity: 0.80; }     /* "off" — softly dimmed */
+/* Active home: enlarge ONLY the bulb — no surrounding box or cell lift */
+.gnav-item.gnav-home.gnav-active { transform: none; box-shadow: none; background: transparent; border-radius: 0; }
 .gnav-item.gnav-home.gnav-active img {
   opacity: 1;
+  transform: translateY(-15px) scale(1.42);                       /* only the bulb grows & lifts */
   animation: bulbGlow 1.8s ease-in-out infinite;                  /* "on" — warm pulsing glow */
 }
 @keyframes bulbGlow {
@@ -424,7 +427,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <!-- LOGIN -->
 <div id="s-login" class="screen active">
   <div class="hero-logo" style="margin-top:24px;">
-    <img src="/icons/logo-full.png" alt="الفلتة!" class="hero-logo-img">
+    <img src="/icons/logo-full.png" alt="الفلته" class="hero-logo-img">
   </div>
   <div class="card" style="margin-top:20px;">
     <h2 style="margin-bottom:16px;font-size:19px;">تسجيل الدخول</h2>
@@ -439,7 +442,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <!-- REGISTER -->
 <div id="s-register" class="screen">
   <div class="hero-logo" style="margin-top:16px;">
-    <img src="/icons/logo-full.png" alt="الفلتة!" class="hero-logo-img">
+    <img src="/icons/logo-full.png" alt="الفلته" class="hero-logo-img">
   </div>
   <div class="card" style="margin-top:14px;">
     <h2 style="margin-bottom:16px;font-size:19px;">إنشاء حساب</h2>
@@ -466,7 +469,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 <!-- HOME -->
 <div id="s-home" class="screen">
   <div class="home-hero">
-    <img src="/icons/logo-full.png" alt="الفلتة!" class="hero-logo-img">
+    <img src="/icons/logo-full.png" alt="الفلته" class="hero-logo-img">
 
     <div class="hero-profile">
       <img class="hp-emo" id="home-emo" src="" alt="">
@@ -523,11 +526,13 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
   <div class="card">
     <div class="howto-box">
       <div class="howto-item"><div class="howto-num">1</div><div>أنشئ غرفة واختر فئة أو أكثر للأسئلة</div></div>
-      <div class="howto-item"><div class="howto-num">2</div><div>شارك كود الغرفة مع أصدقائك ليدخلوا</div></div>
-      <div class="howto-item"><div class="howto-num">3</div><div>عندما يصبح الجميع جاهزاً، يبدأ المضيف اللعبة</div></div>
-      <div class="howto-item"><div class="howto-num">4</div><div>أجب على الأسئلة بسرعة قبل انتهاء الوقت</div></div>
-      <div class="howto-item"><div class="howto-num">5</div><div>اللعبة فيها 3 جولات: سهل، متوسط، صعب</div></div>
-      <div class="howto-item"><div class="howto-num">6</div><div>كل ما زادت نقاطك، رفعت مستواك من البطريق إلى الفلتة!</div></div>
+      <div class="howto-item"><div class="howto-num">2</div><div>شارك كود الغرفة مع أصدقائك</div></div>
+      <div class="howto-item"><div class="howto-num">3</div><div>عندما يصبح الجميع جاهزاً، إبدأ اللعب</div></div>
+      <div class="howto-item"><div class="howto-num">4</div><div>لديك 15 ثانية للإجابة على السؤال</div></div>
+      <div class="howto-item"><div class="howto-num">5</div><div>تتكون اللعبة من 3 جولات متدرجة، تبدء من سهل إلى متوسط إلى صعب</div></div>
+      <div class="howto-item"><div class="howto-num">6</div><div>تحتوي كل جولة على 12 سؤال</div></div>
+      <div class="howto-item"><div class="howto-num">7</div><div>كل 100 نقطة داخل اللعبة تعادل 1 نقطة لمستواك</div></div>
+      <div class="howto-item"><div class="howto-num">8</div><div>كل ما زادت نقاطك إرتفع مستواك إلى أن تصل إلى مستوى الفلته !</div></div>
     </div>
   </div>
 </div>
@@ -751,7 +756,7 @@ const LEVELS=[
   {name:'الدب',   emoji:'🐻',img:'/levels/bear.png',   level:3,min:1251,max:2400 },
   {name:'الأسد',  emoji:'🦁',img:'/levels/lion.png',   level:4,min:2401,max:4100 },
   {name:'التنين', emoji:'🐉',img:'/levels/dragon.png', level:5,min:4101,max:6650 },
-  {name:'الفلتة!',emoji:'💥',img:'/levels/falta.png',  level:6,min:6651,max:99999},
+  {name:'الفلته !',emoji:'💥',img:'/levels/falta.png',  level:6,min:6651,max:99999},
 ];
 
 const NAV_SCREENS = { 's-home':'gnav-home', 's-profile':'gnav-profile', 's-levels':'gnav-levels', 's-shop':'gnav-shop', 's-howto':'gnav-howto' };
