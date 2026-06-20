@@ -128,7 +128,7 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
   width: 100%; max-width: none;
   height: 80px;
   background: transparent; border: none; border-radius: 0;
-  display: flex; align-items: stretch; gap: 10px; padding: 0 0 8px;
+  display: flex; align-items: stretch; padding: 0 0 8px;
   z-index: 1000; box-shadow: none; overflow: visible;
 }
 .gnav-item {
@@ -141,10 +141,15 @@ body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var
 }
 .gnav-item img { width: 34px; height: 34px; display: block; }
 /* center gap for the floating bulb — no card, no box behind it */
-.gnav-item.gnav-home { flex: 0 0 84px; padding: 0; overflow: visible; background: transparent; border-radius: 0; box-shadow: none; }
+.gnav-item.gnav-home { flex: 0 0 100px; padding: 0; overflow: visible; background: transparent; border-radius: 0; box-shadow: none; }
 .gnav-item.gnav-home img { height: 46px; width: auto; display: block; object-fit: contain; box-shadow: none; }
 .gnav-item.gnav-active { transform: translateY(-16px) scale(1.18); z-index: 2; box-shadow: 0 10px 22px rgba(0,0,0,0.3); }
 .gnav-item:active { filter: brightness(0.85); }
+/* join each pair: square off the corners where two cards meet (zero space between them) */
+#gnav-howto   { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#gnav-shop    { border-top-left-radius: 0;  border-bottom-left-radius: 0; }
+#gnav-levels  { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#gnav-profile { border-top-left-radius: 0;  border-bottom-left-radius: 0; }
 .nav-item-red    { background: var(--red); }
 .nav-item-green  { background: var(--green); }
 .nav-item-yellow { background: var(--yellow); }
