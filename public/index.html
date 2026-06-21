@@ -195,10 +195,12 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* Points centered above question */
 .q-points-center { text-align: center; margin-bottom: 8px; }
-.points-tag { display: inline-block; background: var(--yellow); color: #000; border-radius: 20px; padding: 4px 16px; font-size: 14px; font-weight: 800; box-shadow: 0 2px 6px rgba(245,194,0,0.3); }
+.points-tag { display: inline-block; background: var(--blue); color: #fff; border: 2px solid #fff; border-radius: 20px; padding: 5px 18px; font-size: 14px; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
+.pts-top { text-align: center; margin-bottom: 8px; }
+.q-num-inside { position: absolute; bottom: 8px; left: 12px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.85); }
 
 /* Phase banner */
-.phase-banner { text-align:center; border-radius:var(--radius-sm); padding:9px; font-weight:700; font-size:14px; margin-bottom:12px; color:#fff; }
+.phase-banner { text-align:center; border-radius:var(--radius-sm); padding:9px; font-weight:700; font-size:14px; margin-bottom:12px; color:#fff; border:2px solid #fff; }
 
 /* Timer LEFT + question number RIGHT */
 .q-top-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
@@ -226,17 +228,24 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* Answer options */
 .options-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.opt { border:none; border-radius:var(--radius-sm); padding:18px 12px; cursor:pointer; font-size:15px; font-family:var(--font); color:#fff; text-align:center; font-weight:700; line-height:1.4; transition:transform 0.1s, opacity 0.2s; box-shadow:0 4px 14px rgba(0,0,0,0.15); }
+.opt { border:2px solid #fff; border-radius:var(--radius-sm); padding:18px 12px; cursor:pointer; font-size:15px; font-family:var(--font); color:#fff; text-align:center; font-weight:700; line-height:1.4; transition:transform 0.1s, opacity 0.3s; box-shadow:0 4px 14px rgba(0,0,0,0.15); }
 .opt:active { transform:scale(0.95); }
 .opt:disabled { cursor:default; }
 .opt-0 { background:var(--red); }
 .opt-1 { background:var(--blue); }
-.opt-2 { background:var(--yellow); color:#000; }
+.opt-2 { background:var(--yellow); color:#fff; }
 .opt-3 { background:var(--green); }
 .opt-0:hover:not(:disabled) { background:var(--red-d); }
 .opt-1:hover:not(:disabled) { background:var(--blue-d); }
 .opt-2:hover:not(:disabled) { background:var(--yellow-d); }
 .opt-3:hover:not(:disabled) { background:var(--green-d); }
+/* Answer reveal: glow borders, fade, pulses */
+.opt.faded { opacity:0.28; }
+.opt.correct-glow { border:3px solid var(--green); box-shadow:0 0 18px 4px rgba(91,189,78,0.95); }
+.opt.wrong-glow { border:3px solid var(--red); box-shadow:0 0 18px 4px rgba(232,71,42,0.95); }
+.opt.pulse3 { animation:optPulse 0.45s ease 3; }
+.opt.pulse1 { animation:optPulse 0.45s ease 0.5s 1; }
+@keyframes optPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
 .opt.correct { outline:4px solid #fff; animation:correctPop 0.3s ease; filter:brightness(1.1); }
 .opt.wrong   { opacity:0.35; }
 @keyframes correctPop{0%{transform:scale(1)}50%{transform:scale(1.07)}100%{transform:scale(1)}}
@@ -290,12 +299,15 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* ── Podium (Game Over) ── */
 .podium-bg {
-  background: linear-gradient(160deg, var(--blue) 0%, var(--green) 50%, var(--yellow) 100%);
+  background: rgba(22,20,32,0.55);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255,255,255,0.28);
   border-radius: var(--radius);
   padding: 28px 16px 0;
   text-align: center;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
 }
 .podium-title { color: #fff; font-size: 26px; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
 .podium-winner-name { color: #fff; font-size: 20px; font-weight: 700; margin: 10px 0 24px; text-shadow: 0 2px 6px rgba(0,0,0,0.2); }
@@ -304,12 +316,12 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .podium-player { color: #fff; font-size: 13px; font-weight: 700; margin-bottom: 8px; text-shadow: 0 1px 4px rgba(0,0,0,0.2); max-width: 100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .podium-player-1 { font-size: 14px; }
 .podium-block { width: 100%; border-radius: 10px 10px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 10px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1) inset; }
-.podium-block-1 { height: 130px; background: var(--yellow); }
-.podium-block-2 { height: 95px; background: var(--red); }
+.podium-block-1 { height: 130px; background: var(--green); }
+.podium-block-2 { height: 95px; background: var(--yellow); }
 .podium-block-3 { height: 70px; background: var(--blue); }
 .podium-medal { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
-.podium-medal-1 { background: #fff; color: var(--yellow-d); width: 46px; height: 46px; font-size: 22px; }
-.podium-medal-2 { background: #fff; color: var(--red-d); }
+.podium-medal-1 { background: #fff; color: var(--green-d); width: 46px; height: 46px; font-size: 22px; }
+.podium-medal-2 { background: #fff; color: var(--yellow-d); }
 .podium-medal-3 { background: #fff; color: var(--blue-d); }
 .podium-score { color: #fff; font-size: 16px; font-weight: 800; text-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 
@@ -399,7 +411,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .lb-score { color: rgba(255,255,255,0.9); }
 
 /* Gameplay readability on transparent */
-.q-box { background-image: none; background: rgba(0,0,0,0.20); border: 1px solid rgba(255,255,255,0.25); }
+.q-box { background-image: none; background: rgba(0,0,0,0.22); border: 2px solid #fff; padding-bottom: 28px; }
 .q-text { color: #fff; font-size: 20px; }
 .q-num-label { color: rgba(255,255,255,0.9); }
 .timer-circle { color: #1A1A2E; text-shadow: none; }      /* dark number on light circle */
@@ -669,17 +681,15 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <!-- Phase banner -->
     <div class="phase-banner" id="q-phase-banner" style="background:var(--green);">الجولة 1 - سهل</div>
 
-    <!-- Question number + points top row -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <div class="q-num-label" id="q-num">سؤال 1/12</div>
-      <span class="points-tag" id="q-pts">100 نقطة</span>
-    </div>
+    <!-- Points centered above the question box -->
+    <div class="pts-top"><span class="points-tag" id="q-pts">100 نقطة</span></div>
 
     <div id="logo-box" style="display:none;"></div>
 
-    <!-- Question inside 4-color bordered box -->
+    <!-- Question inside bordered box; question number bottom-left inside -->
     <div class="q-box">
       <div class="q-text" id="q-text" style="margin-bottom:0;">...</div>
+      <div class="q-num-inside" id="q-num">سؤال 1/12</div>
     </div>
 
     <!-- Timer centered below question box -->
@@ -703,7 +713,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 <!-- GAME OVER — PODIUM -->
 <div id="s-gameover" class="screen">
   <div class="podium-bg">
-    <h1 class="podium-title">🏆 المنصة! 🏆</h1>
+    <h1 class="podium-title">🏆 الفائز 🏆</h1>
     <div class="podium-winner-name" id="podium-winner-name">—</div>
     <div class="podium-stage">
       <div class="podium-col podium-2">
@@ -730,7 +740,8 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     </div>
   </div>
   <div class="lb-list" id="final-lb-rest" style="margin-top:18px;"></div>
-  <button class="btn btn-primary mt" onclick="show('s-home')">العب مجدداً</button>
+  <button class="btn btn-primary mt" onclick="playAgain()">إلعب مجدداً</button>
+  <button class="btn-logout" onclick="leaveRoom()">العودة إلى الشاشة الرئيسية</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -771,6 +782,7 @@ function playSound(type) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 let token=localStorage.getItem('token'), me=null, socket=null, selectedCats=[], isHost=false;
+let lastPickedAnswer=null, lastAnswerCorrect=false;
 const LEVELS=[
   {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',level:1,min:0,   max:500  },
   {name:'الذئب',  emoji:'🐺',img:'/levels/wolf.png',   level:2,min:501, max:1500 },
@@ -924,6 +936,24 @@ function connectSocket() {
     playSound('enter');show('s-lobby');
   });
 
+  socket.on('room_reset',({code,categories,host})=>{
+    isHost=(host===socket.id);
+    document.getElementById('lobby-code').textContent=code;
+    document.getElementById('lobby-cats').textContent=(categories||[]).join(' • ');
+    if(isHost){
+      document.getElementById('lobby-host-btn').style.display='block';
+      document.getElementById('lobby-ready-btn').style.display='none';
+      document.getElementById('start-btn').disabled=false;
+      document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
+    } else {
+      document.getElementById('lobby-host-btn').style.display='none';
+      document.getElementById('lobby-ready-btn').style.display='block';
+      document.getElementById('ready-btn').disabled=false;
+      document.getElementById('ready-btn').textContent='✔ أنا جاهز';
+    }
+    showToast('غرفة جديدة — استعدوا!'); playSound('enter'); show('s-lobby');
+  });
+
   socket.on('players_update',players=>{
     const el=document.getElementById('lobby-players'); el.innerHTML='';
     players.forEach(p=>{
@@ -969,6 +999,7 @@ function connectSocket() {
 
     document.getElementById('q-result').style.display='none';
     document.getElementById('q-result').textContent='';
+    lastPickedAnswer=null; lastAnswerCorrect=false;
 
     const colors=['opt-0','opt-1','opt-2','opt-3'];
     const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
@@ -993,33 +1024,45 @@ function connectSocket() {
   });
 
   socket.on('answer_result',({correct,points})=>{
+    lastAnswerCorrect=correct;
     document.querySelectorAll('.opt').forEach(b=>b.disabled=true);
     const res=document.getElementById('q-result'); res.style.display='block';
     if(correct){
       playSound('correct');
-      res.style.background='rgba(91,189,78,0.15)'; res.style.color='#2d7a24';
-      res.textContent=`✅ إجابة صحيحة! +${points} نقطة`;
+      res.style.background='rgba(91,189,78,0.85)'; res.style.color='#fff';
+      res.textContent=`إجابة صحيحة! +${points} نقطة`;
     } else {
       playSound('wrong');
-      res.style.background='rgba(232,71,42,0.12)'; res.style.color='var(--red-d)';
-      res.textContent='❌ إجابة خاطئة — انتظر الجميع...';
+      res.style.background='rgba(232,71,42,0.85)'; res.style.color='#fff';
+      res.textContent='إجابة خاطئة';
     }
   });
 
   socket.on('reveal_answer',({correct_answer})=>{
     document.querySelectorAll('.opt').forEach(b=>{
       b.disabled=true;
-      if(b.dataset.value===correct_answer) b.classList.add('correct');
-      else b.classList.add('wrong');
+      if(b.dataset.value===correct_answer){
+        b.classList.add('correct-glow');
+        if(lastAnswerCorrect) b.classList.add('pulse3');
+      } else if(b.dataset.value===lastPickedAnswer){
+        b.classList.add('wrong-glow','pulse1');
+      } else {
+        b.classList.add('faded');
+      }
     });
     const res=document.getElementById('q-result');
-    if(res.textContent.includes('خاطئة')) res.textContent='❌ إجابة خاطئة';
+    if(res.textContent.includes('خاطئة')) res.textContent='إجابة خاطئة';
   });
 
   socket.on('time_up',({correct_answer})=>{
-    document.querySelectorAll('.opt').forEach(b=>{b.disabled=true; if(b.dataset.value===correct_answer)b.classList.add('correct'); else b.classList.add('wrong');});
+    document.querySelectorAll('.opt').forEach(b=>{
+      b.disabled=true;
+      if(b.dataset.value===correct_answer) b.classList.add('correct-glow');
+      else if(b.dataset.value===lastPickedAnswer) b.classList.add('wrong-glow','pulse1');
+      else b.classList.add('faded');
+    });
     const res=document.getElementById('q-result'); res.style.display='block';
-    res.style.background='rgba(245,194,0,0.15)'; res.style.color='#9a7a00'; res.textContent='⏰ انتهى الوقت!';
+    res.style.background='rgba(245,194,0,0.85)'; res.style.color='#fff'; res.textContent='انتهى الوقت!';
     playSound('wrong');
   });
 
@@ -1045,7 +1088,7 @@ function renderPodium(players) {
 
   for (let i = 1; i <= 3; i++) {
     const p = slots[i-1];
-    document.getElementById(`podium-name-${i}`).textContent = p ? p.display_name : '—';
+    document.getElementById(`podium-name-${i}`).textContent = (i===1) ? '\u00A0' : (p ? p.display_name : '—');
     document.getElementById(`podium-score-${i}`).textContent = p ? (p.sessionScore||0).toLocaleString('ar') : '0';
   }
 
@@ -1082,8 +1125,9 @@ function joinRoom(){
 }
 function setReady(){socket.emit('player_ready');document.getElementById('ready-btn').disabled=true;document.getElementById('ready-btn').textContent='✔ جاهز!';playSound('click');}
 function startGame(){socket.emit('start_game');show('s-loading');playSound('click');}
-function submitAnswer(answer){document.querySelectorAll('.opt').forEach(b=>b.disabled=true);socket.emit('submit_answer',{answer});}
+function submitAnswer(answer){lastPickedAnswer=answer;document.querySelectorAll('.opt').forEach(b=>b.disabled=true);socket.emit('submit_answer',{answer});}
 function leaveRoom(){if(socket){socket.disconnect();socket=null;}connectSocket();show('s-home');}
+function playAgain(){ if(!socket){show('s-home');return;} playSound('click'); socket.emit('play_again'); }
 
 init();
 </script>
