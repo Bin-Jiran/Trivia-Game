@@ -210,10 +210,11 @@ io.on('connection', socket => {
 
   socket.on('player_ready', () => {
     const room = rooms[socket.roomCode]; if (!room) return;
-    room.players[socket.id].ready = true;
+    const p = room.players[socket.id]; if (!p) return;
+    p.ready = !p.ready;
     io.to(socket.roomCode).emit('players_update', getPlayers(socket.roomCode));
     const nonHost = Object.entries(room.players).filter(([id]) => id !== room.host);
-    if (nonHost.length > 0 && nonHost.every(([,p]) => p.ready)) io.to(socket.roomCode).emit('all_ready');
+    if (nonHost.length > 0 && nonHost.every(([,pl]) => pl.ready)) io.to(socket.roomCode).emit('all_ready');
   });
 
   socket.on('start_game', async () => {
