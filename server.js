@@ -194,6 +194,20 @@ io.on('connection', socket => {
     io.to(code).emit('players_update', getPlayers(code));
   });
 
+  // Play again: reset the SAME room back to a fresh lobby and keep it alive
+  socket.on('play_again', () => {
+    const code = socket.roomCode; const room = rooms[code];
+    if (!room) return socket.emit('error_msg', 'انتهت الغرفة، أنشئ غرفة جديدة');
+    if (room.endTimer) { clearTimeout(room.endTimer); room.endTimer = null; }
+    if (room.timer) { clearInterval(room.timer); room.timer = null; }
+    room.status = 'waiting'; room.phase = 0; room.qIndex = 0;
+    room.answered = {}; room.currentQuestion = null;
+    room.allQuestions = null; room.questions = null;
+    Object.values(room.players).forEach(p => { p.sessionScore = 0; p.ready = false; });
+    io.to(code).emit('room_reset', { code, categories: room.categories, host: room.host });
+    io.to(code).emit('players_update', getPlayers(code));
+  });
+
   socket.on('player_ready', () => {
     const room = rooms[socket.roomCode]; if (!room) return;
     room.players[socket.id].ready = true;
@@ -321,7 +335,8 @@ async function endGame(code) {
     await pool.query('INSERT INTO game_history (user_id,room_code,score) VALUES ($1,$2,$3)', [p.id, code, p.sessionScore]);
   }
   io.to(code).emit('game_end', { leaderboard });
-  setTimeout(() => delete rooms[code], 30000);
+  if (room.endTimer) clearTimeout(room.endTimer);
+  room.endTimer = setTimeout(() => { delete rooms[code]; }, 120000);
 }
 
 server.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
