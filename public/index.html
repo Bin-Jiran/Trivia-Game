@@ -24,7 +24,7 @@
   --radius: 16px; --radius-sm: 12px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--yellow); background-attachment: fixed; color: var(--text); font-family: var(--font); min-height: 100vh; direction: rtl; }
+body { background: linear-gradient(160deg, var(--red) 0%, var(--yellow) 35%, var(--green) 65%, var(--blue) 100%); background-attachment: fixed; color: var(--text); font-family: var(--font); min-height: 100vh; direction: rtl; }
 .screen { display: none; min-height: 100vh; padding: 20px; max-width: 520px; margin: auto; }
 .screen.active { display: flex; flex-direction: column; }
 
@@ -119,6 +119,7 @@ body { background: var(--yellow); background-attachment: fixed; color: var(--tex
 .hero-btn:active { transform: translateY(2px); }
 .hero-btn img { width: 46px; height: 46px; }
 .hero-btn-blue   { background: var(--blue);   box-shadow: 0 5px 0 var(--blue-d); }
+.hero-btn-green  { background: var(--green);  box-shadow: 0 5px 0 var(--green-d); color: #fff; }
 .hero-btn-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); color: #fff; }
 
 
@@ -128,7 +129,7 @@ body { background: var(--yellow); background-attachment: fixed; color: var(--tex
   width: 100%; max-width: none;
   height: 80px;
   background: transparent; border: none; border-radius: 0;
-  display: flex; align-items: stretch; padding: 0 0 8px;
+  display: flex; align-items: stretch; padding: 0 0 8px; gap: 8px;
   z-index: 1000; box-shadow: none; overflow: visible;
 }
 .gnav-item {
@@ -145,11 +146,11 @@ body { background: var(--yellow); background-attachment: fixed; color: var(--tex
 .gnav-item.gnav-home img { height: 46px; width: auto; display: block; object-fit: contain; box-shadow: none; }
 .gnav-item.gnav-active { transform: translateY(-16px) scale(1.18); z-index: 2; box-shadow: 0 10px 22px rgba(0,0,0,0.3); }
 .gnav-item:active { filter: brightness(0.85); }
-/* join each pair: square off the corners where two cards meet (zero space between them) */
-#gnav-howto   { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-#gnav-shop    { border-top-left-radius: 0;  border-bottom-left-radius: 0; }
-#gnav-levels  { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-#gnav-profile { border-top-left-radius: 0;  border-bottom-left-radius: 0; }
+/* White-bordered groups (#3): profile+levels together, shop+howto together */
+.navgroup { flex: 1; display: flex; border: 3px solid #fff; border-radius: 20px; overflow: visible; box-shadow: 0 3px 10px rgba(0,0,0,0.18); }
+.navgroup .gnav-item { box-shadow: none; border-radius: 0; }
+.navgroup .gnav-item:first-child { border-top-right-radius: 17px; border-bottom-right-radius: 17px; }
+.navgroup .gnav-item:last-child  { border-top-left-radius: 17px;  border-bottom-left-radius: 17px; }
 .nav-item-red    { background: var(--red); }
 .nav-item-green  { background: var(--green); }
 .nav-item-yellow { background: var(--yellow); }
@@ -353,6 +354,31 @@ body { background: var(--yellow); background-attachment: fixed; color: var(--tex
 .level-row .lname { font-size: 18px; }
 .level-row .lrange { font-size: 14px; }
 .level-row .lcurrent { font-size: 14px; color: #fff; }
+
+/* Per-level progress meters (#1) */
+.level-row .meter { margin-top: 8px; }
+.level-row.dimmed { opacity: 0.55; }
+.meter .m-bar { position: relative; direction: rtl; height: 24px; background: rgba(255,255,255,0.28); border-radius: 12px; border: 2px solid #fff; overflow: hidden; }
+.meter .m-fill { height: 100%; border-radius: 10px; background: linear-gradient(90deg,var(--red),var(--yellow),var(--green),var(--blue)); }
+.meter .m-start { position: absolute; top: 0; bottom: 0; right: 8px; display: flex; align-items: center; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.meter .m-end { position: absolute; top: 0; bottom: 0; left: 8px; display: flex; align-items: center; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.meter .m-cur { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+
+/* Top level (الفلته !) reached — glowing 4-color box */
+.level-row.falta-row { position: relative; border: 3px solid transparent; border-radius: 14px;
+  background: linear-gradient(rgba(10,10,20,0.35),rgba(10,10,20,0.35)) padding-box,
+             linear-gradient(90deg,var(--red),var(--yellow),var(--green),var(--blue),var(--red)) border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: faltaShift 4s linear infinite, faltaGlow 3s ease-in-out infinite; }
+.level-row.falta-row .lname { font-size: 19px; font-weight: 800; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+@keyframes faltaShift { 0% { background-position: 0 0, 0 0; } 100% { background-position: 0 0, 300% 0; } }
+@keyframes faltaGlow {
+  0%,100% { box-shadow: 0 0 20px 3px rgba(232,71,42,.7); }
+  25% { box-shadow: 0 0 20px 3px rgba(245,194,0,.7); }
+  50% { box-shadow: 0 0 20px 3px rgba(91,189,78,.7); }
+  75% { box-shadow: 0 0 20px 3px rgba(58,171,219,.7); }
+}
+@media (prefers-reduced-motion: reduce) { .level-row.falta-row { animation: none; box-shadow: 0 0 18px 3px rgba(245,194,0,.6); } }
 .section-title { font-size: 14px; color: #fff; }
 
 /* How to play */
@@ -480,17 +506,6 @@ body { background: var(--yellow); background-attachment: fixed; color: var(--tex
     <div class="hero-profile">
       <img class="hp-emo" id="home-emo" src="" alt="">
       <div class="hp-name" id="home-name"></div>
-      <div class="hp-level" id="home-level-txt"></div>
-      <div class="home-progress-wrap">
-        <div class="home-progress-label">
-          <span id="home-score-label">0 نقطة</span>
-          <span class="home-next-wrap">
-            <span id="home-next-label">التالي: 500</span>
-            <img id="home-next-img" class="home-next-img" src="" alt="">
-          </span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" id="home-bar" style="width:0%"></div></div>
-      </div>
     </div>
 
     <div class="hero-actions">
@@ -498,7 +513,7 @@ body { background: var(--yellow); background-attachment: fixed; color: var(--tex
         <img src="/icons/sign-plus.svg" alt="">
         <span>إنشاء غرفة</span>
       </button>
-      <button class="hero-btn hero-btn-yellow" onclick="playSound('click');show('s-join')">
+      <button class="hero-btn hero-btn-green" onclick="playSound('click');show('s-join')">
         <img src="/icons/sign-join.svg" alt="">
         <span>دخول غرفة</span>
       </button>
@@ -508,7 +523,7 @@ body { background: var(--yellow); background-attachment: fixed; color: var(--tex
 
 <!-- LEVELS (المستويات) -->
 <div id="s-levels" class="screen">
-  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">جميع المستويات</h2>
+  <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">المستويات</h2>
   <div class="card">
     <div class="level-all" id="level-all-list-page"></div>
   </div>
@@ -758,11 +773,11 @@ function playSound(type) {
 let token=localStorage.getItem('token'), me=null, socket=null, selectedCats=[], isHost=false;
 const LEVELS=[
   {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',level:1,min:0,   max:500  },
-  {name:'الذئب',  emoji:'🐺',img:'/levels/wolf.png',   level:2,min:501, max:1250 },
-  {name:'الدب',   emoji:'🐻',img:'/levels/bear.png',   level:3,min:1251,max:2400 },
-  {name:'الأسد',  emoji:'🦁',img:'/levels/lion.png',   level:4,min:2401,max:4100 },
-  {name:'التنين', emoji:'🐉',img:'/levels/dragon.png', level:5,min:4101,max:6650 },
-  {name:'الفلته !',emoji:'💥',img:'/levels/falta.png',  level:6,min:6651,max:99999},
+  {name:'الذئب',  emoji:'🐺',img:'/levels/wolf.png',   level:2,min:501, max:1500 },
+  {name:'الدب',   emoji:'🐻',img:'/levels/bear.png',   level:3,min:1501,max:2500 },
+  {name:'الأسد',  emoji:'🦁',img:'/levels/lion.png',   level:4,min:2501,max:4000 },
+  {name:'التنين', emoji:'🐉',img:'/levels/dragon.png', level:5,min:4001,max:6500 },
+  {name:'الفلته !',emoji:'💥',img:'/levels/falta.png',  level:6,min:6501,max:99999},
 ];
 
 const NAV_SCREENS = { 's-home':'gnav-home', 's-profile':'gnav-profile', 's-levels':'gnav-levels', 's-shop':'gnav-shop', 's-howto':'gnav-howto' };
@@ -806,31 +821,26 @@ function nextLevelInfo(lvl) {
 function updateHomeUI() {
   document.getElementById('home-emo').src=me.level.img||'';
   document.getElementById('home-name').textContent=me.display_name;
-  document.getElementById('home-level-txt').textContent='المستوى الحالي: '+me.level.name;
-
-  const score=me.total_score||0, lvl=me.level;
-  const progress=lvl.level===6?100:Math.round(((score-lvl.min)/(lvl.max-lvl.min))*100);
-  document.getElementById('home-score-label').textContent=score.toLocaleString('ar')+' نقطة';
-  document.getElementById('home-bar').style.width=Math.min(Math.max(progress,2),100)+'%';
-
-  const next=nextLevelInfo(lvl);
-  const nextImgEl=document.getElementById('home-next-img');
-  const nextLabelEl=document.getElementById('home-next-label');
-  if (next) {
-    nextImgEl.src=next.img; nextImgEl.style.display='inline-block';
-    nextLabelEl.textContent='التالي: '+lvl.max.toLocaleString('ar');
-  } else {
-    nextImgEl.style.display='none';
-    nextLabelEl.textContent='أعلى مستوى!';
-  }
-
-  // Levels list now lives on its own page, rendered on-demand in showLevelsScreen()
+  // Current-level line and progress bar were removed from the home screen.
 }
 
 function renderLevelsList(elId, score, currentLvl) {
   const list=document.getElementById(elId); list.innerHTML='';
-  LEVELS.forEach(l=>{ const isCurrent=currentLvl.name===l.name, isPassed=score>l.max&&l.level<6;
-    list.innerHTML+=`<div class="level-row ${isCurrent?'current':''}"><img src="${l.img}" alt=""><div class="linfo"><div class="lname">${l.name}${isPassed?' ✓':''}</div><div class="lrange">${l.min.toLocaleString('ar')} - ${l.level===6?'∞':l.max.toLocaleString('ar')} نقطة</div></div>${isCurrent?'<div class="lcurrent">مستواك الحالي</div>':''}</div>`;
+  LEVELS.forEach(l=>{
+    const isCurrent=currentLvl.name===l.name;
+    const reached=score>=l.min;
+    // Top level reached: glowing 4-color box, no meter
+    if (l.level===6 && isCurrent) {
+      list.innerHTML+=`<div class="level-row falta-row"><img src="${l.img}" alt=""><div class="linfo"><div class="lname">${l.name}</div></div></div>`;
+      return;
+    }
+    const startLabel=l.min.toLocaleString('ar');
+    const endLabel=(l.level===6?'∞':l.max.toLocaleString('ar'));
+    let fill=Math.round(((score-l.min)/(l.max-l.min))*100);
+    fill=Math.min(Math.max(fill,0),100);
+    const cur=isCurrent?`<span class="m-cur">${score.toLocaleString('ar')} نقطة</span>`:'';
+    const cls='level-row'+(isCurrent?' current':'')+(reached?'':' dimmed');
+    list.innerHTML+=`<div class="${cls}"><img src="${l.img}" alt=""><div class="linfo"><div class="lname">${l.name}</div><div class="meter"><div class="m-bar"><div class="m-fill" style="width:${fill}%"></div><span class="m-start">${startLabel}</span><span class="m-end">${endLabel}</span>${cur}</div></div></div></div>`;
   });
 }
 
@@ -1079,21 +1089,25 @@ init();
 </script>
 <!-- FIXED GLOBAL NAV BAR -->
 <div id="global-nav" class="global-navbar" style="display:none;">
-  <div class="gnav-item nav-item-red" id="gnav-profile" onclick="playSound('click');showProfile()">
-    <img src="/icons/nav-profile.svg" alt="ملفي الشخصي">
-  </div>
-  <div class="gnav-item nav-item-green" id="gnav-levels" onclick="playSound('click');showLevelsScreen()">
-    <img src="/icons/nav-trophy.svg" alt="المستويات">
+  <div class="navgroup">
+    <div class="gnav-item nav-item-red" id="gnav-profile" onclick="playSound('click');showProfile()">
+      <img src="/icons/nav-profile.svg" alt="ملفي الشخصي">
+    </div>
+    <div class="gnav-item nav-item-green" id="gnav-levels" onclick="playSound('click');showLevelsScreen()">
+      <img src="/icons/nav-trophy.svg" alt="المستويات">
+    </div>
   </div>
   <div class="gnav-item gnav-home" id="gnav-home" onclick="playSound('click');show('s-home')">
     <img class="bulb-off" src="/icons/nav-home-off.png" alt="الرئيسية">
     <img class="bulb-on"  src="/icons/nav-home-on.png"  alt="" aria-hidden="true">
   </div>
-  <div class="gnav-item nav-item-yellow" id="gnav-shop" onclick="playSound('click');showShop()">
-    <img src="/icons/nav-shop.svg" alt="المتجر">
-  </div>
-  <div class="gnav-item nav-item-blue" id="gnav-howto" onclick="playSound('click');showHowToPlay()">
-    <img src="/icons/nav-howto.svg" alt="طريقة اللعب">
+  <div class="navgroup">
+    <div class="gnav-item nav-item-yellow" id="gnav-shop" onclick="playSound('click');showShop()">
+      <img src="/icons/nav-shop.svg" alt="المتجر">
+    </div>
+    <div class="gnav-item nav-item-blue" id="gnav-howto" onclick="playSound('click');showHowToPlay()">
+      <img src="/icons/nav-howto.svg" alt="طريقة اللعب">
+    </div>
   </div>
 </div>
 
