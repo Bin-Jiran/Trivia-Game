@@ -45,7 +45,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .field input::placeholder { color: var(--muted); }
 .join-box { display: flex; align-items: stretch; background: rgba(0,0,0,0.18); border: 2px solid #fff; border-radius: var(--radius-sm); overflow: hidden; }
 .join-box .join-label { padding: 0 16px; font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; border-left: 1px solid rgba(255,255,255,0.35); display: flex; align-items: center; }
-.join-box .join-input { flex: 1; background: transparent; border: none; padding: 16px; color: #fff; font-size: 26px; text-align: center; letter-spacing: 8px; font-weight: 800; outline: none; }
+.join-box .join-input { flex: 1; min-width: 0; width: 0; background: transparent; border: none; padding: 16px; color: #fff; font-size: 26px; text-align: center; letter-spacing: 8px; font-weight: 800; outline: none; }
 .join-box .join-input::placeholder { color: rgba(255,255,255,0.6); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
@@ -639,7 +639,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div id="join-err" class="error-msg"></div>
     <div class="join-box">
       <div class="join-label">كود الغرفة</div>
-      <input id="j-code" class="join-input" type="text" maxlength="4" placeholder="1234" dir="ltr" style="text-align:center;">
+      <input id="j-code" class="join-input" type="text" maxlength="4" size="4" placeholder="1234" dir="ltr" style="text-align:center;">
     </div>
     <button class="btn btn-primary" onclick="joinRoom()" style="margin-top:14px;">دخول</button>
   </div>
