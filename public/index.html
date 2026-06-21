@@ -177,7 +177,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* ── Players list ── */
 .players-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0; }
-.code-box { background: rgba(22,20,32,0.55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1.5px solid rgba(255,255,255,0.28); border-radius: 16px; padding: 18px; text-align: center; margin: 12px 0 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+.code-box { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22); border-radius: var(--radius-sm); padding: 18px; text-align: center; margin: 12px 0 16px; }
 .code-box .code-label { font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); margin-bottom: 6px; }
 .code-box .code-num { font-size: 48px; font-weight: 800; letter-spacing: 8px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
 .players-title { text-align: center; font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); margin: 6px 0 12px; }
@@ -639,7 +639,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div id="join-err" class="error-msg"></div>
     <div class="join-box">
       <div class="join-label">كود الغرفة</div>
-      <input id="j-code" class="join-input" type="text" maxlength="4" placeholder="1234" dir="ltr">
+      <input id="j-code" class="join-input" type="text" maxlength="4" placeholder="1234" dir="ltr" style="text-align:center;">
     </div>
     <button class="btn btn-primary" onclick="joinRoom()" style="margin-top:14px;">دخول</button>
   </div>
@@ -657,7 +657,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div class="players-list" id="lobby-players"></div>
   </div>
   <div id="lobby-host-btn" style="display:none;">
-    <button class="btn btn-success" id="start-btn" onclick="startGame()" disabled>▶ ابدأ اللعبة (انتظر جاهز الجميع)</button>
+    <button class="btn btn-success" id="start-btn" onclick="startGame()" disabled>بإنتظار باقي اللاعبين</button>
   </div>
   <div id="lobby-ready-btn" style="display:none;">
     <button class="btn btn-ready-green" id="ready-btn" onclick="toggleReady()">جاهز</button>
@@ -668,18 +668,18 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 <div id="s-loading" class="screen">
   <div style="margin-top:80px;text-align:center;">
     <span class="spinner-big"></span>
-    <h2 style="margin-top:14px;color:var(--text);" id="loading-msg">جاري تحضير الأسئلة...</h2>
-    <p style="color:var(--muted);margin-top:6px;font-size:13px;">يرجى الانتظار</p>
+    <h2 style="margin-top:14px;color:var(--text);font-size:24px;font-weight:700;" id="loading-msg">جاري تحضير الأسئلة...</h2>
+    <p style="color:var(--text);margin-top:8px;font-size:24px;font-weight:700;">يرجى الانتظار</p>
   </div>
 </div>
 
 <!-- PHASE START -->
 <div id="s-phase" class="screen">
   <div style="text-align:center;margin-top:60px;">
-    <img src="/logo.jpg" style="width:90px;height:90px;border-radius:20px;display:block;margin:0 auto 16px;box-shadow:0 6px 20px rgba(0,0,0,0.15);" alt="">
+    <img src="/icons/logo-full.png" style="width:170px;height:auto;display:block;margin:0 auto 18px;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.25));" alt="">
     <h1 style="font-size:32px;color:var(--text);">الجولة <span id="phase-num">1</span> من 3</h1>
-    <h2 style="margin-top:8px;font-size:24px;" id="phase-name-big">سهل</h2>
-    <p style="color:var(--muted);margin-top:10px;font-size:13px;">12 سؤال • استعد!</p>
+    <h2 style="margin-top:8px;font-size:32px;color:var(--text);" id="phase-name-big">سهل</h2>
+    <p style="color:var(--text);margin-top:10px;font-size:32px;font-weight:700;">12 سؤال • استعد!</p>
   </div>
 </div>
 
@@ -979,7 +979,7 @@ function connectSocket() {
       const startBtn=document.getElementById('start-btn');
       if (startBtn) {
         startBtn.disabled=!allReady;
-        startBtn.textContent=allReady?'▶ ابدأ اللعبة!':'▶ ابدأ اللعبة (انتظر جاهز الجميع)';
+        startBtn.textContent=allReady?'▶ ابدأ اللعبة!':'بإنتظار باقي اللاعبين';
       }
     } else {
       const meP=players.find(p=>p.socketId===socket.id);
@@ -991,7 +991,7 @@ function connectSocket() {
     }
   });
 
-  socket.on('all_ready',()=>{ if(isHost) showToast('الجميع جاهز!'); });
+  socket.on('all_ready',()=>{});
   socket.on('game_loading',({message})=>{document.getElementById('loading-msg').textContent=message;show('s-loading');});
 
   socket.on('phase_start',({phase,name})=>{
