@@ -217,9 +217,26 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 /* Timer LEFT + question number RIGHT */
 .q-top-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
 .q-num-label { font-size:13px; color:var(--muted); font-weight:600; }
-.timer-circle { width:74px; height:74px; border-radius:50%; border:4px solid var(--blue); background:rgba(255,255,255,0.95); display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:var(--text); flex-shrink:0; transition:all 0.3s; box-shadow: 0 2px 8px rgba(58,171,219,0.2); }
-.timer-circle.urgent { border-color:var(--red); color:var(--red); animation:pulse 0.5s infinite; box-shadow: 0 2px 8px rgba(232,71,42,0.3); }
+/* Timer ring (depletes right→left) */
+.timer-wrap { position:relative; width:84px; height:84px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.timer-svg { position:absolute; inset:0; transform:rotate(-90deg) scaleX(-1); }
+.timer-track { fill:none; stroke:rgba(255,255,255,0.55); stroke-width:8; }
+.timer-prog { fill:none; stroke:var(--blue); stroke-width:8; stroke-linecap:round; stroke-dasharray:289.03; stroke-dashoffset:0; transition:stroke-dashoffset 1s linear, stroke 0.3s; }
+.timer-prog.red { stroke:var(--red); }
+.timer-num { width:64px; height:64px; border-radius:50%; background:rgba(255,255,255,0.96); display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:800; color:var(--text); box-shadow:0 2px 8px rgba(0,0,0,0.18); }
+.timer-num.red { color:var(--red); }
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+@keyframes pulseOnce{0%{transform:scale(1)}35%{transform:scale(1.08)}100%{transform:scale(1)}}
+.pulse-once{ animation:pulseOnce .5s ease-out 1; }
+
+/* Round-intro (loading) screen */
+.phase-frost { text-align:center; background:rgba(22,20,32,0.5); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1.5px solid rgba(255,255,255,0.3); border-radius:14px; padding:13px 10px; color:#fff; font-size:22px; font-weight:800; }
+.phase-ready { width:180px; text-align:center; background:var(--blue); border:1.5px solid rgba(255,255,255,0.55); border-radius:16px; padding:15px 0; color:#fff; font-size:28px; font-weight:800; box-shadow:0 4px 14px rgba(58,171,219,0.45); }
+.cd-wrap { position:relative; width:64px; height:64px; display:flex; align-items:center; justify-content:center; }
+.cd-svg { position:absolute; inset:0; transform:rotate(-90deg) scaleX(-1); }
+.cd-track { fill:none; stroke:rgba(255,255,255,0.5); stroke-width:6; }
+.cd-prog { fill:none; stroke:var(--green); stroke-width:6; stroke-linecap:round; stroke-dasharray:169.65; stroke-dashoffset:0; }
+.cd-num { width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.96); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:var(--green-d); }
 
 /* Question box — 4-color gradient border matching logo */
 .q-box {
@@ -426,7 +443,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .q-box { background-image: none; background: rgba(0,0,0,0.22); border: 2px solid #fff; padding-bottom: 28px; }
 .q-text { color: #fff; font-size: 20px; }
 .q-num-label { color: rgba(255,255,255,0.9); }
-.timer-circle { color: #1A1A2E; text-shadow: none; }      /* dark number on light circle */
+.timer-num { color: #1A1A2E; text-shadow: none; }      /* dark number on light circle */
 .points-tag, .badge-host, .opt-2 { text-shadow: none; }   /* dark text on bright chips */
 
 /* Toast was using --text as a background; keep it dark */
@@ -625,7 +642,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
       <div class="cat-opt" onclick="toggleCat(this,'عواصم الدول')"><div class="cicon">🏛️</div><div class="cname">عواصم الدول</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'خرائط وجغرافيا')"><div class="cicon">🗺️</div><div class="cname">خرائط وجغرافيا</div></div>
     </div>
-    <div id="cat-hint" style="text-align:center;font-size:12px;color:var(--muted);margin-top:6px;">اختر فئة واحدة على الأقل</div>
+    <div id="cat-hint" style="text-align:center;font-size:19px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.25);margin-top:10px;">اختر فئة واحدة على الأقل</div>
     <button class="btn btn-primary mt" id="create-btn" onclick="createRoom()" disabled>إنشاء الغرفة</button>
   </div>
 </div>
@@ -675,11 +692,22 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 <!-- PHASE START -->
 <div id="s-phase" class="screen">
-  <div style="text-align:center;margin-top:60px;">
-    <img src="/icons/logo-full.png" style="width:170px;height:auto;display:block;margin:0 auto 18px;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.25));" alt="">
-    <h1 style="font-size:32px;color:var(--text);">الجولة <span id="phase-num">1</span> من 3</h1>
-    <h2 style="margin-top:8px;font-size:32px;color:var(--text);" id="phase-name-big">سهل</h2>
-    <p style="color:var(--text);margin-top:10px;font-size:32px;font-weight:700;">12 سؤال • استعد!</p>
+  <div style="display:flex;flex-direction:column;align-items:center;width:100%;margin-top:40px;">
+    <img src="/icons/logo-bulb.png" style="display:block;margin:0 auto;width:104px;height:auto;filter:drop-shadow(0 0 16px rgba(255,255,255,0.85));" alt="">
+    <div style="width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px;margin-top:26px;">
+      <div class="phase-frost">الجولة <span dir="ltr">3/<span id="phase-num">1</span></span></div>
+      <div class="phase-frost" style="font-size:20px;font-weight:700;">12 سؤال - <span id="phase-name-big">سهل</span></div>
+    </div>
+  </div>
+  <div style="margin-top:auto;margin-bottom:48px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+    <div id="ready-box" class="phase-ready">استعد !</div>
+    <div class="cd-wrap">
+      <svg class="cd-svg" viewBox="0 0 64 64">
+        <circle class="cd-track" cx="32" cy="32" r="27"></circle>
+        <circle id="cd-ring" class="cd-prog" cx="32" cy="32" r="27"></circle>
+      </svg>
+      <div id="cd-num" class="cd-num">3</div>
+    </div>
   </div>
 </div>
 
@@ -697,12 +725,18 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <!-- Question inside bordered box; question number bottom-left inside -->
     <div class="q-box">
       <div class="q-text" id="q-text" style="margin-bottom:0;">...</div>
-      <div class="q-num-inside" id="q-num">سؤال 1/12</div>
+      <div class="q-num-inside" id="q-num">سؤال <span dir="ltr">1/12</span></div>
     </div>
 
-    <!-- Timer centered below question box -->
+    <!-- Timer ring centered below question box -->
     <div style="display:flex;justify-content:center;margin:14px 0;">
-      <div class="timer-circle" id="timer-el">15</div>
+      <div class="timer-wrap" id="timer-wrap">
+        <svg class="timer-svg" viewBox="0 0 108 108">
+          <circle class="timer-track" cx="54" cy="54" r="46"></circle>
+          <circle id="timer-ring" class="timer-prog" cx="54" cy="54" r="46"></circle>
+        </svg>
+        <div class="timer-num" id="timer-el">15</div>
+      </div>
     </div>
 
     <div class="options-grid" id="q-opts"></div>
@@ -998,13 +1032,31 @@ function connectSocket() {
     document.getElementById('phase-num').textContent=phase;
     document.getElementById('phase-name-big').textContent=name;
     playSound('leaderboard');show('s-phase');
+    startReadyCountdown();
   });
+
+  function startReadyCountdown(){
+    const ring=document.getElementById('cd-ring'), num=document.getElementById('cd-num'), box=document.getElementById('ready-box');
+    if(!ring||!num||!box) return;
+    const C=169.65, CD=3; let t0=null, last=CD+1;
+    function pulseBox(){ box.classList.remove('pulse-once'); void box.offsetWidth; box.classList.add('pulse-once'); }
+    ring.style.strokeDashoffset='0'; num.textContent=CD; pulseBox();
+    function frame(ts){
+      if(!t0)t0=ts;
+      const rem=Math.max(0, CD-(ts-t0)/1000);
+      ring.style.strokeDashoffset=(C*(1-rem/CD)).toFixed(2);
+      const s=Math.ceil(rem);
+      if(s!==last){ last=s; if(s>0){ num.textContent=s; pulseBox(); } }
+      if(rem>0){ requestAnimationFrame(frame); } else { num.textContent='0'; }
+    }
+    requestAnimationFrame(frame);
+  }
 
   socket.on('question',({index,total,question,options,points,phase,is_logo})=>{
     playSound('question');
     const phaseColors=[`var(--green)`,`var(--blue)`,`var(--red)`];
     const phaseNames=['سهل','متوسط','صعب'];
-    document.getElementById('q-num').textContent=`سؤال ${index}/${total}`;
+    document.getElementById('q-num').innerHTML=`سؤال <span dir="ltr">${index}/${total}</span>`;
     document.getElementById('q-pts').textContent=`${points} نقطة`;
     const banner=document.getElementById('q-phase-banner');
     banner.textContent=`الجولة ${phase} - ${phaseNames[phase-1]||''}`;
@@ -1031,16 +1083,34 @@ function connectSocket() {
       btn.onclick=()=>submitAnswer(opt);
       optsEl.appendChild(btn);
     });
-    const timerEl=document.getElementById('timer-el');
-    timerEl.textContent=15; timerEl.className='timer-circle';
+    const timerRing=document.getElementById('timer-ring'), timerNum=document.getElementById('timer-el'), timerWrap=document.getElementById('timer-wrap');
+    timerNum.textContent=15; timerNum.classList.remove('red'); timerRing.classList.remove('red'); timerWrap.classList.remove('pulse-once');
+    timerRing.style.transition='none'; timerRing.style.strokeDashoffset='0'; void timerRing.offsetWidth;
+    timerRing.style.transition='stroke-dashoffset 1s linear, stroke 0.3s';
     show('s-question');
   });
 
   socket.on('timer',({seconds})=>{
-    const el=document.getElementById('timer-el');
-    el.textContent=seconds;
-    el.className='timer-circle'+(seconds<=5?' urgent':'');
-    if (seconds<=5 && seconds>=0) playSound('tick');
+    const ring=document.getElementById('timer-ring'), num=document.getElementById('timer-el'), wrap=document.getElementById('timer-wrap');
+    if(!ring||!num||!wrap) return;
+    const C=289.03, TOTAL=15, s=Math.max(0,Math.round(seconds));
+    num.textContent=s;
+    const red = s<=5;
+    ring.classList.toggle('red', red); num.classList.toggle('red', red);
+    if (s>0){
+      ring.style.transition='stroke-dashoffset 1s linear, stroke 0.3s';
+      ring.style.strokeDashoffset=(C*(1 - s/TOTAL)).toFixed(2);
+      if (red){
+        wrap.classList.remove('pulse-once'); void wrap.offsetWidth; wrap.classList.add('pulse-once');
+        playSound('tick');
+      }
+    } else {
+      ring.style.transition='none';
+      ring.classList.add('red'); num.classList.add('red');
+      ring.style.strokeDashoffset='0'; void ring.offsetWidth;
+      wrap.classList.remove('pulse-once'); void wrap.offsetWidth; wrap.classList.add('pulse-once');
+      playSound('tick');
+    }
   });
 
   socket.on('answer_result',({correct,points})=>{
