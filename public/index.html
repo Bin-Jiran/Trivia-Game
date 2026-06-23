@@ -231,12 +231,14 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* Round-intro (loading) screen */
 .phase-frost { text-align:center; background:rgba(22,20,32,0.5); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1.5px solid rgba(255,255,255,0.3); border-radius:14px; padding:13px 10px; color:#fff; font-size:22px; font-weight:800; }
-.phase-ready { width:180px; text-align:center; background:var(--blue); border:1.5px solid rgba(255,255,255,0.55); border-radius:16px; padding:15px 0; color:#fff; font-size:28px; font-weight:800; box-shadow:0 4px 14px rgba(58,171,219,0.45); }
-.cd-wrap { position:relative; width:64px; height:64px; display:flex; align-items:center; justify-content:center; }
-.cd-svg { position:absolute; inset:0; transform:rotate(-90deg) scaleX(-1); }
-.cd-track { fill:none; stroke:rgba(255,255,255,0.5); stroke-width:6; }
-.cd-prog { fill:none; stroke:var(--green); stroke-width:6; stroke-linecap:round; stroke-dasharray:169.65; stroke-dashoffset:0; }
-.cd-num { width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.96); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:var(--green-d); }
+.phase-bulb { display:block; margin:36px auto 0; width:92px; height:auto; filter:drop-shadow(0 0 16px rgba(255,255,255,0.85)); }
+.phase-info { margin:auto auto 44px; width:100%; max-width:340px; }
+.cd-center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+.cd-stage { font-weight:900; color:#fff; -webkit-text-stroke:5px #1a1a1a; paint-order:stroke fill; text-shadow:0 6px 16px rgba(0,0,0,0.35); line-height:1; }
+@keyframes cdpop{0%{transform:scale(.35);filter:blur(12px);opacity:0}28%{transform:scale(1);filter:blur(0);opacity:1}70%{transform:scale(1);filter:blur(0);opacity:1}100%{transform:scale(1.7);filter:blur(9px);opacity:0}}
+@keyframes golin{0%{transform:scale(.35);filter:blur(12px);opacity:0}30%{transform:scale(1.08);filter:blur(0);opacity:1}55%{transform:scale(1)}100%{transform:scale(1);opacity:1}}
+.cdrun{animation:cdpop .95s ease-out forwards}
+.golrun{animation:golin .6s ease-out forwards}
 
 /* Question box — 4-color gradient border matching logo */
 .q-box {
@@ -283,17 +285,21 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 #q-result { display:none; margin-top:12px; text-align:center; font-size:15px; font-weight:700; padding:10px; border-radius:var(--radius-sm); }
 
 /* ── Leaderboard ── */
-.lb-list { display:flex; flex-direction:column; gap:9px; margin:12px 0; }
-.lb-card { border-radius:var(--radius-sm); padding:12px 14px; display:flex; align-items:center; gap:10px; }
-.lb-card:nth-child(1) { background:linear-gradient(135deg,rgba(245,194,0,0.2),rgba(245,194,0,0.05)); border:1.5px solid var(--yellow); }
-.lb-card:nth-child(2) { background:linear-gradient(135deg,rgba(58,171,219,0.15),rgba(58,171,219,0.03)); border:1.5px solid var(--blue); }
-.lb-card:nth-child(3) { background:linear-gradient(135deg,rgba(232,71,42,0.15),rgba(232,71,42,0.03)); border:1.5px solid var(--red); }
-.lb-card:nth-child(n+4) { background:rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.6); }
-.lb-rank { font-size:22px; width:36px; text-align:center; }
-.lb-info { flex:1; }
-.lb-name { font-size:14px; font-weight:600; }
-.lb-score { font-size:12px; color:var(--muted); }
-.lb-emo { font-size:26px; }
+.lb-frost { background:rgba(22,20,32,0.55); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1.5px solid rgba(255,255,255,0.28); border-radius:18px; padding:14px 12px; }
+.lb-title { text-align:center; color:#fff; font-size:20px; font-weight:800; margin-bottom:14px; text-shadow:0 2px 6px rgba(0,0,0,0.3); }
+.lb-list { display:flex; flex-direction:column; gap:9px; }
+.lb-row { display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:14px; }
+.lb-row.gold   { background:linear-gradient(135deg,#FAD24A,#E0A200); }
+.lb-row.silver { background:linear-gradient(135deg,#E8EDF4,#A7B2C1); }
+.lb-row.bronze { background:linear-gradient(135deg,#E0A064,#B5712F); }
+.lb-row.rest   { background:linear-gradient(135deg,#C49E2A,#937413); }
+.lb-rankcol { width:38px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.lb-star { width:36px; height:36px; background:linear-gradient(155deg,#84CFF1,#3AABDB 52%,#2385B4); display:flex; align-items:center; justify-content:center; clip-path:polygon(50% 2%,61% 35%,97% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,3% 35%,39% 35%); filter:drop-shadow(0 2px 1px rgba(0,0,0,0.45)); }
+.lb-star span { color:#fff; font-weight:800; font-size:13px; margin-top:2px; text-shadow:0 1px 1px rgba(0,0,0,0.4); }
+.lb-trophy { height:50px; width:auto; margin:-8px 0; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.28)); }
+.lb-badge { width:34px; height:34px; flex-shrink:0; object-fit:contain; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }
+.lb-name { flex:1; color:#fff; font-weight:800; font-size:16px; text-shadow:0 1px 2px rgba(0,0,0,0.45); }
+.lb-score { color:#fff; font-weight:800; font-size:16px; text-shadow:0 1px 2px rgba(0,0,0,0.45); }
 
 /* ── Profile ── */
 .level-all { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
@@ -436,8 +442,6 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .cat-opt.selected { background: rgba(58,171,219,0.35); border-color: #fff; }
 .cat-opt .cname { color: #fff; }
 .player-card { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.22); }
-.lb-card:nth-child(n+4) { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.22); }
-.lb-score { color: rgba(255,255,255,0.9); }
 
 /* Gameplay readability on transparent */
 .q-box { background-image: none; background: rgba(0,0,0,0.22); border: 2px solid #fff; padding-bottom: 28px; }
@@ -507,6 +511,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div id="login-err" class="error-msg"></div>
     <div class="field"><label>البريد الإلكتروني</label><input id="l-email" type="email" placeholder="example@email.com" dir="ltr"></div>
     <div class="field"><label>كلمة المرور</label><input id="l-pass" type="password" placeholder="••••••••" dir="ltr"></div>
+    <div style="text-align:left;margin:-4px 0 12px;"><a href="#" onclick="return false;" style="color:#fff;font-size:13px;font-weight:600;text-decoration:underline;opacity:.9;">نسيت كلمة المرور؟</a></div>
     <button class="btn btn-primary" onclick="login()">دخول</button>
     <button class="btn btn-secondary" onclick="show('s-register')">ما عندك حساب؟ سجّل الآن</button>
   </div>
@@ -665,7 +670,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 <!-- LOBBY -->
 <div id="s-lobby" class="screen">
   <div class="code-box">
-    <div class="code-label">كود الغرفة</div>
+    <div class="code-label">كود مشاركة الغرفة</div>
     <div class="code-num" id="lobby-code">----</div>
   </div>
   <span id="lobby-cats" style="display:none;"></span>
@@ -691,22 +696,13 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 </div>
 
 <!-- PHASE START -->
-<div id="s-phase" class="screen">
-  <div style="display:flex;flex-direction:column;align-items:center;width:100%;margin-top:40px;">
-    <img src="/icons/logo-bulb.png" style="display:block;margin:0 auto;width:104px;height:auto;filter:drop-shadow(0 0 16px rgba(255,255,255,0.85));" alt="">
-    <div style="width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px;margin-top:26px;">
-      <div class="phase-frost">الجولة <span dir="ltr">3/<span id="phase-num">1</span></span></div>
-      <div class="phase-frost" style="font-size:20px;font-weight:700;">12 سؤال - <span id="phase-name-big">سهل</span></div>
-    </div>
-  </div>
-  <div style="margin-top:auto;margin-bottom:48px;display:flex;flex-direction:column;align-items:center;gap:16px;">
-    <div id="ready-box" class="phase-ready">استعد !</div>
-    <div class="cd-wrap">
-      <svg class="cd-svg" viewBox="0 0 64 64">
-        <circle class="cd-track" cx="32" cy="32" r="27"></circle>
-        <circle id="cd-ring" class="cd-prog" cx="32" cy="32" r="27"></circle>
-      </svg>
-      <div id="cd-num" class="cd-num">3</div>
+<div id="s-phase" class="screen" style="position:relative;">
+  <img src="/icons/logo-bulb.png" class="phase-bulb" alt="">
+  <div class="cd-center"><div id="cd-stage" class="cd-stage" style="font-size:150px;">3</div></div>
+  <div class="phase-info">
+    <div class="phase-frost">
+      <div style="font-size:21px;font-weight:800;">الجولة <span dir="ltr">3/<span id="phase-num">1</span></span></div>
+      <div style="font-size:17px;font-weight:700;opacity:.92;margin-top:6px;">12 سؤال - <span id="phase-name-big">سهل</span></div>
     </div>
   </div>
 </div>
@@ -754,34 +750,10 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 <!-- GAME OVER — PODIUM -->
 <div id="s-gameover" class="screen">
-  <div class="podium-bg">
-    <h1 class="podium-title">🏆 الفائز 🏆</h1>
-    <div class="podium-winner-name" id="podium-winner-name">—</div>
-    <div class="podium-stage">
-      <div class="podium-col podium-2">
-        <div class="podium-player" id="podium-name-2">—</div>
-        <div class="podium-block podium-block-2">
-          <div class="podium-medal podium-medal-2">2</div>
-          <div class="podium-score" id="podium-score-2">0</div>
-        </div>
-      </div>
-      <div class="podium-col podium-1">
-        <div class="podium-player podium-player-1" id="podium-name-1">—</div>
-        <div class="podium-block podium-block-1">
-          <div class="podium-medal podium-medal-1">1</div>
-          <div class="podium-score" id="podium-score-1">0</div>
-        </div>
-      </div>
-      <div class="podium-col podium-3">
-        <div class="podium-player" id="podium-name-3">—</div>
-        <div class="podium-block podium-block-3">
-          <div class="podium-medal podium-medal-3">3</div>
-          <div class="podium-score" id="podium-score-3">0</div>
-        </div>
-      </div>
-    </div>
+  <div class="lb-frost" style="margin-top:20px;">
+    <div class="lb-title">النتائج النهائية</div>
+    <div class="lb-list" id="final-lb"></div>
   </div>
-  <div class="lb-list" id="final-lb-rest" style="margin-top:18px;"></div>
   <button class="btn btn-primary mt" onclick="playAgain()">إلعب مجدداً</button>
   <button class="btn-logout" onclick="leaveRoom()">العودة إلى الشاشة الرئيسية</button>
 </div>
@@ -1032,24 +1004,22 @@ function connectSocket() {
     document.getElementById('phase-num').textContent=phase;
     document.getElementById('phase-name-big').textContent=name;
     playSound('leaderboard');show('s-phase');
-    startReadyCountdown();
+    runIntroCountdown();
   });
 
-  function startReadyCountdown(){
-    const ring=document.getElementById('cd-ring'), num=document.getElementById('cd-num'), box=document.getElementById('ready-box');
-    if(!ring||!num||!box) return;
-    const C=169.65, CD=3; let t0=null, last=CD+1;
-    function pulseBox(){ box.classList.remove('pulse-once'); void box.offsetWidth; box.classList.add('pulse-once'); }
-    ring.style.strokeDashoffset='0'; num.textContent=CD; pulseBox();
-    function frame(ts){
-      if(!t0)t0=ts;
-      const rem=Math.max(0, CD-(ts-t0)/1000);
-      ring.style.strokeDashoffset=(C*(1-rem/CD)).toFixed(2);
-      const s=Math.ceil(rem);
-      if(s!==last){ last=s; if(s>0){ num.textContent=s; pulseBox(); } }
-      if(rem>0){ requestAnimationFrame(frame); } else { num.textContent='0'; }
+  function runIntroCountdown(){
+    const stage=document.getElementById('cd-stage');
+    if(!stage) return;
+    const seq=['3','2','1','يلا']; let i=0;
+    function step(){
+      stage.textContent=seq[i];
+      stage.classList.remove('cdrun','golrun'); void stage.offsetWidth;
+      if(i<3){ stage.style.fontSize='150px'; stage.classList.add('cdrun'); playSound('tick'); }
+      else { stage.style.fontSize='96px'; stage.classList.add('golrun'); playSound('enter'); }
+      i++;
+      if(i<seq.length) setTimeout(step,950);
     }
-    requestAnimationFrame(frame);
+    step();
   }
 
   socket.on('question',({index,total,question,options,points,phase,is_logo})=>{
@@ -1172,22 +1142,16 @@ function connectSocket() {
 }
 
 function renderPodium(players) {
-  const slots = [players[0], players[1], players[2]];
-  const winner = players[0];
-  document.getElementById('podium-winner-name').textContent = winner ? `🎉 ${winner.display_name} 🎉` : '';
-
-  for (let i = 1; i <= 3; i++) {
-    const p = slots[i-1];
-    document.getElementById(`podium-name-${i}`).textContent = (i===1) ? '\u00A0' : (p ? p.display_name : '—');
-    document.getElementById(`podium-score-${i}`).textContent = p ? (p.sessionScore||0).toLocaleString('ar') : '0';
-  }
-
-  // Rest of the players (4th place onward)
-  const rest = players.slice(3);
-  const el = document.getElementById('final-lb-rest'); el.innerHTML = '';
-  rest.forEach((p, i) => {
+  const el = document.getElementById('final-lb'); el.innerHTML = '';
+  const tier = ['gold','silver','bronze'];
+  players.forEach((p, i) => {
     const lvl = p.level || { img:'/levels/penguin.png' };
-    el.innerHTML += `<div class="lb-card"><div class="lb-rank">${i+4}</div><img src="${lvl.img}" style="width:32px;height:32px;flex-shrink:0;" alt=""><div class="lb-info"><div class="lb-name">${p.display_name}</div><div class="lb-score">${(p.sessionScore||0).toLocaleString('ar')} نقطة</div></div></div>`;
+    const rowCls = i < 3 ? tier[i] : 'rest';
+    const score = (p.sessionScore || 0).toLocaleString('ar');
+    const rankCell = (i === 0)
+      ? `<img class="lb-trophy" src="/icons/trophy.png" alt="">`
+      : `<div class="lb-star"><span>${(i+1).toLocaleString('ar')}</span></div>`;
+    el.innerHTML += `<div class="lb-row ${rowCls}"><div class="lb-rankcol">${rankCell}</div><img class="lb-badge" src="${lvl.img}" alt=""><div class="lb-name">${p.display_name}</div><div class="lb-score">${score}</div></div>`;
   });
 }
 
