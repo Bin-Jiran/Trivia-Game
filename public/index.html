@@ -60,6 +60,8 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .btn-logout:active { transform: scale(0.97); }
 .btn-logout:hover { background: var(--red-d); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pass-eye { position:absolute; top:50%; right:10px; transform:translateY(-50%); background:none; border:none; padding:0; margin:0; cursor:pointer; color:#fff; font-size:20px; line-height:1; display:flex; align-items:center; opacity:.95; }
+#l-pass::-ms-reveal, #l-pass::-ms-clear { display:none; }
 .error-msg { background: rgba(232,71,42,0.1); border: 1px solid rgba(232,71,42,0.3); color: var(--red-d); border-radius: var(--radius-sm); padding: 9px 13px; font-size: 13px; margin-bottom: 12px; display: none; }
 
 /* ── Home hero — body provides gradient, this is just a transparent layout wrapper ── */
@@ -232,7 +234,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 /* Round-intro (loading) screen */
 .phase-frost { text-align:center; background:rgba(22,20,32,0.5); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1.5px solid rgba(255,255,255,0.3); border-radius:14px; padding:13px 10px; color:#fff; font-size:22px; font-weight:800; }
 .phase-bulb { display:block; margin:36px auto 0; width:92px; height:auto; filter:drop-shadow(0 0 16px rgba(255,255,255,0.85)); }
-.phase-info { margin:auto auto 44px; width:100%; max-width:340px; }
+.phase-info { margin:auto auto 100px; width:100%; max-width:340px; }
 .cd-center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
 .cd-stage { font-weight:900; color:#fff; -webkit-text-stroke:5px #1a1a1a; paint-order:stroke fill; text-shadow:0 6px 16px rgba(0,0,0,0.35); line-height:1; }
 @keyframes cdpop{0%{transform:scale(.35);filter:blur(12px);opacity:0}28%{transform:scale(1);filter:blur(0);opacity:1}70%{transform:scale(1);filter:blur(0);opacity:1}100%{transform:scale(1.7);filter:blur(9px);opacity:0}}
@@ -510,10 +512,15 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <h2 style="margin-bottom:16px;font-size:19px;">تسجيل الدخول</h2>
     <div id="login-err" class="error-msg"></div>
     <div class="field"><label>البريد الإلكتروني</label><input id="l-email" type="email" placeholder="example@email.com" dir="ltr"></div>
-    <div class="field"><label>كلمة المرور</label><input id="l-pass" type="password" placeholder="••••••••" dir="ltr"></div>
-    <div style="text-align:left;margin:-4px 0 12px;"><a href="#" onclick="return false;" style="color:#fff;font-size:13px;font-weight:600;text-decoration:underline;opacity:.9;">نسيت كلمة المرور؟</a></div>
+    <div class="field"><label>كلمة المرور</label>
+      <div style="position:relative;">
+        <input id="l-pass" type="password" placeholder="••••••••" dir="ltr" style="padding-right:40px;">
+        <button type="button" class="pass-eye" onclick="togglePass('l-pass',this)" aria-label="إظهار كلمة المرور"><i class="ti ti-eye"></i></button>
+      </div>
+    </div>
+    <div style="text-align:center;margin:-2px 0 12px;"><a href="#" onclick="return false;" style="color:#fff;font-size:13px;font-weight:600;text-decoration:underline;opacity:.9;">نسيت كلمة المرور</a></div>
     <button class="btn btn-primary" onclick="login()">دخول</button>
-    <button class="btn btn-secondary" onclick="show('s-register')">ما عندك حساب؟ سجّل الآن</button>
+    <button class="btn btn-success" onclick="show('s-register')" style="margin-top:12px;">سجل الآن</button>
   </div>
 </div>
 
@@ -894,6 +901,13 @@ function showProfile() {
   show('s-profile');
 }
 
+function togglePass(id,btn){
+  const inp=document.getElementById(id); if(!inp) return;
+  const reveal = inp.type==='password';
+  inp.type = reveal ? 'text' : 'password';
+  const ic=btn.querySelector('i'); if(ic) ic.className = reveal ? 'ti ti-eye-off' : 'ti ti-eye';
+}
+
 async function login() {
   const email=document.getElementById('l-email').value.trim(), password=document.getElementById('l-pass').value;
   const errEl=document.getElementById('login-err'); errEl.style.display='none';
@@ -1007,7 +1021,9 @@ function connectSocket() {
     runIntroCountdown();
   });
 
+  let introEndsAt = 0;
   function runIntroCountdown(){
+    introEndsAt = performance.now() + 3850;
     const stage=document.getElementById('cd-stage');
     if(!stage) return;
     const seq=['3','2','1','يلا']; let i=0;
@@ -1023,7 +1039,6 @@ function connectSocket() {
   }
 
   socket.on('question',({index,total,question,options,points,phase,is_logo})=>{
-    playSound('question');
     const phaseColors=[`var(--green)`,`var(--blue)`,`var(--red)`];
     const phaseNames=['سهل','متوسط','صعب'];
     document.getElementById('q-num').innerHTML=`سؤال <span dir="ltr">${index}/${total}</span>`;
@@ -1057,7 +1072,8 @@ function connectSocket() {
     timerNum.textContent=15; timerNum.classList.remove('red'); timerRing.classList.remove('red'); timerWrap.classList.remove('pulse-once');
     timerRing.style.transition='none'; timerRing.style.strokeDashoffset='0'; void timerRing.offsetWidth;
     timerRing.style.transition='stroke-dashoffset 1s linear, stroke 0.3s';
-    show('s-question');
+    const wait = Math.max(0, introEndsAt - performance.now());
+    setTimeout(()=>{ playSound('question'); show('s-question'); }, wait);
   });
 
   socket.on('timer',({seconds})=>{
