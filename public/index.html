@@ -28,6 +28,40 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .screen { display: none; min-height: 100vh; padding: 20px; max-width: 520px; margin: auto; }
 .screen.active { display: flex; flex-direction: column; }
 
+/* ── Screen transition system (handles ONLY moving between screens) ──
+   Outgoing fades out + lifts up/shrinks; incoming fades in from below/up-scaled.
+   Directionless: every screen enters the same way. Wrapped in
+   prefers-reduced-motion so disabled-animation users get instant switches. */
+@media (prefers-reduced-motion: no-preference) {
+  .screen.screen-enter {
+    animation: screenEnter 360ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  /* Outgoing screen: kept visible and lifted out of flow so it crossfades
+     over the incoming one without shifting the layout. */
+  .screen.screen-exit {
+    display: flex; flex-direction: column;
+    position: fixed; inset: 0;
+    pointer-events: none;
+    animation: screenExit 360ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  }
+  /* Promote each transitioning screen to its own GPU layer so the scale
+     animates a cached texture instead of re-rasterizing the screen's
+     content (images/text/icons) every frame. Dropped automatically when
+     the animationend handler removes the class. */
+  .screen.screen-enter,
+  .screen.screen-exit {
+    will-change: transform, opacity;
+  }
+}
+@keyframes screenEnter {
+  from { opacity: 0; transform: translateY(16px) scale(1.05); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes screenExit {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-12px) scale(0.93); }
+}
+
 /* ── Logo ── */
 .game-logo { text-align:center; margin: 20px 0 16px; }
 .game-logo img { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
@@ -817,8 +851,36 @@ const NAV_SCREENS = { 's-home':'gnav-home', 's-profile':'gnav-profile', 's-level
 const NAV_VISIBLE = ['s-home','s-profile','s-levels','s-shop','s-howto','s-create','s-join','s-lobby'];
 
 function show(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  const next = document.getElementById(id);
+  if (!next) return;
+  const current = document.querySelector('.screen.active');
+
+  // Clear any stale transition classes (e.g. from very fast navigation).
+  document.querySelectorAll('.screen-enter, .screen-exit')
+    .forEach(s => s.classList.remove('screen-enter', 'screen-exit'));
+
+  // Animate the outgoing screen out, then fully hide it once done.
+  if (current && current !== next) {
+    current.classList.remove('active');
+    current.classList.add('screen-exit');
+    const onExit = () => {
+      current.classList.remove('screen-exit');
+      current.removeEventListener('animationend', onExit);
+    };
+    current.addEventListener('animationend', onExit);
+  }
+
+  // Activate the incoming screen and (re)start its enter animation.
+  next.classList.add('active');
+  next.classList.remove('screen-enter');
+  void next.offsetWidth;            // reflow so re-entering a screen replays the animation
+  next.classList.add('screen-enter');
+  const onEnter = () => {
+    next.classList.remove('screen-enter');
+    next.removeEventListener('animationend', onEnter);
+  };
+  next.addEventListener('animationend', onEnter);
+
   document.body.classList.toggle('home-active', id === 's-home');
 
   const nav = document.getElementById('global-nav');
@@ -827,7 +889,7 @@ function show(id) {
 
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('has-nav'));
   if (showNav) {
-    document.getElementById(id).classList.add('has-nav');
+    next.classList.add('has-nav');
     // Highlight active tab (sub-screens like create/join have none)
     document.querySelectorAll('.gnav-item').forEach(el => el.classList.remove('gnav-active'));
     const activeNavId = NAV_SCREENS[id];
@@ -888,7 +950,8 @@ function showHowToPlay() { show('s-howto'); }
 
 function showProfile() {
   playSound('click');
-  document.getElementById('p-emo').src=me.level.img||'';
+  const pEmo=document.getElementById('p-emo'); const pImg=me.level.img||'';
+  if (pEmo.getAttribute('src')!==pImg) pEmo.src=pImg;  // avoid poking the image pipeline when unchanged
   document.getElementById('p-name').textContent=me.display_name;
   document.getElementById('p-level-name').textContent=me.level.name;
   document.getElementById('p-email').textContent=me.email;
