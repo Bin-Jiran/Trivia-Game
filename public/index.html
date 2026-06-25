@@ -34,7 +34,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
    prefers-reduced-motion so disabled-animation users get instant switches. */
 @media (prefers-reduced-motion: no-preference) {
   .screen.screen-enter {
-    animation: screenEnter 360ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    animation: screenEnter 500ms cubic-bezier(0.22, 0.61, 0.36, 1);
   }
   /* Outgoing screen: kept visible and lifted out of flow so it crossfades
      over the incoming one without shifting the layout. */
@@ -42,7 +42,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     display: flex; flex-direction: column;
     position: fixed; inset: 0;
     pointer-events: none;
-    animation: screenExit 360ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+    animation: screenExit 500ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
   }
   /* Promote each transitioning screen to its own GPU layer so the scale
      animates a cached texture instead of re-rasterizing the screen's
