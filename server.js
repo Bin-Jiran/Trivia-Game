@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -23,14 +24,34 @@ async function initDB() {
       id SERIAL PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
       phone TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL,
       dob TEXT NOT NULL, gender TEXT NOT NULL, password TEXT NOT NULL,
-      total_score INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      total_score INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      is_admin BOOLEAN NOT NULL DEFAULT FALSE
     );
     CREATE TABLE IF NOT EXISTS game_history (
       id SERIAL PRIMARY KEY, user_id INTEGER, room_code TEXT, score INTEGER,
       played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS question_flags (
+      id SERIAL PRIMARY KEY,
+      question_key TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      question_text TEXT,
+      options TEXT,
+      correct_answer TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (question_key, user_id)
+    );
   `);
+  // Backward-compatible: add is_admin to pre-existing tables without touching data.
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
   console.log('✅ Database ready');
+
+  // Promote the configured admin account (idempotent — safe to run every boot).
+  if (process.env.ADMIN_EMAIL) {
+    const r = await pool.query('UPDATE users SET is_admin = TRUE WHERE email = $1', [process.env.ADMIN_EMAIL]);
+    if (r.rowCount > 0) console.log(`👑 Admin privileges ensured for ${process.env.ADMIN_EMAIL}`);
+    else console.log(`👑 ADMIN_EMAIL set to ${process.env.ADMIN_EMAIL} — no matching account yet (will apply once they register)`);
+  }
 }
 initDB().catch(console.error);
 
@@ -49,6 +70,24 @@ function safeUser(u) {
   return { id:u.id, first_name:u.first_name, last_name:u.last_name,
     email:u.email, phone:u.phone, dob:u.dob, gender:u.gender,
     total_score:u.total_score||0, display_name:displayName(u), level };
+}
+
+// Admin gate: verify the JWT exactly like the protected routes, then read the
+// authoritative is_admin flag from the DB (never trust a token claim). 403 if not admin.
+async function requireAdmin(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: 'غير مصرح' });
+  try {
+    const r = await pool.query('SELECT id, is_admin FROM users WHERE id=$1', [payload.id]);
+    const user = r.rows[0];
+    if (!user) return res.status(404).json({ error: 'غير موجود' });
+    if (!user.is_admin) return res.status(403).json({ error: 'ممنوع' });
+    req.adminId = user.id;
+    next();
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 }
 
 // FIX #2: Shuffle options while keeping track of correct answer
@@ -106,7 +145,47 @@ app.get('/api/me', async (req, res) => {
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
   const r = await pool.query('SELECT * FROM users WHERE id=$1', [payload.id]);
   if (!r.rows[0]) return res.status(404).json({ error: 'غير موجود' });
-  res.json(safeUser(r.rows[0]));
+  res.json({ ...safeUser(r.rows[0]), is_admin: r.rows[0].is_admin || false });
+});
+
+// Protected test endpoint — only reachable by admins (foundation for the dashboard).
+app.get('/api/admin/ping', requireAdmin, (req, res) => {
+  res.json({ ok: true });
+});
+
+// Player flags a problematic AI-generated question. Identified by a hash of the
+// question text; the text/options are stored so it can be reviewed later, and the
+// correct answer is enriched from authoritative live room state (never from the
+// client). Idempotent: one flag per (question, user) thanks to ON CONFLICT.
+app.post('/api/flag-question', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: 'غير مصرح' });
+
+  const { question, options, code } = req.body || {};
+  if (!question || typeof question !== 'string') return res.status(400).json({ error: 'سؤال غير صالح' });
+
+  const question_key = crypto.createHash('sha256').update(question.trim()).digest('hex');
+  const optionsJson = Array.isArray(options) ? JSON.stringify(options) : null;
+
+  // Pull the correct answer from the live room if it still matches this question.
+  let correct_answer = null;
+  const room = code && rooms[code];
+  if (room && room.currentQuestion && room.currentQuestion.question === question) {
+    correct_answer = room.currentQuestion.answer || null;
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO question_flags (question_key, user_id, question_text, options, correct_answer)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (question_key, user_id) DO NOTHING`,
+      [question_key, payload.id, question, optionsJson, correct_answer]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // FIX #3: Special prompt for logos category

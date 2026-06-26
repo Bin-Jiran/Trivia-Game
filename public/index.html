@@ -135,6 +135,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* Profile card — transparent, not clickable (#3 & #6) */
 .hero-profile {
+  position: relative;
   background: transparent; border-radius: 18px; padding: 10px 10px;
   margin-top: 10px; cursor: default; display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
@@ -306,6 +307,40 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .opt-1:hover:not(:disabled) { background:var(--blue-d); }
 .opt-2:hover:not(:disabled) { background:var(--yellow-d); }
 .opt-3:hover:not(:disabled) { background:var(--green-d); }
+/* Report-a-problem control — top-LEFT corner, opposite the points pill (RTL).
+   The slot holds the small glass flag button plus a status box that replaces it. */
+.pts-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.report-slot { position:relative; display:flex; align-items:center; flex:0 0 auto; min-height:34px; }
+/* flex:0 0 auto + white-space:nowrap => can never shrink to nothing; solid amber so it stands out on yellow */
+.report-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; flex:0 0 auto; white-space:nowrap; background:#EF6C00; border:1px solid rgba(255,255,255,0.65); color:#fff; text-shadow:none; border-radius:10px; padding:7px 13px; font-size:13px; font-weight:800; font-family:var(--font); box-shadow:0 2px 6px rgba(0,0,0,0.25); cursor:pointer; transition:opacity 0.35s ease, transform 0.1s, background 0.2s; }
+.report-btn:hover { background:#E25E00; }
+.report-btn:active { transform:scale(0.97); }
+.report-btn svg { width:16px; height:16px; flex:0 0 auto; display:block; }
+.report-btn.hidden { opacity:0; pointer-events:none; }
+/* Status box fades in over the button's spot, anchored to the same (left) corner */
+.report-msg { position:absolute; left:0; top:50%; transform:translateY(-50%); white-space:nowrap; padding:7px 13px; border-radius:10px; font-size:13px; font-weight:800; color:#fff; text-shadow:none; box-shadow:0 2px 6px rgba(0,0,0,0.25); opacity:0; pointer-events:none; transition:opacity 0.4s ease; }
+.report-msg.show { opacity:1; }
+.report-msg.ok  { background:var(--green); border:1px solid rgba(255,255,255,0.5); }
+.report-msg.err { background:rgba(10,10,16,0.92); border:1px solid rgba(255,255,255,0.30); }
+/* Admin-only control panel button on the home screen */
+/* Admin-only control-panel button: dark frosted glass, sits to the LEFT of the
+   home avatar (level with its centre). Absolute so it doesn't disturb the
+   centered avatar/name column. */
+.admin-btn {
+  position:absolute; left:0; top:58px; transform:translateY(-50%); /* 58px = 10px pad + half of 96px avatar */
+  display:inline-flex; align-items:center; gap:6px;
+  background:rgba(20,20,30,0.55);
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,0.22);
+  color:#fff; text-shadow:none;
+  border-radius:12px; padding:8px 12px;
+  font-size:13px; font-weight:700; font-family:var(--font); white-space:nowrap;
+  box-shadow:0 4px 14px rgba(0,0,0,0.25);
+  cursor:pointer; z-index:2;
+  transition:transform 0.1s, background 0.2s;
+}
+.admin-btn:hover { background:rgba(30,30,44,0.62); }
+.admin-btn:active { transform:translateY(-50%) scale(0.97); }
 /* Answer reveal: glow borders, fade, pulses */
 .opt.faded { opacity:0.28; }
 .opt.correct-glow { border:3px solid var(--green); box-shadow:0 0 18px 4px rgba(91,189,78,0.95); }
@@ -591,6 +626,9 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <img src="/icons/logo-full.png" alt="الفلته" class="hero-logo-img">
 
     <div class="hero-profile">
+      <!-- Admin entry: injected by updateHomeUI() only when /api/me confirms is_admin;
+           absolutely placed to the LEFT of the avatar, level with it -->
+      <div id="admin-entry"></div>
       <img class="hp-emo" id="home-emo" src="" alt="">
       <div class="hp-name" id="home-name"></div>
     </div>
@@ -754,8 +792,17 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <!-- Phase banner -->
     <div class="phase-banner" id="q-phase-banner" style="background:var(--green);">الجولة 1 - سهل</div>
 
-    <!-- Points centered above the question box -->
-    <div class="pts-top"><span class="points-tag" id="q-pts">100 نقطة</span></div>
+    <!-- Top row: points pill (right) + report-a-problem control (left corner, clear of options) -->
+    <div class="pts-top">
+      <span class="points-tag" id="q-pts">100 نقطة</span>
+      <div class="report-slot" id="report-slot">
+        <button id="report-btn" class="report-btn" type="button" onclick="reportQuestion()" aria-label="الإبلاغ عن مشكلة في السؤال" title="الإبلاغ عن مشكلة في السؤال">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.4 6 14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>
+          <span>الإبلاغ عن مشكلة</span>
+        </button>
+        <div id="report-msg" class="report-msg"></div>
+      </div>
+    </div>
 
     <div id="logo-box" style="display:none;"></div>
 
@@ -837,6 +884,7 @@ function playSound(type) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 let token=localStorage.getItem('token'), me=null, socket=null, selectedCats=[], isHost=false;
+let currentRoomCode=null, currentFlagQuestion=null, currentFlagOptions=null, reportedThisQuestion=false, reportInFlight=false;
 let lastPickedAnswer=null, lastAnswerCorrect=false;
 const LEVELS=[
   {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',level:1,min:0,   max:500  },
@@ -917,6 +965,17 @@ function updateHomeUI() {
   document.getElementById('home-emo').src=me.level.img||'';
   document.getElementById('home-name').textContent=me.display_name;
   // Current-level line and progress bar were removed from the home screen.
+  // Admin-only control panel button: rendered only for confirmed admins, otherwise absent.
+  const adminEntry=document.getElementById('admin-entry');
+  if (adminEntry) {
+    if (me && me.is_admin) {
+      if (!document.getElementById('admin-btn')) {
+        adminEntry.innerHTML='<button id="admin-btn" class="admin-btn" type="button" onclick="playSound(\'click\');location.href=\'/admin.html\'">⚙ لوحة التحكم</button>';
+      }
+    } else {
+      adminEntry.innerHTML='';
+    }
+  }
 }
 
 function renderLevelsList(elId, score, currentLvl) {
@@ -1005,7 +1064,7 @@ function connectSocket() {
   socket.on('error_msg',msg=>showToast('⚠️ '+msg));
 
   socket.on('room_created',({code,categories})=>{
-    isHost=true;
+    isHost=true; currentRoomCode=code;
     document.getElementById('lobby-code').textContent=code;
     document.getElementById('lobby-cats').textContent=categories.join(' • ');
     document.getElementById('lobby-host-btn').style.display='block';
@@ -1017,7 +1076,7 @@ function connectSocket() {
   });
 
   socket.on('room_joined',({code,categories})=>{
-    isHost=false;
+    isHost=false; currentRoomCode=code;
     document.getElementById('lobby-code').textContent=code;
     document.getElementById('lobby-cats').textContent=(categories||[]).join(' • ');
     document.getElementById('lobby-host-btn').style.display='none';
@@ -1029,7 +1088,7 @@ function connectSocket() {
   });
 
   socket.on('room_reset',({code,categories,host})=>{
-    isHost=(host===socket.id);
+    isHost=(host===socket.id); currentRoomCode=code;
     document.getElementById('lobby-code').textContent=code;
     document.getElementById('lobby-cats').textContent=(categories||[]).join(' • ');
     if(isHost){
@@ -1120,6 +1179,11 @@ function connectSocket() {
     document.getElementById('q-result').style.display='none';
     document.getElementById('q-result').textContent='';
     lastPickedAnswer=null; lastAnswerCorrect=false;
+
+    // Reset the report-a-problem control for this new question (fresh button reappears).
+    currentFlagQuestion=question; currentFlagOptions=options; reportedThisQuestion=false; reportInFlight=false;
+    document.getElementById('report-btn').classList.remove('hidden');
+    const _rm=document.getElementById('report-msg'); _rm.classList.remove('show','ok','err');
 
     const colors=['opt-0','opt-1','opt-2','opt-3'];
     const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
@@ -1259,6 +1323,29 @@ function joinRoom(){
 function toggleReady(){socket.emit('player_ready');playSound('click');}
 function startGame(){socket.emit('start_game');show('s-loading');playSound('click');}
 function submitAnswer(answer){lastPickedAnswer=answer;document.querySelectorAll('.opt').forEach(b=>b.disabled=true);socket.emit('submit_answer',{answer});}
+function reportQuestion(){
+  if(reportedThisQuestion || reportInFlight || !currentFlagQuestion) return;
+  reportInFlight=true; // guard against double-tap while the request is in flight
+  const btn=document.getElementById('report-btn'), msg=document.getElementById('report-msg');
+  // Show a status box in the button's spot: green on success, black on failure.
+  const showStatus=(ok)=>{
+    btn.classList.add('hidden');                       // button disappears
+    msg.textContent = ok ? 'تم الإبلاغ، شكراً لك' : 'تعذّر الإبلاغ، حاول مجدداً';
+    msg.classList.remove('ok','err'); msg.classList.add(ok?'ok':'err','show'); // fade in
+    setTimeout(()=>{
+      msg.classList.remove('show');                    // fade out after 1.5s
+      if(!ok){ btn.classList.remove('hidden'); }       // failure: bring the button back to retry
+    },1500);
+  };
+  fetch('/api/flag-question',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({question:currentFlagQuestion,options:currentFlagOptions,code:currentRoomCode})})
+    .then(r=>r.json()).then(d=>{
+      reportInFlight=false;
+      if(d&&d.ok){ reportedThisQuestion=true; showStatus(true); }  // success: button stays gone for this question
+      else { showStatus(false); }                                 // failure: retry allowed
+    })
+    .catch(()=>{ reportInFlight=false; showStatus(false); });
+}
 function leaveRoom(){if(socket){socket.disconnect();socket=null;}connectSocket();show('s-home');}
 function playAgain(){ if(!socket){show('s-home');return;} playSound('click'); socket.emit('play_again'); }
 

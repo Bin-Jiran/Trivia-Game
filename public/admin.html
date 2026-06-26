@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة المشرف</title>
+  <style>
+    body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      font-family: system-ui, sans-serif; background:#1A1A2E; color:#fff; }
+    #status { font-size:22px; font-weight:700; text-align:center; padding:24px; }
+    .ok { color:#43c463; }
+    .deny { color:#e8472a; }
+  </style>
+</head>
+<body>
+  <!-- Foundation placeholder. The real admin dashboard will be built into this file later. -->
+  <div id="status">…جاري التحقق</div>
+  <script>
+    (async function () {
+      const el = document.getElementById('status');
+      // Read the auth token the same way the rest of the app does.
+      const token = localStorage.getItem('token');
+      if (!token) { el.textContent = '✗ لا تملك صلاحية الدخول'; el.className = 'deny'; return; }
+      try {
+        const res = await fetch('/api/admin/ping', { headers: { Authorization: 'Bearer ' + token } });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) { el.textContent = '✓ تم تأكيد صلاحية المشرف'; el.className = 'ok'; }
+        else { el.textContent = '✗ لا تملك صلاحية الدخول'; el.className = 'deny'; }
+      } catch (e) {
+        el.textContent = '✗ لا تملك صلاحية الدخول'; el.className = 'deny';
+      }
+    })();
+  </script>
+</body>
+</html>
