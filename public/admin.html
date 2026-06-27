@@ -3,32 +3,217 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>لوحة المشرف</title>
+  <title>لوحة التحكم</title>
   <style>
-    body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-      font-family: system-ui, sans-serif; background:#1A1A2E; color:#fff; }
-    #status { font-size:22px; font-weight:700; text-align:center; padding:24px; }
-    .ok { color:#43c463; }
-    .deny { color:#e8472a; }
+    :root{
+      --yellow:#F5C200; --green:#5BBD4E; --red:#E8472A; --orange:#F07020; --blue:#3AABDB;
+      --glass:rgba(20,20,30,0.55); --glass-border:rgba(255,255,255,0.20);
+      --font:'Segoe UI', Tahoma, sans-serif;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    body{
+      min-height:100vh; direction:rtl; color:#fff; font-family:var(--font);
+      /* Sunburst gold: radial highlight + faint conic rays, like the game's home screen */
+      background-color:var(--yellow);
+      background-image:
+        radial-gradient(circle at 50% 34%, rgba(255,243,180,0.95), rgba(245,194,0,0) 58%),
+        repeating-conic-gradient(from 0deg at 50% 50%, var(--yellow) 0deg, #FFD64A 7.5deg, var(--yellow) 15deg);
+      background-attachment:fixed;
+      display:flex; justify-content:center; align-items:flex-start;
+      padding:18px 14px 40px;
+    }
+    .wrap{ width:100%; max-width:560px; }
+
+    /* Dark frosted glass — used by every card/bar/button */
+    .glass{
+      background:var(--glass);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      border:1px solid var(--glass-border); border-radius:16px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.22);
+    }
+
+    /* Top bar: sign-out (top-left), centered logo, right-aligned title */
+    .topbar{ position:relative; display:flex; flex-direction:column; align-items:center; margin-bottom:18px; }
+    .signout{
+      position:absolute; top:0; left:0; display:inline-flex; align-items:center; gap:6px;
+      padding:7px 11px; font-size:13px; font-weight:700; color:#fff; cursor:pointer; font-family:var(--font);
+    }
+    .signout:active{ transform:scale(0.97); }
+    .signout svg{ width:16px; height:16px; flex:0 0 auto; }
+    .logo{ height:62px; width:auto; display:block; margin:2px auto 12px; filter:drop-shadow(0 3px 8px rgba(0,0,0,0.25)); }
+    .page-title{ width:100%; text-align:right; font-size:23px; font-weight:800; color:#000; text-decoration:underline; }
+
+    /* Metric boxes */
+    .metrics{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:14px; }
+    .metric{ padding:18px 12px; text-align:center; }
+    .metric .num{ font-size:30px; font-weight:800; line-height:1; }
+    .metric .lbl{ font-size:14px; font-weight:600; opacity:0.92; margin-top:8px; }
+
+    /* Tappable detail bars (centered text, no call-to-action) */
+    .bar{
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      padding:15px 16px; margin-bottom:12px; cursor:pointer; text-align:center;
+    }
+    .bar:active{ transform:scale(0.99); }
+    .bar .bar-main{ font-size:15px; font-weight:700; }
+    /* Numbers inside the bars: larger than the surrounding label text */
+    .bar .bnum{ font-size:22px; font-weight:800; }
+
+    /* Management cards */
+    .manage{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:4px; }
+    .mcard{ padding:26px 12px; text-align:center; font-size:18px; font-weight:800; cursor:pointer; }
+    .mcard:active{ transform:scale(0.99); }
+
+    .hint{ text-align:center; font-size:12px; font-weight:700; color:#000; margin-top:18px; }
+
+    /* Solid color modifiers (defined after .glass so they win) — white text stays readable.
+       1.5px white border makes each colored box clearly outlined. */
+    .btn-red   { background:#E8472A; border:1.5px solid #fff; }
+    .btn-green { background:#2F9E44; border:1.5px solid #fff; }
+    .btn-blue  { background:#2090BB; border:1.5px solid #fff; }
+
+    /* Loading / denied states */
+    #loading, #denied{ min-height:72vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+    #loading .l-txt{ font-weight:700; font-size:16px; }
+    #denied .big{ font-size:22px; font-weight:800; }
+    #denied .sub{ font-size:14px; opacity:0.9; max-width:300px; }
+    .denybtn{ padding:10px 22px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; font-family:var(--font); }
+    .spinner{ width:42px; height:42px; border:4px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+
+    /* Responsive: reflow to single column on narrow screens */
+    @media (max-width:340px){
+      .metrics{ grid-template-columns:1fr; }
+      .manage{ grid-template-columns:1fr; }
+    }
   </style>
 </head>
 <body>
-  <!-- Foundation placeholder. The real admin dashboard will be built into this file later. -->
-  <div id="status">…جاري التحقق</div>
+
+  <!-- LOADING (default) -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="l-txt">جاري التحميل...</div>
+  </div>
+
+  <!-- ACCESS DENIED -->
+  <div id="denied" style="display:none;">
+    <div class="big">✗ لا تملك صلاحية الدخول</div>
+    <div class="sub">يجب تسجيل الدخول بحساب مشرف لعرض لوحة التحكم.</div>
+    <button class="glass denybtn" type="button" onclick="goHome()">العودة للرئيسية</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="signout glass btn-red" type="button" onclick="signOut()" aria-label="تسجيل الخروج" title="تسجيل الخروج">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>خروج</span>
+      </button>
+      <img class="logo" src="/icons/logo-full.png" alt="الفلتة">
+      <div class="page-title">لوحة التحكم</div>
+    </div>
+
+    <!-- Four metric boxes -->
+    <div class="metrics">
+      <div class="metric glass"><div class="num" id="m-active">…</div><div class="lbl">الألعاب النشطة</div></div>
+      <div class="metric glass"><div class="num" id="m-online">…</div><div class="lbl">المتصلون الآن</div></div>
+      <div class="metric glass"><div class="num" id="m-users">…</div><div class="lbl">إجمالي اللاعبين</div></div>
+      <div class="metric glass"><div class="num" id="m-today">…</div><div class="lbl">ألعاب اليوم</div></div>
+    </div>
+
+    <!-- Tappable detail bars (placeholder routes for now) -->
+    <div class="bar glass btn-green" onclick="go('/admin-rooms')">
+      <div class="bar-main" id="bar-rooms">الغرف النشطة: … - عدد اللاعبين: …</div>
+    </div>
+    <div class="bar glass btn-red" onclick="go('/admin-flags.html')">
+      <div class="bar-main" id="bar-flags">عدد الأسئلة التي تم التبليغ عنها: …</div>
+    </div>
+
+    <!-- Management cards (placeholder routes for now) -->
+    <div class="manage">
+      <div class="mcard glass btn-blue" onclick="go('/admin-players')">إدارة اللاعبين</div>
+      <div class="mcard glass btn-blue" onclick="go('/admin-stats')">الإحصائيات</div>
+    </div>
+
+    <div class="hint">يتم تحديث الأرقام تلقائياً</div>
+  </div>
+
   <script>
-    (async function () {
-      const el = document.getElementById('status');
-      // Read the auth token the same way the rest of the app does.
-      const token = localStorage.getItem('token');
-      if (!token) { el.textContent = '✗ لا تملك صلاحية الدخول'; el.className = 'deny'; return; }
-      try {
-        const res = await fetch('/api/admin/ping', { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.ok) { el.textContent = '✓ تم تأكيد صلاحية المشرف'; el.className = 'ok'; }
-        else { el.textContent = '✗ لا تملك صلاحية الدخول'; el.className = 'deny'; }
-      } catch (e) {
-        el.textContent = '✗ لا تملك صلاحية الدخول'; el.className = 'deny';
-      }
+    const token = localStorage.getItem('token');
+
+    function goHome(){ location.href = '/'; }
+    function signOut(){ localStorage.removeItem('token'); location.href = '/'; }
+    function go(path){ location.href = path; }
+
+    function showOnly(id){
+      ['loading','denied','dash'].forEach(s=>{
+        document.getElementById(s).style.display = (s===id) ? (s==='dash' ? 'block' : 'flex') : 'none';
+      });
+    }
+    const ar = (v)=> (v==null ? 0 : v).toLocaleString('ar');
+    function setNum(id, v){ document.getElementById(id).textContent = ar(v); }
+
+    let statsTimer = null, onDash = false;
+    const REFRESH_MS = 30000;
+
+    // Update the existing nodes in place (no re-render, no flicker).
+    function applyStats(d){
+      const activeGames   = d.activeGames   ?? 0,
+            playersOnline = d.playersOnline ?? 0,
+            totalUsers    = d.totalUsers    ?? 0,
+            gamesToday    = d.gamesToday    ?? 0,
+            flaggedCount  = d.flaggedCount  ?? 0;
+      setNum('m-active', activeGames);
+      setNum('m-online', playersOnline);
+      setNum('m-users',  totalUsers);
+      setNum('m-today',  gamesToday);
+      // Numbers come from the server as integers (safe to inline); spans make them larger.
+      document.getElementById('bar-rooms').innerHTML =
+        `الغرف النشطة: <span class="bnum">${ar(activeGames)}</span> - عدد اللاعبين: <span class="bnum">${ar(playersOnline)}</span>`;
+      document.getElementById('bar-flags').innerHTML =
+        `عدد الأسئلة التي تم التبليغ عنها: <span class="bnum">${ar(flaggedCount)}</span>`;
+    }
+
+    // Fetch once. /api/admin/stats is requireAdmin-gated, so a non-ok IS the admin check.
+    // Returns 'ok' | 'denied' | 'error'.
+    async function fetchStats(){
+      if(!token) return 'denied';
+      try{
+        const res = await fetch('/api/admin/stats', { headers:{ Authorization:'Bearer ' + token } });
+        if(res.status === 401 || res.status === 403) return 'denied';
+        if(!res.ok) return 'error';
+        applyStats(await res.json().catch(()=> ({})));
+        return 'ok';
+      }catch(e){ return 'error'; }
+    }
+
+    function startAuto(){ stopAuto(); statsTimer = setInterval(refresh, REFRESH_MS); }
+    function stopAuto(){ if(statsTimer){ clearInterval(statsTimer); statsTimer = null; } }
+
+    // Background refresh: update numbers silently; only a revoked session flips to denied.
+    async function refresh(){
+      const r = await fetchStats();
+      if(r === 'denied'){ onDash = false; stopAuto(); showOnly('denied'); }
+      // 'error' => keep showing the last good numbers, try again next tick
+    }
+
+    // Pause polling while hidden; refetch immediately when the tab returns.
+    document.addEventListener('visibilitychange', ()=>{
+      if(!onDash) return;
+      if(document.visibilityState === 'visible'){ refresh(); startAuto(); }
+      else { stopAuto(); }
+    });
+
+    (async function(){
+      if(!token){ showOnly('denied'); return; }   // not logged in
+      const r = await fetchStats();               // initial: any non-ok => denied
+      if(r !== 'ok'){ showOnly('denied'); return; }
+      onDash = true;
+      showOnly('dash');
+      startAuto();
     })();
   </script>
 </body>

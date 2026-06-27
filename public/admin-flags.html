@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الأسئلة المُبلغ عنها</title>
+  <style>
+    :root{
+      --yellow:#F5C200; --green:#2F9E44; --red:#E8472A; --blue:#2090BB;
+      --glass:rgba(20,20,30,0.55); --glass-border:rgba(255,255,255,0.20);
+      --font:'Segoe UI', Tahoma, sans-serif;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    body{
+      min-height:100vh; direction:rtl; color:#fff; font-family:var(--font);
+      background-color:var(--yellow);
+      background-image:
+        radial-gradient(circle at 50% 34%, rgba(255,243,180,0.95), rgba(245,194,0,0) 58%),
+        repeating-conic-gradient(from 0deg at 50% 50%, var(--yellow) 0deg, #FFD64A 7.5deg, var(--yellow) 15deg);
+      background-attachment:fixed;
+      display:flex; justify-content:center; align-items:flex-start;
+      padding:18px 14px 40px;
+    }
+    .wrap{ width:100%; max-width:620px; }
+
+    .glass{
+      background:var(--glass);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      border:1px solid var(--glass-border); border-radius:16px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.22);
+    }
+
+    /* Top bar: back (top-left), right-aligned title */
+    .topbar{ position:relative; display:flex; align-items:center; min-height:42px; margin-bottom:18px; }
+    /* Matches the dashboard's red sign-out pill exactly */
+    .back{
+      position:absolute; top:0; left:0; display:inline-flex; align-items:center; gap:6px;
+      padding:7px 11px; font-size:13px; font-weight:700; color:#fff; cursor:pointer;
+      font-family:var(--font); background:#E8472A; border:1.5px solid #fff; border-radius:16px;
+    }
+    .back:active{ transform:scale(0.97); }
+    .back svg{ width:16px; height:16px; flex:0 0 auto; }
+    .page-title{ width:100%; text-align:right; font-size:23px; font-weight:800; color:#000; text-decoration:underline; }
+
+    /* Question cards */
+    .qcard{ padding:16px; margin-bottom:14px; }
+    .qmeta{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:12.5px; font-weight:700; opacity:0.92; margin-bottom:10px; }
+    .qmeta .count{ color:#ff6a52; }
+    .qtext{ font-size:17px; font-weight:800; line-height:1.5; margin-bottom:12px; }
+
+    .opts{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+    .opt{ padding:9px 12px; border-radius:10px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.18); font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    .opt.correct{ background:rgba(47,158,68,0.35); border-color:#fff; }
+    .opt .tick{ width:18px; height:18px; flex:0 0 auto; }
+    .opt .tick.hidden{ visibility:hidden; }
+
+    .actions{ display:flex; gap:9px; }
+    /* flex:1 1 0 + min-width:0 => every button gets an equal share of the row, regardless of label length */
+    .btn{ flex:1 1 0; min-width:0; padding:10px 8px; border-radius:10px; border:1.5px solid #fff; color:#fff; font-size:14px; font-weight:800; font-family:var(--font); cursor:pointer; text-align:center; }
+    .btn:active{ transform:scale(0.98); }
+    .btn-edit{ background:var(--blue); }
+    .btn-del{ background:var(--red); }
+    .btn-keep{ background:var(--green); }
+    .btn-save{ background:var(--green); }
+    .btn-cancel{ background:var(--red); }
+
+    /* Edit mode */
+    .edit-field{ margin-bottom:10px; }
+    .edit-label{ font-size:12.5px; font-weight:700; opacity:0.9; margin-bottom:5px; }
+    .edit-q{ width:100%; min-height:70px; resize:vertical; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.25); color:#fff; font-size:15px; font-family:var(--font); line-height:1.5; }
+    .edit-opt-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .edit-opt-row input[type=text]{ flex:1 1 auto; padding:9px 11px; border-radius:10px; border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.25); color:#fff; font-size:14px; font-family:var(--font); }
+    .edit-opt-row label{ font-size:12px; font-weight:700; opacity:0.9; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; cursor:pointer; }
+
+    /* States */
+    #loading, #denied, #empty{ min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+    #loading .l-txt{ font-weight:700; font-size:16px; }
+    #denied .big, #empty .big{ font-size:21px; font-weight:800; }
+    #denied .sub{ font-size:14px; opacity:0.9; max-width:300px; }
+    .statebtn{ padding:10px 22px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; font-family:var(--font); background:var(--blue); border:1.5px solid #fff; }
+    .spinner{ width:42px; height:42px; border:4px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING (default) -->
+  <div id="loading"><div class="spinner"></div><div class="l-txt">جاري التحميل...</div></div>
+
+  <!-- ACCESS DENIED -->
+  <div id="denied" style="display:none;">
+    <div class="big">✗ لا تملك صلاحية الدخول</div>
+    <div class="sub">يجب تسجيل الدخول بحساب مشرف لعرض هذه الصفحة.</div>
+    <button class="statebtn" type="button" onclick="goHome()">العودة للرئيسية</button>
+  </div>
+
+  <!-- EMPTY STATE -->
+  <div id="empty" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="back" type="button" onclick="goDash()" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>رجوع</span>
+      </button>
+      <div class="page-title">الأسئلة المُبلغ عنها</div>
+    </div>
+    <div class="glass" style="padding:40px 16px; text-align:center; font-size:18px; font-weight:800;">لا توجد أسئلة مُبلغ عنها حالياً</div>
+  </div>
+
+  <!-- LIST -->
+  <div id="list-screen" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="back" type="button" onclick="goDash()" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>رجوع</span>
+      </button>
+      <div class="page-title">الأسئلة المُبلغ عنها</div>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    let flags = [];
+
+    function goHome(){ location.href = '/'; }
+    function goDash(){ location.href = '/admin.html'; }
+    function showOnly(id){
+      ['loading','denied','empty','list-screen'].forEach(s=>{
+        document.getElementById(s).style.display = (s===id) ? (s==='loading'||s==='denied' ? 'flex' : 'block') : 'none';
+      });
+    }
+    const ar = (v)=> (v==null ? 0 : v).toLocaleString('ar');
+
+    function fmtDate(ts){
+      try { return new Date(ts).toLocaleString('ar', { dateStyle:'medium', timeStyle:'short' }); }
+      catch(e){ return ''; }
+    }
+    // Small helper: create an element with optional class and text (text set safely).
+    function el(tag, cls, text){
+      const e = document.createElement(tag);
+      if(cls) e.className = cls;
+      if(text != null) e.textContent = text;
+      return e;
+    }
+    const checkSVG = '<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+    function render(){
+      const wrap = document.getElementById('list');
+      wrap.innerHTML = '';
+      if(!flags.length){ showOnly('empty'); return; }
+      showOnly('list-screen');
+      flags.forEach(f => wrap.appendChild(viewCard(f)));
+    }
+
+    // ---- View card ----
+    function viewCard(f){
+      const card = el('div','qcard glass');
+      card.dataset.id = f.id;
+
+      const meta = el('div','qmeta');
+      // No category is stored on flags yet, so show only the report count (in red).
+      meta.appendChild(el('span','count', 'عدد البلاغات: ' + ar(f.report_count)));
+      meta.appendChild(el('span', null, fmtDate(f.first_reported)));
+      card.appendChild(meta);
+
+      card.appendChild(el('div','qtext', f.question || '—'));
+
+      const opts = el('div','opts');
+      if(f.options && f.options.length){
+        f.options.forEach(o=>{
+          const isCorrect = f.correct_answer != null && o === f.correct_answer;
+          const row = el('div', 'opt' + (isCorrect ? ' correct' : ''));
+          const tick = document.createElement('span');
+          tick.innerHTML = checkSVG;
+          const svg = tick.firstChild;
+          if(!isCorrect) svg.classList.add('hidden');
+          row.appendChild(svg);
+          row.appendChild(el('span', null, o));
+          opts.appendChild(row);
+        });
+      } else {
+        opts.appendChild(el('div','opt','— لا توجد خيارات محفوظة —'));
+      }
+      card.appendChild(opts);
+
+      const actions = el('div','actions');
+      const editBtn = el('button','btn btn-edit','تعديل');
+      editBtn.onclick = ()=> card.replaceWith(editCard(f));
+      const keepBtn = el('button','btn btn-keep','لا يوجد خطأ');
+      keepBtn.onclick = ()=> onKeep(f, card);
+      const delBtn = el('button','btn btn-del','حذف');
+      delBtn.onclick = ()=> onDelete(f, card);
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      actions.appendChild(keepBtn);
+      card.appendChild(actions);
+
+      return card;
+    }
+
+    // ---- Edit card ----
+    function editCard(f){
+      const card = el('div','qcard glass');
+      card.dataset.id = f.id;
+
+      // Question text
+      const qf = el('div','edit-field');
+      qf.appendChild(el('div','edit-label','نص السؤال'));
+      const qta = el('textarea','edit-q');
+      qta.value = f.question || '';
+      qf.appendChild(qta);
+      card.appendChild(qf);
+
+      // Options + correct radio
+      const of = el('div','edit-field');
+      of.appendChild(el('div','edit-label','الخيارات (حدد الإجابة الصحيحة)'));
+      const optInputs = [];
+      const radioName = 'correct-' + Math.abs(hashStr(f.id));
+      const baseOpts = (f.options && f.options.length) ? f.options : ['','','',''];
+      baseOpts.forEach((o)=>{
+        const row = el('div','edit-opt-row');
+        const inp = el('input'); inp.type='text'; inp.value = o;
+        const radioLabel = el('label');
+        const radio = el('input'); radio.type='radio'; radio.name = radioName;
+        if(f.correct_answer != null && o === f.correct_answer) radio.checked = true;
+        radioLabel.appendChild(radio);
+        radioLabel.appendChild(el('span', null, 'صحيحة'));
+        row.appendChild(inp);
+        row.appendChild(radioLabel);
+        of.appendChild(row);
+        optInputs.push({ inp, radio });
+      });
+      card.appendChild(of);
+
+      // Actions
+      const actions = el('div','actions');
+      const saveBtn = el('button','btn btn-save','حفظ');
+      saveBtn.onclick = ()=>{
+        const question = qta.value.trim();
+        if(!question){ alert('نص السؤال مطلوب'); return; }
+        const options = optInputs.map(x=> x.inp.value.trim()).filter(v=> v.length);
+        let correct_answer = null;
+        const chosen = optInputs.find(x=> x.radio.checked);
+        if(chosen){ const v = chosen.inp.value.trim(); if(v.length) correct_answer = v; }
+        onSave(f, { question, options, correct_answer }, card);
+      };
+      const cancelBtn = el('button','btn btn-cancel','إلغاء');
+      cancelBtn.onclick = ()=> card.replaceWith(viewCard(f));
+      actions.appendChild(saveBtn);
+      actions.appendChild(cancelBtn);
+      card.appendChild(actions);
+
+      return card;
+    }
+
+    function hashStr(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h<<5)-h+s.charCodeAt(i); h|=0; } return h; }
+
+    // ---- Actions ----
+    async function onSave(f, payload, card){
+      try{
+        const res = await fetch('/api/admin/flags/' + encodeURIComponent(f.id), {
+          method:'PUT',
+          headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
+          body: JSON.stringify(payload)
+        });
+        if(!res.ok){ alert('تعذّر الحفظ، حاول مجدداً'); return; }
+        flags = flags.filter(x=> x.id !== f.id);   // fixed -> leaves pending list
+        render();
+      }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
+    }
+
+    // "لا مشكلة" — resolve the report, leave the question intact (no edit, no delete).
+    async function onKeep(f, card){
+      try{
+        const res = await fetch('/api/admin/flags/' + encodeURIComponent(f.id) + '/keep', {
+          method:'POST',
+          headers:{ Authorization:'Bearer ' + token }
+        });
+        if(!res.ok){ alert('تعذّر الحفظ، حاول مجدداً'); return; }
+        flags = flags.filter(x=> x.id !== f.id);   // resolved -> leaves pending list
+        render();
+      }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
+    }
+
+    async function onDelete(f, card){
+      if(!confirm('هل أنت متأكد؟')) return;
+      try{
+        const res = await fetch('/api/admin/flags/' + encodeURIComponent(f.id), {
+          method:'DELETE',
+          headers:{ Authorization:'Bearer ' + token }
+        });
+        if(!res.ok){ alert('تعذّر الحذف، حاول مجدداً'); return; }
+        flags = flags.filter(x=> x.id !== f.id);
+        render();
+      }catch(e){ alert('تعذّر الحذف، حاول مجدداً'); }
+    }
+
+    // ---- Load ----
+    (async function(){
+      if(!token){ showOnly('denied'); return; }
+      try{
+        const res = await fetch('/api/admin/flags', { headers:{ Authorization:'Bearer ' + token } });
+        if(!res.ok){ showOnly('denied'); return; }   // 401/403 => not admin / not logged in
+        const d = await res.json().catch(()=> ({}));
+        flags = Array.isArray(d.flags) ? d.flags : [];
+        render();
+      }catch(e){ showOnly('denied'); }
+    })();
+  </script>
+</body>
+</html>

@@ -39,11 +39,17 @@ async function initDB() {
       options TEXT,
       correct_answer TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      resolved BOOLEAN NOT NULL DEFAULT FALSE,
+      resolved_at TIMESTAMP,
+      resolution TEXT,
       UNIQUE (question_key, user_id)
     );
   `);
-  // Backward-compatible: add is_admin to pre-existing tables without touching data.
+  // Backward-compatible: add new columns to pre-existing tables without touching data.
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
+  await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT FALSE');
+  await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP');
+  await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolution TEXT');
   console.log('✅ Database ready');
 
   // Promote the configured admin account (idempotent — safe to run every boot).
@@ -151,6 +157,127 @@ app.get('/api/me', async (req, res) => {
 // Protected test endpoint — only reachable by admins (foundation for the dashboard).
 app.get('/api/admin/ping', requireAdmin, (req, res) => {
   res.json({ ok: true });
+});
+
+// Admin dashboard metrics. Each metric is computed independently and falls back
+// to 0 on error, so one failing query never breaks the whole response.
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  // In-memory live metrics (Socket.IO room state).
+  let activeGames = 0, playersOnline = 0;
+  try {
+    activeGames = Object.keys(rooms).length;
+    playersOnline = Object.values(rooms).reduce((n, r) => n + Object.keys(r.players || {}).length, 0);
+  } catch (e) { /* keep whatever computed; defaults are 0 */ }
+
+  // DB metrics — each guarded so a single failure yields 0 for that metric only.
+  const count = async (sql) => {
+    try { const r = await pool.query(sql); return parseInt(r.rows[0].c, 10) || 0; }
+    catch (e) { return 0; }
+  };
+  const totalUsers   = await count('SELECT COUNT(*)::int AS c FROM users');
+  // One game = one room_code (game_history has a row per player), and "today" is
+  // measured against Kuwait local midnight (UTC+3, no DST).
+  const gamesToday   = await count(
+    "SELECT COUNT(DISTINCT room_code)::int AS c FROM game_history " +
+    "WHERE (played_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kuwait') >= date_trunc('day', now() AT TIME ZONE 'Asia/Kuwait')"
+  );
+  const flaggedCount = await count('SELECT COUNT(DISTINCT question_key)::int AS c FROM question_flags WHERE resolved = FALSE');
+
+  res.json({ activeGames, playersOnline, totalUsers, gamesToday, flaggedCount });
+});
+
+// Flagged questions for review. Questions are AI-generated (no master bank), so we
+// review the snapshots saved in question_flags. Rows are grouped by question_key:
+// one entry per distinct question, with a report count and the earliest report date.
+// Pending only (resolved = FALSE), oldest first.
+app.get('/api/admin/flags', requireAdmin, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT question_key,
+             COUNT(*)::int AS report_count,
+             MIN(created_at) AS first_reported,
+             (ARRAY_AGG(question_text   ORDER BY created_at DESC))[1] AS question_text,
+             (ARRAY_AGG(options         ORDER BY (options IS NULL),        created_at DESC))[1] AS options,
+             (ARRAY_AGG(correct_answer  ORDER BY (correct_answer IS NULL), created_at DESC))[1] AS correct_answer
+      FROM question_flags
+      WHERE resolved = FALSE
+      GROUP BY question_key
+      ORDER BY first_reported ASC
+    `);
+    const flags = r.rows.map(row => {
+      let options = [];
+      try { const p = JSON.parse(row.options || '[]'); if (Array.isArray(p)) options = p; } catch (e) { options = []; }
+      return {
+        id: row.question_key,
+        question: row.question_text || '',
+        options,
+        correct_answer: row.correct_answer || null,
+        report_count: row.report_count,
+        first_reported: row.first_reported
+      };
+    });
+    res.json({ flags });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Save a corrected version of a flagged question and mark it resolved (leaves the
+// pending list). :id is the question_key (the group). Operates on all rows of the group.
+app.put('/api/admin/flags/:id', requireAdmin, async (req, res) => {
+  const questionKey = req.params.id;
+  const { question, options, correct_answer } = req.body || {};
+  if (!question || typeof question !== 'string') return res.status(400).json({ error: 'سؤال غير صالح' });
+  const optionsJson = Array.isArray(options) ? JSON.stringify(options) : null;
+  const correct = (typeof correct_answer === 'string' && correct_answer.length) ? correct_answer : null;
+  try {
+    const r = await pool.query(
+      `UPDATE question_flags
+         SET question_text = $1,
+             options = $2,
+             correct_answer = COALESCE($3, correct_answer),
+             resolved = TRUE,
+             resolved_at = now(),
+             resolution = 'edited'
+       WHERE question_key = $4 AND resolved = FALSE`,
+      [question, optionsJson, correct, questionKey]
+    );
+    res.json({ ok: true, updated: r.rowCount });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Dismiss a flagged question (the report was bad). We mark resolved (keep history)
+// rather than deleting; the question snapshot is left intact.
+app.delete('/api/admin/flags/:id', requireAdmin, async (req, res) => {
+  const questionKey = req.params.id;
+  try {
+    const r = await pool.query(
+      `UPDATE question_flags SET resolved = TRUE, resolved_at = now(), resolution = 'dismissed'
+       WHERE question_key = $1 AND resolved = FALSE`,
+      [questionKey]
+    );
+    res.json({ ok: true, resolved: r.rowCount });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// "لا مشكلة" — the reported question is actually fine. Mark the group resolved and
+// leave the question snapshot completely unchanged (no edit, no delete).
+app.post('/api/admin/flags/:id/keep', requireAdmin, async (req, res) => {
+  const questionKey = req.params.id;
+  try {
+    const r = await pool.query(
+      `UPDATE question_flags SET resolved = TRUE, resolved_at = now(), resolution = 'ok'
+       WHERE question_key = $1 AND resolved = FALSE`,
+      [questionKey]
+    );
+    res.json({ ok: true, resolved: r.rowCount });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // Player flags a problematic AI-generated question. Identified by a hash of the
