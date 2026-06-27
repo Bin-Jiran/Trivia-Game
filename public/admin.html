@@ -61,8 +61,11 @@
 
     /* Management cards */
     .manage{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:4px; }
-    .mcard{ padding:26px 12px; text-align:center; font-size:18px; font-weight:800; cursor:pointer; }
+    .mcard{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+      padding:22px 12px; text-align:center; font-size:18px; font-weight:800; cursor:pointer; }
     .mcard:active{ transform:scale(0.99); }
+    /* White-on-transparent PNG icons sit above the card label */
+    .micon{ width:42px; height:42px; object-fit:contain; display:block; }
 
     .hint{ text-align:center; font-size:12px; font-weight:700; color:#000; margin-top:18px; }
 
@@ -134,8 +137,14 @@
 
     <!-- Management cards (placeholder routes for now) -->
     <div class="manage">
-      <div class="mcard glass btn-blue" onclick="go('/admin-players')">إدارة اللاعبين</div>
-      <div class="mcard glass btn-blue" onclick="go('/admin-stats')">الإحصائيات</div>
+      <div class="mcard glass btn-blue" onclick="go('/admin-players.html')">
+        <img class="micon" src="/icons/ico-players.png" alt="">
+        <span>إدارة اللاعبين</span>
+      </div>
+      <div class="mcard glass btn-blue" onclick="go('/admin-stats')">
+        <img class="micon" src="/icons/ico-stats.png" alt="">
+        <span>الإحصائيات</span>
+      </div>
     </div>
 
     <div class="hint">يتم تحديث الأرقام تلقائياً</div>

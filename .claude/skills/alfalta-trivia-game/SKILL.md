@@ -102,6 +102,16 @@ a leveling system. UI is right-to-left (RTL) Arabic.
   randomized so the correct answer isn't always first.
 - **Leaderboard:** dark frosted glass, title "الفائز", podium-style FINAL only
   (no mid-game leaderboards); 1st green / 2nd yellow / 3rd blue, trophy for 1st.
+- **⚠️ Level logic is DUPLICATED — keep all copies in sync.** The points→level
+  ladder lives in TWO places: `server.js` `getLevel()` (the authoritative source —
+  it sets the badge via `safeUser()`, and is also what the admin **adjust-points
+  recompute** uses) and `public/index.html`'s `LEVELS` array (display-only: the
+  levels ladder + progress bars). There is NO shared definition (no build step), so
+  when thresholds OR tier names change you MUST edit BOTH or the game and server
+  will disagree (e.g. a player shows one level but the server scores them at
+  another). Current ladder (cumulative points): **penguin 0–500, wolf 501–1500,
+  bear 1501–2500, lion 2501–4000, dragon 4001–6500, falta 6501+.** Tier names must
+  match exactly across copies too — the ladder highlights the current row by name.
 
 ## Gameplay rules (don't regress these)
 

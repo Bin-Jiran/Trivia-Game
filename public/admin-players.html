@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة اللاعبين</title>
+  <style>
+    :root{
+      --yellow:#F5C200; --green:#2F9E44; --red:#E8472A; --blue:#2090BB; --gold:#F5C200;
+      --glass:rgba(20,20,30,0.55); --glass-border:rgba(255,255,255,0.20);
+      --font:'Segoe UI', Tahoma, sans-serif;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    body{
+      min-height:100vh; direction:rtl; color:#fff; font-family:var(--font);
+      background-color:var(--yellow);
+      background-image:
+        radial-gradient(circle at 50% 34%, rgba(255,243,180,0.95), rgba(245,194,0,0) 58%),
+        repeating-conic-gradient(from 0deg at 50% 50%, var(--yellow) 0deg, #FFD64A 7.5deg, var(--yellow) 15deg);
+      background-attachment:fixed;
+      display:flex; justify-content:center; align-items:flex-start;
+      padding:18px 14px 40px;
+    }
+    .wrap{ width:100%; max-width:620px; }
+
+    .glass{
+      background:var(--glass);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      border:1px solid var(--glass-border); border-radius:16px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.22);
+    }
+
+    /* Top bar: back (top-left), right-aligned title — identical to the flagged screen */
+    .topbar{ position:relative; display:flex; align-items:center; min-height:42px; margin-bottom:16px; }
+    .back{
+      position:absolute; top:0; left:0; display:inline-flex; align-items:center; gap:6px;
+      padding:7px 11px; font-size:13px; font-weight:700; color:#fff; cursor:pointer;
+      font-family:var(--font); background:#E8472A; border:1.5px solid #fff; border-radius:16px;
+    }
+    .back:active{ transform:scale(0.97); }
+    .back svg{ width:16px; height:16px; flex:0 0 auto; }
+    .page-title{ width:100%; text-align:right; font-size:23px; font-weight:800; color:#000; text-decoration:underline; }
+
+    /* Search + count */
+    .search{
+      width:100%; padding:12px 14px; border-radius:12px; font-size:15px; font-family:var(--font);
+      color:#fff; border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.25); margin-bottom:10px;
+    }
+    .search::placeholder{ color:rgba(255,255,255,0.7); }
+    .count{ font-size:13px; font-weight:800; color:#000; margin:0 2px 14px; }
+
+    /* User cards */
+    .ucard{ padding:15px 16px; margin-bottom:13px; }
+    .uhead{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .uname{ font-size:17px; font-weight:800; line-height:1.4; word-break:break-word; }
+    .uemail{ font-size:13px; font-weight:600; opacity:0.85; margin-top:2px; word-break:break-word; }
+    .umeta{ display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12.5px; font-weight:700; opacity:0.92; margin-top:9px; }
+    .pnum{ font-weight:800; }
+
+    .badges{ display:flex; flex-wrap:wrap; gap:6px; flex:0 0 auto; justify-content:flex-end; }
+    .badge{ font-size:11.5px; font-weight:800; padding:3px 9px; border-radius:999px; border:1.5px solid #fff; white-space:nowrap; }
+    .badge-owner, .badge-admin{ background:var(--gold); color:#3a2c00; }
+    .badge-banned{ background:var(--red); color:#fff; }
+
+    /* Action buttons */
+    .uactions{ display:flex; flex-wrap:wrap; gap:9px; margin-top:13px; }
+    .btn{ flex:1 1 0; min-width:110px; padding:10px 8px; border-radius:10px; border:1.5px solid #fff; color:#fff; font-size:13.5px; font-weight:800; font-family:var(--font); cursor:pointer; text-align:center; }
+    .btn:active{ transform:scale(0.98); }
+    .btn-points{ background:var(--blue); }
+    .btn-ban, .btn-demote{ background:var(--red); }
+    .btn-unban, .btn-promote{ background:var(--green); }
+
+    .owner-note{ margin-top:11px; font-size:12.5px; font-weight:700; opacity:0.85; text-align:center;
+      padding:8px; border-radius:10px; background:rgba(255,255,255,0.08); border:1px dashed rgba(255,255,255,0.3); }
+
+    /* Points editor (inline) */
+    .pe-slot{ margin-top:11px; }
+    .pe-row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .pe-amount{ flex:1 1 120px; min-width:0; padding:10px 12px; border-radius:10px; font-size:15px; font-family:var(--font);
+      color:#fff; border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.25); }
+    .pe-row .btn{ flex:0 0 auto; min-width:0; padding:10px 14px; }
+    .pe-add{ background:var(--green); }
+    .pe-sub{ background:var(--red); }
+    .pe-cancel{ background:rgba(255,255,255,0.16); }
+
+    .loadmore{ width:100%; padding:13px; border-radius:12px; border:1.5px solid #fff; background:var(--blue);
+      color:#fff; font-size:15px; font-weight:800; font-family:var(--font); cursor:pointer; margin-top:2px; }
+    .loadmore:active{ transform:scale(0.99); }
+
+    /* Confirmation modal — centered frosted card on a dimmed, blurred backdrop */
+    .modal-overlay{ position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+      padding:20px; background:rgba(0,0,0,0.55); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
+    .modal-card{ width:100%; max-width:340px; padding:22px 20px; text-align:center; }
+    .modal-msg{ font-size:17px; font-weight:800; line-height:1.55; margin-bottom:18px; }
+    .modal-actions{ display:flex; gap:10px; }
+    .mbtn{ flex:1 1 0; min-width:0; padding:11px 10px; border-radius:11px; border:1.5px solid #fff; color:#fff;
+      font-size:14.5px; font-weight:800; font-family:var(--font); cursor:pointer; }
+    .mbtn:active{ transform:scale(0.98); }
+    .mbtn-ok{ background:var(--green); }
+    .mbtn-danger{ background:var(--red); }
+    .mbtn-cancel{ background:rgba(255,255,255,0.16); }
+
+    /* States */
+    #loading, #denied{ min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+    #loading .l-txt{ font-weight:700; font-size:16px; }
+    #denied .big{ font-size:21px; font-weight:800; }
+    #denied .sub{ font-size:14px; opacity:0.9; max-width:300px; }
+    .statebtn{ padding:10px 22px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; font-family:var(--font); background:var(--blue); border:1.5px solid #fff; border-radius:12px; }
+    .empty-box{ padding:36px 16px; text-align:center; font-size:17px; font-weight:800; }
+    .spinner{ width:42px; height:42px; border:4px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING (default) -->
+  <div id="loading"><div class="spinner"></div><div class="l-txt">جاري التحميل...</div></div>
+
+  <!-- ACCESS DENIED -->
+  <div id="denied" style="display:none;">
+    <div class="big">✗ لا تملك صلاحية الدخول</div>
+    <div class="sub">يجب تسجيل الدخول بحساب مشرف لعرض هذه الصفحة.</div>
+    <button class="statebtn" type="button" onclick="goHome()">العودة للرئيسية</button>
+  </div>
+
+  <!-- MAIN -->
+  <div id="screen" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="back" type="button" onclick="goDash()" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>رجوع</span>
+      </button>
+      <div class="page-title">إدارة اللاعبين</div>
+    </div>
+
+    <input id="search" class="search" type="text" placeholder="ابحث بالاسم أو البريد الإلكتروني..." autocomplete="off">
+    <div class="count" id="count"></div>
+
+    <div id="list"></div>
+    <button id="loadmore" class="loadmore" type="button" style="display:none;" onclick="loadMore()">تحميل المزيد ⌄</button>
+  </div>
+
+  <!-- Reusable confirmation modal (centered, frosted glass, dimmed backdrop) -->
+  <div id="confirm-modal" class="modal-overlay" style="display:none;" aria-hidden="true">
+    <div class="modal-card glass" role="dialog" aria-modal="true">
+      <div class="modal-msg" id="confirm-msg"></div>
+      <div class="modal-actions">
+        <button id="confirm-ok" class="mbtn" type="button"></button>
+        <button id="confirm-cancel" class="mbtn mbtn-cancel" type="button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    let viewer = null;                 // { id, is_super_admin }
+    let users = [], page = 1, currentSearch = '', hasMore = false, total = 0;
+
+    function goHome(){ location.href = '/'; }
+    function goDash(){ location.href = '/admin.html'; }
+    function showOnly(id){
+      ['loading','denied','screen'].forEach(s=>{
+        document.getElementById(s).style.display = (s===id) ? (s==='screen' ? 'block' : 'flex') : 'none';
+      });
+    }
+    const ar = (v)=> (v==null ? 0 : v).toLocaleString('ar');
+    function fmtDate(ts){
+      try { return new Date(ts).toLocaleDateString('ar', { dateStyle:'medium' }); }
+      catch(e){ return ''; }
+    }
+    // Create an element; text is set via textContent (safe against HTML in names/emails).
+    function el(tag, cls, text){
+      const e = document.createElement(tag);
+      if(cls) e.className = cls;
+      if(text != null) e.textContent = text;
+      return e;
+    }
+
+    // ---- Reusable confirm modal ----
+    // showConfirm(message, onConfirm, { danger, confirmText }) — danger => red confirm
+    // button (ban/demote/subtract), otherwise green. Cancel or backdrop click dismisses.
+    let _confirmCb = null;
+    function showConfirm(message, onConfirm, opts){
+      opts = opts || {};
+      document.getElementById('confirm-msg').textContent = message;
+      const ok = document.getElementById('confirm-ok');
+      ok.textContent = opts.confirmText || 'تأكيد';
+      ok.className = 'mbtn ' + (opts.danger ? 'mbtn-danger' : 'mbtn-ok');
+      _confirmCb = onConfirm;
+      const overlay = document.getElementById('confirm-modal');
+      overlay.style.display = 'flex'; overlay.setAttribute('aria-hidden','false');
+    }
+    function hideConfirm(){
+      const overlay = document.getElementById('confirm-modal');
+      overlay.style.display = 'none'; overlay.setAttribute('aria-hidden','true');
+      _confirmCb = null;
+    }
+    document.getElementById('confirm-ok').addEventListener('click', ()=>{
+      const cb = _confirmCb; hideConfirm(); if(cb) cb();
+    });
+    document.getElementById('confirm-cancel').addEventListener('click', hideConfirm);
+    document.getElementById('confirm-modal').addEventListener('click', (e)=>{
+      if(e.target.id === 'confirm-modal') hideConfirm();   // backdrop click cancels
+    });
+
+    // ---- Render ----
+    function render(){
+      const wrap = document.getElementById('list');
+      wrap.innerHTML = '';
+      document.getElementById('count').textContent = 'عدد اللاعبين المسجلين: ' + ar(total);
+      if(!users.length){
+        wrap.appendChild(el('div','glass empty-box','لا يوجد لاعبون مطابقون'));
+      } else {
+        users.forEach(u => wrap.appendChild(userCard(u)));
+      }
+      document.getElementById('loadmore').style.display = hasMore ? 'block' : 'none';
+    }
+
+    function replaceCard(u, card){ card.replaceWith(userCard(u)); }
+
+    function userCard(u){
+      const card = el('div','ucard glass'); card.dataset.id = u.id;
+
+      const head = el('div','uhead');
+      const left = el('div');
+      left.appendChild(el('div','uname', u.name || '—'));
+      left.appendChild(el('div','uemail', u.email || ''));
+      head.appendChild(left);
+
+      const badges = el('div','badges');
+      if(u.is_super_admin) badges.appendChild(el('span','badge badge-owner','المالك'));
+      else if(u.is_admin)  badges.appendChild(el('span','badge badge-admin','مشرف'));
+      if(u.is_banned)      badges.appendChild(el('span','badge badge-banned','محظور'));
+      head.appendChild(badges);
+      card.appendChild(head);
+
+      const meta = el('div','umeta');
+      meta.appendChild(el('span', null, u.level_name || ''));
+      const pts = el('span'); pts.innerHTML = 'النقاط: <span dir="ltr" class="pnum">' + ar(u.points) + '</span>';
+      meta.appendChild(pts);
+      meta.appendChild(el('span', null, 'انضم: ' + fmtDate(u.created_at)));
+      card.appendChild(meta);
+
+      // --- Action visibility (mirrors the server-side enforcement) ---
+      const isOwnerCard   = !!u.is_super_admin;
+      const isSelf        = viewer && u.id === viewer.id;
+      const viewerIsOwner = viewer && viewer.is_super_admin;
+      const targetIsAdmin = u.is_admin || u.is_super_admin;
+      // Non-owner admins may act ONLY on regular (non-admin) players; the owner can act on admins too.
+      const canAct        = viewerIsOwner || !targetIsAdmin;
+
+      const actions = el('div','uactions');
+      // Points: anyone the viewer is allowed to act on.
+      if(canAct){
+        const b = el('button','btn btn-points','تعديل النقاط');
+        b.onclick = ()=> togglePointsEditor(u, card);
+        actions.appendChild(b);
+      }
+      // Ban/unban: allowed to act, and never the owner card or yourself.
+      if(canAct && !isOwnerCard && !isSelf){
+        if(u.is_banned){
+          const b = el('button','btn btn-unban','إلغاء الحظر'); b.onclick = ()=> onUnban(u, card); actions.appendChild(b);
+        } else {
+          const b = el('button','btn btn-ban','حظر'); b.onclick = ()=> onBan(u, card); actions.appendChild(b);
+        }
+      }
+      // Promote/demote: OWNER only, not the owner card, not yourself.
+      if(viewerIsOwner && !isOwnerCard && !isSelf){
+        if(u.is_admin){
+          const b = el('button','btn btn-demote','إزالة المشرف'); b.onclick = ()=> onDemote(u, card); actions.appendChild(b);
+        } else {
+          const b = el('button','btn btn-promote','ترقية لمشرف'); b.onclick = ()=> onPromote(u, card); actions.appendChild(b);
+        }
+      }
+      if(actions.children.length) card.appendChild(actions);
+
+      if(isOwnerCard) card.appendChild(el('div','owner-note','لا يمكن تغيير صلاحيات المالك'));
+
+      const slot = el('div','pe-slot'); slot.style.display = 'none'; card.appendChild(slot);
+      return card;
+    }
+
+    // ---- Points editor ----
+    function togglePointsEditor(u, card){
+      const slot = card.querySelector('.pe-slot');
+      if(slot.style.display !== 'none'){ slot.style.display='none'; slot.innerHTML=''; return; }
+      slot.innerHTML='';
+      const row = el('div','pe-row');
+      const inp = el('input','pe-amount'); inp.type='number'; inp.min='1'; inp.inputMode='numeric'; inp.placeholder='المبلغ';
+      row.appendChild(inp);
+      const addB = el('button','btn pe-add','＋ إضافة'); addB.onclick = ()=> applyPoints(u, card, inp, 1);
+      const subB = el('button','btn pe-sub','－ خصم');   subB.onclick = ()=> applyPoints(u, card, inp, -1);
+      const cancel = el('button','btn pe-cancel','إلغاء'); cancel.onclick = ()=>{ slot.style.display='none'; slot.innerHTML=''; };
+      row.appendChild(addB); row.appendChild(subB); row.appendChild(cancel);
+      slot.appendChild(row); slot.style.display='block'; inp.focus();
+    }
+
+    function applyPoints(u, card, inp, sign){
+      const mag = parseInt(inp.value, 10);
+      if(!Number.isInteger(mag) || mag <= 0){ alert('أدخل مبلغاً صحيحاً أكبر من صفر'); return; }
+      const msg = sign > 0 ? ('إضافة ' + mag + ' نقطة؟') : ('خصم ' + mag + ' نقطة؟');
+      showConfirm(msg, async ()=>{
+        try{
+          const res = await fetch('/api/admin/users/' + u.id + '/points', {
+            method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
+            body: JSON.stringify({ amount: sign * mag })
+          });
+          const d = await res.json().catch(()=> ({}));
+          if(!res.ok){ alert(d.error || 'تعذّر التعديل'); return; }
+          u.points = d.points; u.level_name = d.level_name; u.level = d.level;
+          replaceCard(u, card);
+        }catch(e){ alert('تعذّر التعديل، حاول مجدداً'); }
+      }, { danger: sign < 0, confirmText: sign > 0 ? 'إضافة' : 'خصم' });
+    }
+
+    // ---- Permission actions ----
+    async function act(url){
+      try{
+        const res = await fetch(url, { method:'POST', headers:{ Authorization:'Bearer ' + token } });
+        const d = await res.json().catch(()=> ({}));
+        if(!res.ok){ alert(d.error || 'تعذّرت العملية'); return null; }
+        return d;
+      }catch(e){ alert('تعذّرت العملية، حاول مجدداً'); return null; }
+    }
+    function onBan(u, card){
+      showConfirm('حظر هذا اللاعب؟ سيتم إخراجه من اللعبة فوراً.', async ()=>{
+        if(await act('/api/admin/users/' + u.id + '/ban')){ u.is_banned = true; replaceCard(u, card); }
+      }, { danger:true, confirmText:'حظر' });
+    }
+    function onUnban(u, card){
+      showConfirm('إلغاء الحظر عن هذا اللاعب؟', async ()=>{
+        if(await act('/api/admin/users/' + u.id + '/unban')){ u.is_banned = false; replaceCard(u, card); }
+      }, { confirmText:'إلغاء الحظر' });
+    }
+    function onPromote(u, card){
+      showConfirm('ترقية هذا اللاعب إلى مشرف؟', async ()=>{
+        if(await act('/api/admin/users/' + u.id + '/promote')){ u.is_admin = true; replaceCard(u, card); }
+      }, { confirmText:'ترقية' });
+    }
+    function onDemote(u, card){
+      showConfirm('إزالة صلاحية المشرف عن هذا اللاعب؟', async ()=>{
+        if(await act('/api/admin/users/' + u.id + '/demote')){ u.is_admin = false; replaceCard(u, card); }
+      }, { danger:true, confirmText:'إزالة' });
+    }
+
+    // ---- Data loading ----
+    async function fetchUsers(reset){
+      if(reset){ page = 1; currentSearch = document.getElementById('search').value.trim(); }
+      try{
+        const url = '/api/admin/users?search=' + encodeURIComponent(currentSearch) + '&page=' + page;
+        const res = await fetch(url, { headers:{ Authorization:'Bearer ' + token } });
+        if(res.status === 401 || res.status === 403){ showOnly('denied'); return; }
+        const d = await res.json().catch(()=> ({}));
+        const batch = Array.isArray(d.users) ? d.users : [];
+        users = reset ? batch : users.concat(batch);
+        hasMore = !!d.hasMore;
+        total = (d.total != null) ? d.total : users.length;
+        render();
+      }catch(e){ /* keep current view; user can retry */ }
+    }
+    function loadMore(){ page += 1; fetchUsers(false); }
+
+    // Debounced search.
+    let searchTimer = null;
+    function onSearchInput(){ clearTimeout(searchTimer); searchTimer = setTimeout(()=> fetchUsers(true), 300); }
+
+    (async function(){
+      if(!token){ showOnly('denied'); return; }
+      // Identify the viewer — we need their super-admin status to decide which
+      // controls to show. /api/me also confirms admin access.
+      try{
+        const meRes = await fetch('/api/me', { headers:{ Authorization:'Bearer ' + token } });
+        if(!meRes.ok){ showOnly('denied'); return; }
+        const me = await meRes.json();
+        if(!me.is_admin){ showOnly('denied'); return; }
+        viewer = { id: me.id, is_super_admin: !!me.is_super_admin };
+      }catch(e){ showOnly('denied'); return; }
+
+      showOnly('screen');
+      document.getElementById('search').addEventListener('input', onSearchInput);
+      await fetchUsers(true);
+    })();
+  </script>
+</body>
+</html>

@@ -47,27 +47,37 @@ async function initDB() {
   `);
   // Backward-compatible: add new columns to pre-existing tables without touching data.
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN NOT NULL DEFAULT FALSE');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT FALSE');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolution TEXT');
   console.log('✅ Database ready');
 
-  // Promote the configured admin account (idempotent — safe to run every boot).
+  // The ADMIN_EMAIL account is the OWNER: it is both admin and super-admin. Idempotent —
+  // safe to run every boot. Only this account may promote/demote other admins.
   if (process.env.ADMIN_EMAIL) {
-    const r = await pool.query('UPDATE users SET is_admin = TRUE WHERE email = $1', [process.env.ADMIN_EMAIL]);
-    if (r.rowCount > 0) console.log(`👑 Admin privileges ensured for ${process.env.ADMIN_EMAIL}`);
+    const r = await pool.query(
+      'UPDATE users SET is_admin = TRUE, is_super_admin = TRUE WHERE email = $1',
+      [process.env.ADMIN_EMAIL]
+    );
+    if (r.rowCount > 0) console.log(`👑 Owner (super-admin) privileges ensured for ${process.env.ADMIN_EMAIL}`);
     else console.log(`👑 ADMIN_EMAIL set to ${process.env.ADMIN_EMAIL} — no matching account yet (will apply once they register)`);
   }
 }
 initDB().catch(console.error);
 
+// Level ladder — the SINGLE SOURCE OF TRUTH for a player's badge (home, profile,
+// admin list, admin adjust-points recompute all read this via safeUser()).
+// index.html's LEVELS array is a display-only copy of the SAME bands; keep them
+// identical (no build step lets us share one definition).
 function getLevel(score) {
   if (score <= 500)  return { name:'البطريق', emoji:'🐧', img:'/levels/penguin.png', level:1, min:0,    max:500   };
-  if (score <= 1250) return { name:'الذئب',   emoji:'🐺', img:'/levels/wolf.png',    level:2, min:501,  max:1250  };
-  if (score <= 2400) return { name:'الدب',    emoji:'🐻', img:'/levels/bear.png',    level:3, min:1251, max:2400  };
-  if (score <= 4100) return { name:'الأسد',   emoji:'🦁', img:'/levels/lion.png',    level:4, min:2401, max:4100  };
-  if (score <= 6650) return { name:'التنين',  emoji:'🐉', img:'/levels/dragon.png',  level:5, min:4101, max:6650  };
-  return { name:'الفلتة!', emoji:'💥', img:'/levels/falta.png', level:6, min:6651, max:99999 };
+  if (score <= 1500) return { name:'الذئب',   emoji:'🐺', img:'/levels/wolf.png',    level:2, min:501,  max:1500  };
+  if (score <= 2500) return { name:'الدب',    emoji:'🐻', img:'/levels/bear.png',    level:3, min:1501, max:2500  };
+  if (score <= 4000) return { name:'الأسد',   emoji:'🦁', img:'/levels/lion.png',    level:4, min:2501, max:4000  };
+  if (score <= 6500) return { name:'التنين',  emoji:'🐉', img:'/levels/dragon.png',  level:5, min:4001, max:6500  };
+  return { name:'الفلتة!', emoji:'💥', img:'/levels/falta.png', level:6, min:6501, max:99999 };
 }
 function displayName(u) { return `${u.first_name} ${u.last_name.substring(0,3)}`; }
 function verifyToken(t) { try { return jwt.verify(t, JWT_SECRET); } catch { return null; } }
@@ -78,6 +88,16 @@ function safeUser(u) {
     total_score:u.total_score||0, display_name:displayName(u), level };
 }
 
+// Load the columns the admin player-management endpoints need to make decisions
+// (permissions + current score). Never selects the password hash.
+async function getUserRow(id) {
+  const r = await pool.query(
+    'SELECT id, first_name, last_name, email, total_score, is_admin, is_super_admin, is_banned FROM users WHERE id=$1',
+    [id]
+  );
+  return r.rows[0] || null;
+}
+
 // Admin gate: verify the JWT exactly like the protected routes, then read the
 // authoritative is_admin flag from the DB (never trust a token claim). 403 if not admin.
 async function requireAdmin(req, res, next) {
@@ -85,11 +105,14 @@ async function requireAdmin(req, res, next) {
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
   try {
-    const r = await pool.query('SELECT id, is_admin FROM users WHERE id=$1', [payload.id]);
+    const r = await pool.query('SELECT id, is_admin, is_super_admin FROM users WHERE id=$1', [payload.id]);
     const user = r.rows[0];
     if (!user) return res.status(404).json({ error: 'غير موجود' });
     if (!user.is_admin) return res.status(403).json({ error: 'ممنوع' });
     req.adminId = user.id;
+    // Super-admin (owner) status, read fresh from the DB. Endpoints that manage
+    // admins gate on this; never trust a token claim for it.
+    req.isSuperAdmin = !!user.is_super_admin;
     next();
   } catch (e) {
     res.status(500).json({ error: 'خطأ في الخادم' });
@@ -141,6 +164,8 @@ app.post('/api/login', async (req, res) => {
   if (!user) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
+  // Banned accounts cannot obtain a fresh session.
+  if (user.is_banned) return res.status(403).json({ error: 'تم حظر حسابك. للاستفسار تواصل مع الإدارة.' });
   const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: safeUser(user) });
 });
@@ -151,7 +176,9 @@ app.get('/api/me', async (req, res) => {
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
   const r = await pool.query('SELECT * FROM users WHERE id=$1', [payload.id]);
   if (!r.rows[0]) return res.status(404).json({ error: 'غير موجود' });
-  res.json({ ...safeUser(r.rows[0]), is_admin: r.rows[0].is_admin || false });
+  res.json({ ...safeUser(r.rows[0]),
+    is_admin: r.rows[0].is_admin || false,
+    is_super_admin: r.rows[0].is_super_admin || false });
 });
 
 // Protected test endpoint — only reachable by admins (foundation for the dashboard).
@@ -280,6 +307,154 @@ app.post('/api/admin/flags/:id/keep', requireAdmin, async (req, res) => {
   }
 });
 
+// ── Player management (admin) ────────────────────────────────────────────────
+// Self-protection rules enforced on the SERVER (never trust the client):
+//  • The owner (is_super_admin) can never be banned, demoted, or lose super-admin.
+//  • Only the owner may adjust the owner's OWN points; no other admin may touch
+//    the owner's account at all.
+//  • An admin cannot ban or demote themselves (no self-lockout).
+//  • Only the owner (super-admin) may promote/demote admins.
+const USERS_PAGE_SIZE = 25;
+
+// Searchable, paginated user list. Search matches first/last/full name or email.
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  const search = (req.query.search || '').toString().trim();
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const offset = (page - 1) * USERS_PAGE_SIZE;
+  try {
+    let where = '';
+    const params = [];
+    if (search) {
+      params.push('%' + search + '%');
+      where = `WHERE (first_name ILIKE $1 OR last_name ILIKE $1
+                   OR (first_name || ' ' || last_name) ILIKE $1 OR email ILIKE $1)`;
+    }
+    const totalR = await pool.query(`SELECT COUNT(*)::int AS c FROM users ${where}`, params);
+    const total = totalR.rows[0].c;
+
+    const listParams = params.slice();
+    listParams.push(USERS_PAGE_SIZE, offset);
+    const r = await pool.query(
+      `SELECT id, first_name, last_name, email, total_score, created_at,
+              is_admin, is_super_admin, is_banned
+         FROM users ${where}
+        ORDER BY is_super_admin DESC, is_admin DESC, total_score DESC, id ASC
+        LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`,
+      listParams
+    );
+    const users = r.rows.map(u => {
+      const lvl = getLevel(u.total_score || 0);
+      return {
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+        email: u.email,
+        points: u.total_score || 0,
+        level_name: lvl.name,
+        level: lvl.level,
+        created_at: u.created_at,
+        is_admin: !!u.is_admin,
+        is_super_admin: !!u.is_super_admin,
+        is_banned: !!u.is_banned
+      };
+    });
+    res.json({ users, total, page, pageSize: USERS_PAGE_SIZE, hasMore: offset + users.length < total });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Adjust points by a SIGNED amount (e.g. +500 / -200). Floors at 0 (never negative)
+// and returns the recomputed level.
+app.post('/api/admin/users/:id/points', requireAdmin, async (req, res) => {
+  const targetId = parseInt(req.params.id, 10);
+  const amount = parseInt(req.body?.amount, 10);
+  if (!Number.isInteger(targetId) || !Number.isInteger(amount))
+    return res.status(400).json({ error: 'بيانات غير صالحة' });
+  try {
+    const target = await getUserRow(targetId);
+    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    // Regular (non-owner) admins may only act on non-admin players. Only the owner
+    // may touch any admin/owner account (including their own).
+    if ((target.is_admin || target.is_super_admin) && !req.isSuperAdmin)
+      return res.status(403).json({ error: 'لا يمكنك تعديل حساب مشرف' });
+    const newPoints = Math.max(0, (target.total_score || 0) + amount);
+    await pool.query('UPDATE users SET total_score=$1 WHERE id=$2', [newPoints, targetId]);
+    const lvl = getLevel(newPoints);
+    res.json({ ok: true, points: newPoints, level_name: lvl.name, level: lvl.level });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Ban: block future logins/sockets and kick any live session immediately.
+app.post('/api/admin/users/:id/ban', requireAdmin, async (req, res) => {
+  const targetId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  try {
+    const target = await getUserRow(targetId);
+    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    if (target.is_super_admin) return res.status(403).json({ error: 'لا يمكن حظر المالك' });
+    // Regular (non-owner) admins may only ban non-admin players.
+    if (target.is_admin && !req.isSuperAdmin) return res.status(403).json({ error: 'لا يمكنك حظر مشرف' });
+    if (req.adminId === targetId) return res.status(403).json({ error: 'لا يمكنك حظر نفسك' });
+    await pool.query('UPDATE users SET is_banned=TRUE WHERE id=$1', [targetId]);
+    kickUser(targetId);
+    res.json({ ok: true, is_banned: true });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Unban: restore login/socket access.
+app.post('/api/admin/users/:id/unban', requireAdmin, async (req, res) => {
+  const targetId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  try {
+    const target = await getUserRow(targetId);
+    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    // Regular (non-owner) admins may only act on non-admin players.
+    if ((target.is_admin || target.is_super_admin) && !req.isSuperAdmin)
+      return res.status(403).json({ error: 'لا يمكنك تعديل حساب مشرف' });
+    await pool.query('UPDATE users SET is_banned=FALSE WHERE id=$1', [targetId]);
+    res.json({ ok: true, is_banned: false });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Promote to admin — OWNER ONLY. Never grants super-admin (owner stays the sole one).
+app.post('/api/admin/users/:id/promote', requireAdmin, async (req, res) => {
+  if (!req.isSuperAdmin) return res.status(403).json({ error: 'صلاحية المالك مطلوبة' });
+  const targetId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  try {
+    const target = await getUserRow(targetId);
+    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    await pool.query('UPDATE users SET is_admin=TRUE WHERE id=$1', [targetId]);
+    res.json({ ok: true, is_admin: true });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Demote an admin — OWNER ONLY. The owner can't be demoted; admins can't demote
+// themselves. The owner is never demotable, so there's always ≥1 super-admin.
+app.post('/api/admin/users/:id/demote', requireAdmin, async (req, res) => {
+  if (!req.isSuperAdmin) return res.status(403).json({ error: 'صلاحية المالك مطلوبة' });
+  const targetId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  try {
+    const target = await getUserRow(targetId);
+    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    if (target.is_super_admin) return res.status(403).json({ error: 'لا يمكن إزالة صلاحية المالك' });
+    if (req.adminId === targetId) return res.status(403).json({ error: 'لا يمكنك إزالة صلاحياتك' });
+    await pool.query('UPDATE users SET is_admin=FALSE WHERE id=$1', [targetId]);
+    res.json({ ok: true, is_admin: false });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 // Player flags a problematic AI-generated question. Identified by a hash of the
 // question text; the text/options are stored so it can be reviewed later, and the
 // correct answer is enriched from authoritative live room state (never from the
@@ -374,6 +549,9 @@ io.use((socket, next) => {
   if (!payload) return next(new Error('غير مصرح'));
   pool.query('SELECT * FROM users WHERE id=$1', [payload.id]).then(r => {
     if (!r.rows[0]) return next(new Error('غير موجود'));
+    // Banned accounts cannot open new sockets. Re-checked on every connection
+    // (the JWT itself stays valid for 30 days), so a ban blocks reconnection.
+    if (r.rows[0].is_banned) return next(new Error('محظور'));
     socket.user = safeUser(r.rows[0]); next();
   }).catch(() => next(new Error('خطأ')));
 });
@@ -483,6 +661,30 @@ function getPlayers(code) {
   return Object.entries(rooms[code].players).map(([id,p]) => ({
     ...p, socketId:id, isHost:id===rooms[code].host
   })).sort((a,b) => b.sessionScore-a.sessionScore);
+}
+
+// Force every live socket of a banned user out of the game. Mirrors the disconnect
+// handler's room cleanup (drop the player, reassign host or delete an empty room),
+// then disconnects the socket so they can't keep playing the current session.
+function kickUser(userId) {
+  for (const s of io.sockets.sockets.values()) {
+    if (!s.user || s.user.id !== userId) continue;
+    const code = s.roomCode;
+    if (code && rooms[code]) {
+      delete rooms[code].players[s.id];
+      if (Object.keys(rooms[code].players).length === 0) {
+        clearInterval(rooms[code].timer); delete rooms[code];
+      } else {
+        if (rooms[code].host === s.id) {
+          rooms[code].host = Object.keys(rooms[code].players)[0];
+          io.to(code).emit('host_changed', { host: rooms[code].host });
+        }
+        io.to(code).emit('players_update', getPlayers(code));
+      }
+    }
+    s.emit('error_msg', 'تم حظرك من قبل الإدارة');
+    s.disconnect(true);
+  }
 }
 
 function startPhase(code) {
