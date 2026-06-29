@@ -15,6 +15,14 @@ const io = new Server(server, { cors: { origin: '*' } });
 const JWT_SECRET = process.env.JWT_SECRET || 'trivia_secret_key_2024';
 const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+// Maintenance mode: when 'true', only admins may create/join/restart games. Unset or
+// anything other than 'true' = game fully open (default). Flip via the Render env var.
+const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true';
+
+// Questions come from the Supabase `questions` table. AI generation is now only a
+// gap-filler for short rounds — flip AI_FALLBACK_ENABLED to false once the bank is full.
+const AI_FALLBACK_ENABLED = true;
+const QUESTIONS_PER_ROUND = { easy: 12, medium: 12, hard: 12 };
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
@@ -541,6 +549,92 @@ async function generateQuestions(categories, difficulty, count = 12) {
   });
 }
 
+// ── Question bank (Supabase `questions` table) ───────────────────────────────
+// Fisher–Yates copy — randomizes the 4 image tile positions (text uses shuffleOptions).
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+// Map a DB row to the internal question object the game already emits. `id` is kept for
+// per-game no-repeat tracking (never emitted). The four positions are shuffled;
+// correctness stays BY VALUE (the `answer` column), so the shuffle never affects scoring.
+function mapQuestionRow(row){
+  const choices = [row.choice1, row.choice2, row.choice3, row.choice4];
+  if (row.is_image) {
+    return { id: row.id, question: row.question, images: shuffle(choices), answer: row.answer, is_image: true };
+  }
+  // Text: reuse the existing shuffle (also re-applies the أ/ب/ج/د prefixes), matched by value.
+  const s = shuffleOptions(choices, row.answer);
+  return { id: row.id, question: row.question, options: s.options, answer: s.answer, is_image: false };
+}
+
+// Available question count per category at one difficulty, excluding already-used IDs.
+async function availabilityByCategory(categories, difficulty, usedArr){
+  const m = new Map();
+  try {
+    const r = await pool.query(
+      `SELECT category, COUNT(*)::int AS cnt FROM questions
+        WHERE active AND difficulty = $1 AND category = ANY($2::text[]) AND id <> ALL($3::int[])
+        GROUP BY category`,
+      [difficulty, categories, usedArr]
+    );
+    for (const row of r.rows) m.set(row.category, row.cnt);
+  } catch (e) { console.error('availability query failed:', e.message); }
+  return m;
+}
+
+// Randomly pick `count` rows from the given categories at one difficulty, excluding used IDs.
+async function queryQuestions(categories, difficulty, count, usedArr){
+  if (count <= 0) return [];
+  try {
+    const r = await pool.query(
+      `SELECT id, is_image, question, choice1, choice2, choice3, choice4, answer
+         FROM questions
+        WHERE active AND difficulty = $1 AND category = ANY($2::text[]) AND id <> ALL($3::int[])
+        ORDER BY random() LIMIT $4`,
+      [difficulty, categories, usedArr, count]
+    );
+    return r.rows.map(mapQuestionRow);
+  } catch (e) { console.error('queryQuestions failed:', e.message); return []; }
+}
+
+// Weighted allocation of `need` slots across the selected categories:
+//   • base 1 per category that has anything available (so each appears at least once)
+//   • remaining slots go to the biggest categories first (random tiebreak), one each,
+//     capped at 2 per category and at each category's available count.
+function allocateSlots(categories, availMap, need){
+  const alloc = new Map();
+  for (const c of categories) alloc.set(c, (availMap.get(c) || 0) >= 1 ? 1 : 0);
+  let left = need - [...alloc.values()].reduce((a, b) => a + b, 0);
+  const extra = shuffle(categories.filter(c => alloc.get(c) === 1 && (availMap.get(c) || 0) >= 2))
+                  .sort((a, b) => (availMap.get(b) || 0) - (availMap.get(a) || 0));
+  for (const c of extra){
+    if (left <= 0) break;
+    alloc.set(c, 2); left--;
+  }
+  return alloc;
+}
+
+// Build one difficulty round: weight 12 questions across the selected categories,
+// excluding IDs already used this game, then (only if enabled, should never happen now)
+// fill any genuine shortfall from the AI generator. Mutates `usedIds` with what it picks.
+async function buildRound(categories, difficulty, usedIds){
+  const need = QUESTIONS_PER_ROUND[difficulty];
+  const used = [...usedIds];
+  const availMap = await availabilityByCategory(categories, difficulty, used);
+  const alloc = allocateSlots(categories, availMap, need);
+  const picks = await Promise.all(
+    categories.filter(c => alloc.get(c) > 0)
+              .map(c => queryQuestions([c], difficulty, alloc.get(c), used))
+  );
+  let questions = picks.flat();
+  questions.forEach(q => { if (q.id != null) usedIds.add(q.id); });   // AI-fallback rows have no id
+  if (AI_FALLBACK_ENABLED && questions.length < need) {
+    const gap = need - questions.length;
+    try { questions = questions.concat(await generateQuestions(categories, difficulty, gap)); }
+    catch (e) { console.error('AI fallback failed:', e.message); }
+  }
+  return shuffle(questions);   // interleave categories instead of grouping them
+}
+
 const rooms = {};
 function generateCode() { return String(Math.floor(1000+Math.random()*9000)); }
 
@@ -552,14 +646,23 @@ io.use((socket, next) => {
     // Banned accounts cannot open new sockets. Re-checked on every connection
     // (the JWT itself stays valid for 30 days), so a ban blocks reconnection.
     if (r.rows[0].is_banned) return next(new Error('محظور'));
-    socket.user = safeUser(r.rows[0]); next();
+    socket.user = safeUser(r.rows[0]);
+    socket.isAdmin = !!r.rows[0].is_admin;   // captured from the row already fetched (for maintenance mode)
+    next();
   }).catch(() => next(new Error('خطأ')));
 });
 
 io.on('connection', socket => {
   socket.on('create_room', ({ categories }) => {
+    if (MAINTENANCE_MODE && !socket.isAdmin) {
+      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
+    }
+    // Enforce 6–12 categories on the server too (mirrors the client check).
+    if (!Array.isArray(categories) || categories.length < 6 || categories.length > 12) {
+      return socket.emit('error_msg', 'اختر من ٦ إلى ١٢ فئة');
+    }
     const code = generateCode();
-    const cats = Array.isArray(categories) && categories.length > 0 ? categories : ['معلومات عامة'];
+    const cats = categories;
     rooms[code] = { code, host:socket.id, categories:cats, players:{}, phase:0,
       phaseNames:['easy','medium','hard'], qIndex:0, timer:null, status:'waiting', answered:{} };
     rooms[code].players[socket.id] = { ...socket.user, sessionScore:0, ready:false };
@@ -569,6 +672,9 @@ io.on('connection', socket => {
   });
 
   socket.on('join_room', ({ code }) => {
+    if (MAINTENANCE_MODE && !socket.isAdmin) {
+      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
+    }
     const room = rooms[code];
     if (!room) return socket.emit('error_msg', 'الغرفة غير موجودة');
     if (room.status !== 'waiting') return socket.emit('error_msg', 'اللعبة بدأت');
@@ -580,6 +686,9 @@ io.on('connection', socket => {
 
   // Play again: reset the SAME room back to a fresh lobby and keep it alive
   socket.on('play_again', () => {
+    if (MAINTENANCE_MODE && !socket.isAdmin) {
+      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
+    }
     const code = socket.roomCode; const room = rooms[code];
     if (!room) return socket.emit('error_msg', 'انتهت الغرفة، أنشئ غرفة جديدة');
     if (room.endTimer) { clearTimeout(room.endTimer); room.endTimer = null; }
@@ -607,11 +716,12 @@ io.on('connection', socket => {
     room.status = 'loading';
     io.to(code).emit('game_loading', { message:'جاري تحضير الأسئلة...' });
     try {
-      const [easy, medium, hard] = await Promise.all([
-        generateQuestions(room.categories, 'easy', 12),
-        generateQuestions(room.categories, 'medium', 12),
-        generateQuestions(room.categories, 'hard', 12)
-      ]);
+      // One per-game used-ID set, threaded through all three rounds so no question
+      // repeats (built sequentially so each round excludes earlier rounds' picks).
+      const usedIds = new Set();
+      const easy   = await buildRound(room.categories, 'easy',   usedIds);
+      const medium = await buildRound(room.categories, 'medium', usedIds);
+      const hard   = await buildRound(room.categories, 'hard',   usedIds);
       room.allQuestions = { easy, medium, hard };
       room.status = 'playing'; room.phase = 0;
       startPhase(code);
@@ -707,7 +817,9 @@ function askQuestion(code) {
   io.to(code).emit('question', {
     index:room.qIndex+1, total:room.questions.length,
     question:q.question, options:q.options, points:pts, phase:room.phase+1,
-    is_logo:q.logo_question||false
+    is_logo:q.logo_question||false,
+    is_image:q.is_image||false,
+    images:q.images||null
   });
   let timeLeft = 15;
   io.to(code).emit('timer', { seconds:timeLeft });

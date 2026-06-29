@@ -233,9 +233,9 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 /* ── Category grid ── */
 .cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 10px 0; }
 .cat-opt { background: rgba(255,255,255,0.6); border: 2px solid rgba(255,255,255,0.5); border-radius: var(--radius-sm); padding: 12px; cursor: pointer; text-align: center; transition: all 0.2s; position: relative; }
-.cat-opt:hover { border-color: var(--blue); }
+.cat-opt:hover { border-color: rgba(255,255,255,0.6); }
 .cat-opt.selected { border-color: var(--blue); background: rgba(58,171,219,0.1); }
-.cat-opt.selected::after { content:'✓'; position:absolute; top:6px; left:8px; background:var(--blue); color:#fff; border-radius:50%; width:18px; height:18px; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+.cat-opt.selected::after { content:'✓'; position:absolute; top:6px; left:8px; background:#fff; color:#5BBD4E; border-radius:50%; width:18px; height:18px; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:700; }
 .cat-opt .cicon { font-size: 24px; margin-bottom: 3px; }
 .cat-opt .cname { font-size: 12px; font-weight: 600; color: var(--text); }
 
@@ -307,6 +307,13 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .opt-1:hover:not(:disabled) { background:var(--blue-d); }
 .opt-2:hover:not(:disabled) { background:var(--yellow-d); }
 .opt-3:hover:not(:disabled) { background:var(--green-d); }
+/* Image-type answer tiles (logo questions): four equal SQUARE frosted-glass tiles
+   in the existing 2-col grid. Reuse the .opt base (white border/radius/shadow + the
+   correct-glow/wrong-glow/faded/pulse reveal classes). object-fit:contain centers
+   each logo so a wide or square image never gives the answer away by its shape. */
+.opt-img { padding:0; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; overflow:hidden;
+  background:rgba(255,255,255,0.12); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.opt-img > img { width:100%; height:100%; object-fit:contain; padding:14px; pointer-events:none; }
 /* Report-a-problem control — top-LEFT corner, opposite the points pill (RTL).
    The slot holds the small glass flag button plus a status box that replaces it. */
 .pts-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -399,6 +406,16 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 /* ── Toast ── */
 .toast { position:fixed; bottom:20px; right:50%; transform:translateX(50%); background:var(--text); color:var(--bg); border-radius:var(--radius-sm); padding:10px 22px; font-size:13px; z-index:999; opacity:0; transition:opacity 0.3s; pointer-events:none; white-space:nowrap; font-weight:600; }
 .toast.show { opacity:1; }
+/* Maintenance overlay — centered dark-red frosted-glass box (only for maintenance_blocked) */
+.maint-overlay { position:fixed; inset:0; z-index:10000; display:none; align-items:center; justify-content:center; padding:26px;
+  background:rgba(0,0,0,0.55); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
+.maint-overlay.show { display:flex; }
+.maint-box { width:100%; max-width:360px; text-align:center; padding:30px 24px; border-radius:18px;
+  background:rgba(140,22,16,0.62); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+  border:1.5px solid rgba(255,255,255,0.30); box-shadow:0 12px 34px rgba(0,0,0,0.42);
+  color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.35); }
+.maint-box .maint-icon { font-size:40px; line-height:1; margin-bottom:12px; }
+.maint-box .maint-text { font-size:19px; font-weight:800; line-height:1.6; }
 
 .mt { margin-top:10px; }
 .back-btn { background:none; border:none; color:var(--blue); cursor:pointer; font-size:22px; padding:0; }
@@ -509,8 +526,9 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 #s-shop .ti { color: rgba(255,255,255,0.9) !important; }
 
 /* Lobby / create / join chips -> glass */
-.cat-opt { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.3); }
-.cat-opt.selected { background: rgba(58,171,219,0.35); border-color: #fff; }
+/* Category tiles: dark frosted glass by default, solid green (#5BBD4E) when selected. */
+.cat-opt { background: rgba(20,20,30,0.55); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); border-color: rgba(255,255,255,0.25); }
+.cat-opt.selected { background: #5BBD4E; border-color: #fff; }
 .cat-opt .cname { color: #fff; }
 .player-card { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.22); }
 
@@ -719,14 +737,29 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
   <div class="card">
     <div class="section-title">اختر الفئات</div>
     <div class="cat-grid">
+      <div class="cat-opt" onclick="toggleCat(this,'أساطير')"><div class="cicon">🐉</div><div class="cname">أساطير</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'أعلام ودول')"><div class="cicon">🚩</div><div class="cname">أعلام ودول</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'الكويت')"><div class="cicon">🇰🇼</div><div class="cname">الكويت</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'التكنولوجيا')"><div class="cicon">💻</div><div class="cname">التكنولوجيا</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'تاريخ')"><div class="cicon">📜</div><div class="cname">تاريخ</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'تقنية واختراعات')"><div class="cicon">💡</div><div class="cname">تقنية واختراعات</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'جسم الإنسان')"><div class="cicon">🫀</div><div class="cname">جسم الإنسان</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'جغرافيا')"><div class="cicon">🗺️</div><div class="cname">جغرافيا</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'حيوانات')"><div class="cicon">🐾</div><div class="cname">حيوانات</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'دين')"><div class="cicon">🕌</div><div class="cname">دين</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'رياضة')"><div class="cicon">🏅</div><div class="cname">رياضة</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'رياضيات')"><div class="cicon">➗</div><div class="cname">رياضيات</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'معلومات عامة')"><div class="cicon">🌍</div><div class="cname">معلومات عامة</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'شعارات الشركات')"><div class="cicon">🏷️</div><div class="cname">شعارات الشركات</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'عواصم الدول')"><div class="cicon">🏛️</div><div class="cname">عواصم الدول</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'خرائط وجغرافيا')"><div class="cicon">🗺️</div><div class="cname">خرائط وجغرافيا</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'علوم')"><div class="cicon">🔬</div><div class="cname">علوم</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'عملات')"><div class="cicon">🪙</div><div class="cname">عملات</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'عواصم')"><div class="cicon">🏛️</div><div class="cname">عواصم</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'فضاء وفلك')"><div class="cicon">🪐</div><div class="cname">فضاء وفلك</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'فن وأدب عالمي')"><div class="cicon">🎨</div><div class="cname">فن وأدب عالمي</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'كرة القدم')"><div class="cicon">⚽</div><div class="cname">كرة القدم</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'لغة عربية')"><div class="cicon">✍️</div><div class="cname">لغة عربية</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'معالم وسياحة')"><div class="cicon">🗿</div><div class="cname">معالم وسياحة</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'خمن الشعار')"><div class="cicon">🏷️</div><div class="cname">خمن الشعار</div></div>
     </div>
-    <div id="cat-hint" style="text-align:center;font-size:19px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.25);margin-top:10px;">اختر فئة واحدة على الأقل</div>
+    <div id="cat-hint" style="text-align:center;font-size:19px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.25);margin-top:10px;">اختر من ٦ إلى ١٢ فئة</div>
     <button class="btn btn-primary mt" id="create-btn" onclick="createRoom()" disabled>إنشاء الغرفة</button>
   </div>
 </div>
@@ -809,7 +842,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <!-- Question inside bordered box; question number bottom-left inside -->
     <div class="q-box">
       <div class="q-text" id="q-text" style="margin-bottom:0;">...</div>
-      <div class="q-num-inside" id="q-num">سؤال <span dir="ltr">1/12</span></div>
+      <div class="q-num-inside" id="q-num">سؤال <bdi>1</bdi>/<bdi>12</bdi></div>
     </div>
 
     <!-- Timer ring centered below question box -->
@@ -847,6 +880,12 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="maint-overlay" id="maint-overlay" role="alertdialog" aria-modal="true">
+  <div class="maint-box">
+    <div class="maint-icon" aria-hidden="true">🛠️</div>
+    <div class="maint-text" id="maint-text"></div>
+  </div>
+</div>
 
 <script>
 // ── Sounds ──────────────────────────────────────────────────────────────────
@@ -948,6 +987,13 @@ function show(id) {
   }
 }
 function showToast(msg,d=2500) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),d); }
+// Centered red frosted-glass overlay for maintenance rejections (tap the backdrop to dismiss).
+function showMaintenanceOverlay(msg) {
+  const ov=document.getElementById('maint-overlay');
+  document.getElementById('maint-text').textContent = msg || 'اللعبة قيد الصيانة حالياً، حاول لاحقاً';
+  ov.classList.add('show');
+  ov.onclick = (e)=>{ if(e.target===ov) ov.classList.remove('show'); };   // dismiss on backdrop tap
+}
 
 async function init() {
   if (!token) { show('s-login'); return; }
@@ -1062,6 +1108,8 @@ function connectSocket() {
   socket=io({auth:{token}});
   socket.on('connect_error',e=>showToast('خطأ: '+e.message));
   socket.on('error_msg',msg=>showToast('⚠️ '+msg));
+  // Maintenance rejections get a centered red overlay instead of the small toast.
+  socket.on('maintenance_blocked',msg=>showMaintenanceOverlay(msg));
 
   socket.on('room_created',({code,categories})=>{
     isHost=true; currentRoomCode=code;
@@ -1160,17 +1208,21 @@ function connectSocket() {
     step();
   }
 
-  socket.on('question',({index,total,question,options,points,phase,is_logo})=>{
+  socket.on('question',({index,total,question,options,points,phase,is_logo,is_image,images})=>{
     const phaseColors=[`var(--green)`,`var(--blue)`,`var(--red)`];
     const phaseNames=['سهل','متوسط','صعب'];
-    document.getElementById('q-num').innerHTML=`سؤال <span dir="ltr">${index}/${total}</span>`;
+    document.getElementById('q-num').innerHTML=`سؤال <bdi>${index}</bdi>/<bdi>${total}</bdi>`;
     document.getElementById('q-pts').textContent=`${points} نقطة`;
     const banner=document.getElementById('q-phase-banner');
     banner.textContent=`الجولة ${phase} - ${phaseNames[phase-1]||''}`;
     banner.style.background=phaseColors[phase-1]||'var(--green)';
 
     const logoBox=document.getElementById('logo-box'), qEl=document.getElementById('q-text');
-    if (is_logo) {
+    if (is_image) {
+      // Image-type (logo) question: fixed prompt, no description box.
+      logoBox.style.display='none';
+      qEl.textContent='ما هو الشعار الصحيح؟';
+    } else if (is_logo) {
       logoBox.style.display='block';
       logoBox.innerHTML=`<div style="background:rgba(255,255,255,0.8);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;text-align:center;border:1px solid rgba(255,255,255,0.5);"><div style="font-size:11px;color:var(--muted);margin-bottom:5px;">وصف الشعار</div><div style="font-size:14px;line-height:1.6;color:var(--text);">${question}</div></div>`;
       qEl.textContent='ما هي الشركة صاحبة هذا الشعار؟';
@@ -1185,16 +1237,21 @@ function connectSocket() {
     document.getElementById('report-btn').classList.remove('hidden');
     const _rm=document.getElementById('report-msg'); _rm.classList.remove('show','ok','err');
 
-    const colors=['opt-0','opt-1','opt-2','opt-3'];
-    const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
-    options.forEach((opt,i)=>{
-      const btn=document.createElement('button');
-      btn.className=`opt ${colors[i]}`;
-      btn.textContent=opt.replace(/^[أبجد]\. /,'');
-      btn.dataset.value=opt;
-      btn.onclick=()=>submitAnswer(opt);
-      optsEl.appendChild(btn);
-    });
+    if (is_image && Array.isArray(images)) {
+      // Image-type question: 2x2 logo tiles instead of colored text boxes.
+      buildImageTiles(images);
+    } else {
+      const colors=['opt-0','opt-1','opt-2','opt-3'];
+      const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
+      options.forEach((opt,i)=>{
+        const btn=document.createElement('button');
+        btn.className=`opt ${colors[i]}`;
+        btn.textContent=opt.replace(/^[أبجد]\. /,'');
+        btn.dataset.value=opt;
+        btn.onclick=()=>submitAnswer(opt);
+        optsEl.appendChild(btn);
+      });
+    }
     const timerRing=document.getElementById('timer-ring'), timerNum=document.getElementById('timer-el'), timerWrap=document.getElementById('timer-wrap');
     timerNum.textContent=15; timerNum.classList.remove('red'); timerRing.classList.remove('red'); timerWrap.classList.remove('pulse-once');
     timerRing.style.transition='none'; timerRing.style.strokeDashoffset='0'; void timerRing.offsetWidth;
@@ -1307,13 +1364,23 @@ function renderLB(elId,players){
 }
 
 function toggleCat(el,cat){
-  if(el.classList.contains('selected')){el.classList.remove('selected');selectedCats=selectedCats.filter(c=>c!==cat);}
-  else{el.classList.add('selected');selectedCats.push(cat);}
-  document.getElementById('cat-hint').textContent=selectedCats.length===0?'اختر فئة واحدة على الأقل':`${selectedCats.length} فئة محددة`;
-  document.getElementById('create-btn').disabled=selectedCats.length===0;
+  if(el.classList.contains('selected')){
+    el.classList.remove('selected'); selectedCats=selectedCats.filter(c=>c!==cat);
+  } else {
+    if(selectedCats.length>=12){ showToast('الحد الأقصى ١٢ فئة'); return; }   // can't select more than 12
+    el.classList.add('selected'); selectedCats.push(cat);
+  }
+  const n=selectedCats.length;
+  document.getElementById('cat-hint').textContent =
+    n===0 ? 'اختر من ٦ إلى ١٢ فئة' : (n<6 ? 'اختر ٦ فئات على الأقل' : `${n} فئة محددة`);
+  document.getElementById('create-btn').disabled = (n<6 || n>12);   // can start only with 6–12
 }
 
-function createRoom(){if(!socket||selectedCats.length===0)return;playSound('click');socket.emit('create_room',{categories:selectedCats});}
+function createRoom(){
+  if(!socket) return;
+  if(selectedCats.length<6 || selectedCats.length>12){ showToast('اختر من ٦ إلى ١٢ فئة'); return; }
+  playSound('click'); socket.emit('create_room',{categories:selectedCats});
+}
 function joinRoom(){
   const code=document.getElementById('j-code').value.trim();
   const errEl=document.getElementById('join-err'); errEl.style.display='none';
@@ -1323,6 +1390,22 @@ function joinRoom(){
 function toggleReady(){socket.emit('player_ready');playSound('click');}
 function startGame(){socket.emit('start_game');show('s-loading');playSound('click');}
 function submitAnswer(answer){lastPickedAnswer=answer;document.querySelectorAll('.opt').forEach(b=>b.disabled=true);socket.emit('submit_answer',{answer});}
+// Build the 2x2 image-tile answer grid for image-type (logo) questions. Tiles carry
+// the .opt base class + dataset.value (the image src) + submitAnswer, so the existing
+// correct/wrong reveal feedback (which selects .opt and matches dataset.value against
+// correct_answer) lights them up unchanged — same behavior as the colored boxes.
+function buildImageTiles(images){
+  const optsEl=document.getElementById('q-opts'); optsEl.innerHTML='';
+  images.forEach((src)=>{
+    const btn=document.createElement('button');
+    btn.className='opt opt-img';
+    btn.dataset.value=src;
+    const img=document.createElement('img'); img.src=src; img.alt='';
+    btn.appendChild(img);
+    btn.onclick=()=>submitAnswer(src);
+    optsEl.appendChild(btn);
+  });
+}
 function reportQuestion(){
   if(reportedThisQuestion || reportInFlight || !currentFlagQuestion) return;
   reportInFlight=true; // guard against double-tap while the request is in flight
