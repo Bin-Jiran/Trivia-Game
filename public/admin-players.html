@@ -70,9 +70,6 @@
     .btn-ban, .btn-demote{ background:var(--red); }
     .btn-unban, .btn-promote{ background:var(--green); }
 
-    .owner-note{ margin-top:11px; font-size:12.5px; font-weight:700; opacity:0.85; text-align:center;
-      padding:8px; border-radius:10px; background:rgba(255,255,255,0.08); border:1px dashed rgba(255,255,255,0.3); }
-
     /* Points editor (inline) */
     .pe-slot{ margin-top:11px; }
     .pe-row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
@@ -275,8 +272,6 @@
         }
       }
       if(actions.children.length) card.appendChild(actions);
-
-      if(isOwnerCard) card.appendChild(el('div','owner-note','لا يمكن تغيير صلاحيات المالك'));
 
       const slot = el('div','pe-slot'); slot.style.display = 'none'; card.appendChild(slot);
       return card;
