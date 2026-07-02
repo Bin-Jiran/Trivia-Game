@@ -293,11 +293,13 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* Image-in-question (classic path, e.g. flags): shown directly below the question box
    with NO box styling — transparent, no border/shadow/padding, just the flag itself.
-   Responsive display area (full card width; height clamped 96px–26vh–200px) so a tall
-   flag can never push the answer buttons off a phone screen; object-fit:contain scales
-   any flag ratio (2:1, 3:2, Qatar's wide 28:11) to fit fully, centered, no distortion. */
-.q-image { width:100%; height:clamp(96px, 26vh, 200px); margin:12px 0; background:transparent; border:none;
-  box-shadow:none; padding:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+   Uniform 2:1 frame: the clamp height (96px–26vh–200px, so answers never get pushed
+   off a phone screen) plus aspect-ratio derive one identical box for every flag;
+   object-fit:contain fits wider (Qatar), squarer (Switzerland, Vatican) and Nepal
+   inside with small margins, centered, never distorted. max-width guards narrow screens. */
+.q-image { height:clamp(96px, 26vh, 200px); aspect-ratio:2/1; width:auto; max-width:100%;
+  margin:12px auto; background:transparent; border:none; box-shadow:none; padding:0;
+  display:flex; align-items:center; justify-content:center; overflow:hidden; }
 .q-image > img { width:100%; height:100%; object-fit:contain; }
 
 /* Question text */
