@@ -60,6 +60,7 @@ async function initDB() {
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT FALSE');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolution TEXT');
+  await pool.query('ALTER TABLE questions ADD COLUMN IF NOT EXISTS image_url TEXT');
   console.log('✅ Database ready');
 
   // The ADMIN_EMAIL account is the OWNER: it is both admin and super-admin. Idempotent —
@@ -559,11 +560,11 @@ function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=
 function mapQuestionRow(row){
   const choices = [row.choice1, row.choice2, row.choice3, row.choice4];
   if (row.is_image) {
-    return { id: row.id, question: row.question, images: shuffle(choices), answer: row.answer, is_image: true };
+    return { id: row.id, question: row.question, images: shuffle(choices), answer: row.answer, is_image: true, image_url: row.image_url };
   }
   // Text: reuse the existing shuffle (also re-applies the أ/ب/ج/د prefixes), matched by value.
   const s = shuffleOptions(choices, row.answer);
-  return { id: row.id, question: row.question, options: s.options, answer: s.answer, is_image: false };
+  return { id: row.id, question: row.question, options: s.options, answer: s.answer, is_image: false, image_url: row.image_url };
 }
 
 // Available question count per category at one difficulty, excluding already-used IDs.
@@ -586,7 +587,7 @@ async function queryQuestions(categories, difficulty, count, usedArr){
   if (count <= 0) return [];
   try {
     const r = await pool.query(
-      `SELECT id, is_image, question, choice1, choice2, choice3, choice4, answer
+      `SELECT id, is_image, question, choice1, choice2, choice3, choice4, answer, image_url
          FROM questions
         WHERE active AND difficulty = $1 AND category = ANY($2::text[]) AND id <> ALL($3::int[])
         ORDER BY random() LIMIT $4`,
@@ -819,7 +820,8 @@ function askQuestion(code) {
     question:q.question, options:q.options, points:pts, phase:room.phase+1,
     is_logo:q.logo_question||false,
     is_image:q.is_image||false,
-    images:q.images||null
+    images:q.images||null,
+    image_url:q.image_url||null
   });
   let timeLeft = 15;
   io.to(code).emit('timer', { seconds:timeLeft });
