@@ -554,6 +554,8 @@ async function generateQuestions(categories, difficulty, count = 12) {
 // Fisher–Yates copy — randomizes the 4 image tile positions (text uses shuffleOptions).
 function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 // Map a DB row to the internal question object the game already emits. `id` is kept for
 // per-game no-repeat tracking (never emitted). The four positions are shuffled;
 // correctness stays BY VALUE (the `answer` column), so the shuffle never affects scoring.
@@ -568,33 +570,59 @@ function mapQuestionRow(row){
 }
 
 // Available question count per category at one difficulty, excluding already-used IDs.
-async function availabilityByCategory(categories, difficulty, usedArr){
+// One retry after 300ms on error; a second failure logs loudly (room/diff/cats) and
+// falls back to an empty map — the round then degrades exactly as it always did.
+async function availabilityByCategory(categories, difficulty, usedArr, ctx = {}){
   const m = new Map();
-  try {
-    const r = await pool.query(
-      `SELECT category, COUNT(*)::int AS cnt FROM questions
+  for (let attempt = 1; attempt <= 2; attempt++){
+    try {
+      const r = await pool.query(
+        `SELECT category, COUNT(*)::int AS cnt FROM questions
         WHERE active AND difficulty = $1 AND category = ANY($2::text[]) AND id <> ALL($3::int[])
         GROUP BY category`,
-      [difficulty, categories, usedArr]
-    );
-    for (const row of r.rows) m.set(row.category, row.cnt);
-  } catch (e) { console.error('availability query failed:', e.message); }
+        [difficulty, categories, usedArr]
+      );
+      for (const row of r.rows) m.set(row.category, row.cnt);
+      return m;
+    } catch (e) {
+      if (attempt === 1){
+        console.log(`⚠️ availabilityByCategory failed, retrying in 300ms [room=${ctx.code || '?'}, diff=${difficulty}]: ${e.message}`);
+        await sleep(300);
+      } else {
+        console.error(`❌ availabilityByCategory failed twice [room=${ctx.code || '?'}, diff=${difficulty}, cats=${categories.join('،')}]: ${e.message}`);
+        if (ctx.failures) ctx.failures.push(`availabilityByCategory(${difficulty})`);
+      }
+    }
+  }
   return m;
 }
 
 // Randomly pick `count` rows from the given categories at one difficulty, excluding used IDs.
-async function queryQuestions(categories, difficulty, count, usedArr){
+// One retry after 300ms on error; a second failure logs loudly (room/diff/cats) and
+// falls back to [] — the round then degrades exactly as it always did.
+async function queryQuestions(categories, difficulty, count, usedArr, ctx = {}){
   if (count <= 0) return [];
-  try {
-    const r = await pool.query(
-      `SELECT id, is_image, question, choice1, choice2, choice3, choice4, answer, image_url
+  for (let attempt = 1; attempt <= 2; attempt++){
+    try {
+      const r = await pool.query(
+        `SELECT id, is_image, question, choice1, choice2, choice3, choice4, answer, image_url
          FROM questions
         WHERE active AND difficulty = $1 AND category = ANY($2::text[]) AND id <> ALL($3::int[])
         ORDER BY random() LIMIT $4`,
-      [difficulty, categories, usedArr, count]
-    );
-    return r.rows.map(mapQuestionRow);
-  } catch (e) { console.error('queryQuestions failed:', e.message); return []; }
+        [difficulty, categories, usedArr, count]
+      );
+      return r.rows.map(mapQuestionRow);
+    } catch (e) {
+      if (attempt === 1){
+        console.log(`⚠️ queryQuestions failed, retrying in 300ms [room=${ctx.code || '?'}, diff=${difficulty}, cats=${categories.join('،')}]: ${e.message}`);
+        await sleep(300);
+      } else {
+        console.error(`❌ queryQuestions failed twice [room=${ctx.code || '?'}, diff=${difficulty}, cats=${categories.join('،')}]: ${e.message}`);
+        if (ctx.failures) ctx.failures.push(`queryQuestions(${categories.join('،')}/${difficulty})`);
+      }
+    }
+  }
+  return [];
 }
 
 // Weighted allocation of `need` slots across the selected categories:
@@ -617,21 +645,31 @@ function allocateSlots(categories, availMap, need){
 // Build one difficulty round: weight 12 questions across the selected categories,
 // excluding IDs already used this game, then (only if enabled, should never happen now)
 // fill any genuine shortfall from the AI generator. Mutates `usedIds` with what it picks.
-async function buildRound(categories, difficulty, usedIds){
+async function buildRound(categories, difficulty, usedIds, ctx = {}){
   const need = QUESTIONS_PER_ROUND[difficulty];
   const used = [...usedIds];
-  const availMap = await availabilityByCategory(categories, difficulty, used);
+  const availMap = await availabilityByCategory(categories, difficulty, used, ctx);
   const alloc = allocateSlots(categories, availMap, need);
   const picks = await Promise.all(
     categories.filter(c => alloc.get(c) > 0)
-              .map(c => queryQuestions([c], difficulty, alloc.get(c), used))
+              .map(c => queryQuestions([c], difficulty, alloc.get(c), used, ctx))
   );
   let questions = picks.flat();
   questions.forEach(q => { if (q.id != null) usedIds.add(q.id); });   // AI-fallback rows have no id
   if (AI_FALLBACK_ENABLED && questions.length < need) {
     const gap = need - questions.length;
-    try { questions = questions.concat(await generateQuestions(categories, difficulty, gap)); }
-    catch (e) { console.error('AI fallback failed:', e.message); }
+    let aiCount = 0;
+    try {
+      const ai = await generateQuestions(categories, difficulty, gap);
+      aiCount = ai.length;
+      questions = questions.concat(ai);
+    }
+    catch (e) { console.error(`❌ AI fallback failed [room=${ctx.code || '?'}, diff=${difficulty}]: ${e.message}`); }
+    // Fallback usage is always visible in logs, even without a DB error (thin bucket).
+    console.log(`ℹ️ AI fallback filled ${aiCount}/${gap} gap of ${need} [room=${ctx.code || '?'}, diff=${difficulty}, cats=${categories.join('،')}]`);
+    if (ctx.failures && ctx.failures.length){
+      console.error(`❌ Round gap after DB failure [room=${ctx.code || '?'}, diff=${difficulty}] failed=[${ctx.failures.join(', ')}] aiFilled=${aiCount}/${gap}`);
+    }
   }
   return shuffle(questions);   // interleave categories instead of grouping them
 }
@@ -720,9 +758,10 @@ io.on('connection', socket => {
       // One per-game used-ID set, threaded through all three rounds so no question
       // repeats (built sequentially so each round excludes earlier rounds' picks).
       const usedIds = new Set();
-      const easy   = await buildRound(room.categories, 'easy',   usedIds);
-      const medium = await buildRound(room.categories, 'medium', usedIds);
-      const hard   = await buildRound(room.categories, 'hard',   usedIds);
+      const ctx = { code, failures: [] };   // threads the room code into retry/fallback logs
+      const easy   = await buildRound(room.categories, 'easy',   usedIds, ctx);
+      const medium = await buildRound(room.categories, 'medium', usedIds, ctx);
+      const hard   = await buildRound(room.categories, 'hard',   usedIds, ctx);
       room.allQuestions = { easy, medium, hard };
       room.status = 'playing'; room.phase = 0;
       startPhase(code);
