@@ -20,8 +20,9 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true';
 
 // Questions come from the Supabase `questions` table. AI generation is now only a
-// gap-filler for short rounds — flip AI_FALLBACK_ENABLED to false once the bank is full.
-const AI_FALLBACK_ENABLED = true;
+// gap-filler for short rounds. Defaults ON; set the AI_FALLBACK_ENABLED env var to the
+// literal string 'false' (in Render's Environment tab) to disable it.
+const AI_FALLBACK_ENABLED = process.env.AI_FALLBACK_ENABLED !== 'false';
 const QUESTIONS_PER_ROUND = { easy: 12, medium: 12, hard: 12 };
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
