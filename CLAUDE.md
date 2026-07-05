@@ -25,8 +25,8 @@ I'm a beginner. Explain what you're doing and why, in plain language, before eac
 
 ## Environment
 - MAINTENANCE_MODE lives in Render's Environment tab; the local `.env` has no effect on the live site. Only the literal lowercase string `true` enables it.
-- AI_FALLBACK_ENABLED is hardcoded `true` at server.js:24 (not an env var).
-- The خمن الشعار tile has 0 DB rows — it is served ONLY by the AI fallback.
+- AI_FALLBACK_ENABLED is env-driven (`process.env.AI_FALLBACK_ENABLED !== 'false'`, default ON); the live value is set in Render's Environment tab.
+- The خمن الشعار tile was removed at commit 96316a2 (0 DB rows, was AI-fallback-served); restore it from git history when the logo category gets real content.
 
 ## Round contract
 - 12 questions per round; per-category base 1, cap 2; NO cross-category top-up — gaps go to the AI fallback or the round runs short.
