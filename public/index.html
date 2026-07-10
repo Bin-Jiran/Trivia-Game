@@ -301,6 +301,10 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
   margin:12px auto; background:transparent; border:none; box-shadow:none; padding:0;
   display:flex; align-items:center; justify-content:center; overflow:hidden; }
 .q-image > img { width:100%; height:100%; object-fit:contain; }
+/* Club crests are square artwork: 1:1 frame instead of the 2:1 flag frame. Same clamp
+   height and contain behavior — only the aspect ratio changes. Toggled per-question in
+   JS by the /crests/ image_url prefix. */
+.q-image.crest-frame { aspect-ratio:1/1; }
 
 /* Question text */
 .q-text { font-size:18px; font-weight:700; text-align:center; line-height:1.5; min-height:52px; color:var(--text); }
@@ -769,6 +773,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
       <div class="cat-opt" onclick="toggleCat(this,'فضاء وفلك')"><div class="cicon">🪐</div><div class="cname">فضاء وفلك</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'فن وأدب عالمي')"><div class="cicon">🎨</div><div class="cname">فن وأدب عالمي</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'كرة القدم')"><div class="cicon">⚽</div><div class="cname">كرة القدم</div></div>
+      <div class="cat-opt" onclick="toggleCat(this,'شعارات كروية')"><div class="cicon">🛡️</div><div class="cname">شعارات كروية</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'لغة عربية')"><div class="cicon">✍️</div><div class="cname">لغة عربية</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'معالم وسياحة')"><div class="cicon">🗿</div><div class="cname">معالم وسياحة</div></div>
       <div class="cat-opt" onclick="toggleCat(this,'أزياء وموضة')"><div class="cicon">👗</div><div class="cname">أزياء وموضة</div></div>
@@ -1252,8 +1257,10 @@ function connectSocket() {
     // the question box when image_url is set; otherwise keep it hidden so plain text
     // questions look exactly as before. Independent of the is_image 2x2-tile feature.
     const qImage=document.getElementById('q-image'), qImageImg=document.getElementById('q-image-img');
-    if (image_url) { qImageImg.src=image_url; qImage.style.display='flex'; }
-    else { qImage.style.display='none'; qImageImg.removeAttribute('src'); }
+    // crest-frame must be toggled BOTH ways: added for /crests/ images, removed for
+    // anything else — otherwise a flag shown after a crest keeps the square frame.
+    if (image_url) { qImageImg.src=image_url; qImage.classList.toggle('crest-frame', image_url.startsWith('/crests/')); qImage.style.display='flex'; }
+    else { qImage.style.display='none'; qImageImg.removeAttribute('src'); qImage.classList.remove('crest-frame'); }
 
     document.getElementById('q-result').style.display='none';
     document.getElementById('q-result').textContent='';
