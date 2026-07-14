@@ -19,12 +19,13 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 
 ## New-tile workflow
 - Add the tile in `public/index.html` (`cat-opt` div: `toggleCat(this,'NAME')` + `cname` label must be identical).
-- The category grid is currently 28 tiles — keep this number in sync when adding/removing tiles.
+- The category grid is currently 29 tiles — keep this number in sync when adding/removing tiles.
 - Verify by extracting the string FROM THE FILE (never retype it) and querying the DB with the extracted string — expect the exact known row count before committing.
 - Arabic tile↔DB category strings must match byte-for-byte; never trust terminal display of Arabic (RTL reordering lies) — verify by code points or a DB query.
 
 ## Content conventions
 - أنمي: one category (per-title split rejected); every question carries its title, convention «في {Title}، …»; a future split is a prefix-match relabel. Character-image questions will NOT name the anime. Titles/character/technique names in English, question text in Arabic.
+- كرتون: nostalgia cartoons for the Gulf audience up to the 2000s generation. Arabic DUBBED names throughout (titles and characters) — the English-titles rule of أنمي explicitly does NOT apply here. Question prefix «في كرتون {الاسم}،». Image-backed BY DESIGN — append-only forever, even while text-only. No theme-song lyrics reproduction, ever. Overlap guard: shows covered in أنمي (currently Hunter x Hunter, Dragon Ball, Pokémon, and any future additions) must never appear in كرتون and vice versa.
 - Answer and its three distractors always use the same language/spelling per row.
 - أساطير: answers and distractors in English (names); meaning-answers may stay Arabic.
 - قصص الأنبياء covers past prophets only; سيرة النبي محمد ﷺ stays in دين. Sourcing: Quranic narrative and mainstream tafsir only.
