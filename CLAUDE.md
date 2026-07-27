@@ -10,18 +10,16 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - The Excel master (`C:/Users/aljir/Trivia-Data/Question-Bank/`) is the single source of truth. ANY master edit requires a database sync, or master and live silently diverge.
 - Master format: answers as letters A–D, difficulty in Arabic (سهل/متوسط/صعب). Supabase format: answers as full text, difficulty in English (easy/medium/hard). Every load converts both.
 - `image_url` column: NULL = text question; a path (e.g. `/flags/kw.svg`) = classic image-in-question rendering. `is_image=true` is the separate (unused) 2×2 tile feature — never set both on one row.
+- Never trust terminal display of Arabic strings (RTL reordering lies) — verify by code points or a DB query.
 
 ## Load patterns
-- All content loads are single-transaction SQL: BEGIN/COMMIT with a guard block (DO $$) that aborts on any count or integrity mismatch (answer must equal one of the four choices).
+- Content loads (new categories, bulk inserts, master→DB syncs) always follow the content-loader skill.
 - Category delete+reload is PERMANENTLY FORBIDDEN for أنمي once image rows exist — use append-only or targeted-UPDATE loaders after that point.
-- Never re-run a spent INSERT file (it duplicates rows). Delete SQL files from the repo after running them.
-- Check generated SQL for real newlines before running — a literal `\n`-artifact file caused a syntax failure once.
+- Spent INSERT files must never be re-run (it duplicates rows) — the content-loader skill handles this and file cleanup.
 
 ## New-tile workflow
-- Add the tile in `public/index.html` (`cat-opt` div: `toggleCat(this,'NAME')` + `cname` label must be identical).
+- Adding a category tile follows the new-tile skill (byte-exact insertion + DB verification).
 - The category grid is currently 29 tiles — keep this number in sync when adding/removing tiles.
-- Verify by extracting the string FROM THE FILE (never retype it) and querying the DB with the extracted string — expect the exact known row count before committing.
-- Arabic tile↔DB category strings must match byte-for-byte; never trust terminal display of Arabic (RTL reordering lies) — verify by code points or a DB query.
 
 ## Content conventions
 - أنمي: one category (per-title split rejected); every question carries its title, convention «في {Title}، …»; a future split is a prefix-match relabel. Character-image questions will NOT name the anime. Titles/character/technique names in English, question text in Arabic.
