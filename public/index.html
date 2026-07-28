@@ -214,13 +214,15 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 
 /* ── Players list ── */
 .players-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0; }
-.code-box { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22); border-radius: var(--radius-sm); padding: 18px; text-align: center; margin: 12px 0 16px; }
-.code-box .code-label { font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); margin-bottom: 6px; }
-.code-box .code-num { font-size: 48px; font-weight: 800; letter-spacing: 8px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+.code-box { background: rgba(0,0,0,0.16); border: 1px solid rgba(255,255,255,0.22); border-radius: var(--radius-sm); padding: 10px; text-align: center; margin: 12px 0 16px; }
+.code-box .code-label { font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); margin-bottom: 3px; }
+.code-box .code-num { font-size: 30px; font-weight: 800; letter-spacing: 5px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+/* ── Lobby: selected-categories thumbnails, visible to every player ── */
+.lobby-cats-title { text-align: center; font-size: 15px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); margin: 14px 0 8px; }
+.lobby-cats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.lobby-cat-thumb { position: relative; border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.15); }
+.lobby-cat-thumb img { width: 100%; height: auto; aspect-ratio: 980 / 1490; object-fit: contain; display: block; }
 .players-title { text-align: center; font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.3); margin: 6px 0 12px; }
-.btn-ready-green { background: var(--green); box-shadow: 0 4px 0 var(--green-d); color: #fff; }
-.btn-ready-red { background: var(--red); box-shadow: 0 4px 0 var(--red-d); color: #fff; }
-.badge-notready { background: var(--red); color: #fff; border: 2px solid #fff; border-radius: 8px; padding: 4px 12px; font-size: 13px; font-weight: 700; }
 .player-card { background: rgba(255,255,255,0.7); border-radius: var(--radius-sm); padding: 14px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.6); }
 .player-card .emo { font-size: 26px; }
 .player-card img { width: 50px; height: 50px; flex-shrink: 0; }
@@ -228,16 +230,71 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .player-card .name { flex: 1; font-size: 18px; font-weight: 700; }
 .player-card .lvl { font-size: 12px; color: var(--muted); }
 .badge-host { background: var(--blue); color: #fff; border: 2px solid #fff; border-radius: 8px; padding: 4px 12px; font-size: 13px; font-weight: 700; }
-.badge-ready { background: var(--green); color: #fff; border: 2px solid #fff; border-radius: 8px; padding: 4px 12px; font-size: 13px; font-weight: 700; }
 
-/* ── Category grid ── */
-.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 10px 0; }
-.cat-opt { background: rgba(255,255,255,0.6); border: 2px solid rgba(255,255,255,0.5); border-radius: var(--radius-sm); padding: 12px; cursor: pointer; text-align: center; transition: all 0.2s; position: relative; }
-.cat-opt:hover { border-color: rgba(255,255,255,0.6); }
-.cat-opt.selected { border-color: var(--blue); background: rgba(58,171,219,0.1); }
-.cat-opt.selected::after { content:'✓'; position:absolute; top:6px; left:8px; background:#fff; color:#5BBD4E; border-radius:50%; width:18px; height:18px; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:700; }
-.cat-opt .cicon { font-size: 24px; margin-bottom: 3px; }
-.cat-opt .cname { font-size: 12px; font-weight: 600; color: var(--text); }
+/* ── Host-editing indicator (non-host lobby view only) ── */
+.lobby-editing-hint { display: none; text-align: center; font-size: 13px; font-weight: 700; color: #fff; opacity: 0.9; margin: -2px 0 8px; }
+.lobby-editing-hint.show { display: block; }
+.lobby-editing-hint .dots i { display: inline-block; width: 4px; height: 4px; margin-inline-start: 2px; border-radius: 50%; background: #fff; opacity: 0.3; animation: dotPulse 1.2s infinite ease-in-out; font-style: normal; }
+.lobby-editing-hint .dots i:nth-child(2) { animation-delay: 0.2s; }
+.lobby-editing-hint .dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dotPulse { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+.lobby-cats-grid { transition: opacity 0.2s; }
+.lobby-cats-grid.editing { opacity: 0.5; }
+
+/* ── Category grid (image cards) ── */
+.cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.cat-card { position: relative; border-radius: 10px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,0.15); transition: opacity 0.2s, filter 0.2s, transform 0.1s; }
+.cat-card:active { transform: scale(0.97); }
+.cat-card img { width: 100%; height: auto; aspect-ratio: 980 / 1490; object-fit: contain; display: block; }
+.cat-card.selected { box-shadow: 0 0 0 4px #5BBD4E inset; }
+.cat-card .cat-badge { position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; border-radius: 50%; background: #5BBD4E; color: #fff; font-weight: 800; font-size: 13px; display: none; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+.cat-card.selected .cat-badge { display: flex; }
+/* At the 12-selection cap, dim+grayscale unselected cards so the limit is visible before tapping a 13th */
+.cat-grid.maxed .cat-card:not(.selected) { opacity: 0.4; filter: grayscale(1); }
+
+/* ── Selected tray (fixed footer above the bottom nav) ── */
+.cat-footer { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 998; max-width: 520px; margin: 0 auto;
+  background: rgba(20,20,30,0.75); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(255,255,255,0.25); border-radius: 18px 18px 0 0;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -6px 20px rgba(0,0,0,0.25); }
+.cat-footer.show { display: block; }
+.cat-footer-hint { display: none; text-align: center; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.85); margin-bottom: 6px; }
+.cat-footer-hint.show { display: block; }
+.cat-tray { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.cat-tray:not(:empty) { margin-bottom: 10px; }
+.cat-tray-thumb { position: relative; border-radius: 8px; overflow: hidden; cursor: pointer; }
+.cat-tray-thumb img { width: 100%; height: auto; aspect-ratio: 980 / 1490; object-fit: contain; display: block; }
+.cat-tray-thumb .cat-badge { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #5BBD4E; color: #fff; font-weight: 800; font-size: 9px; display: flex; align-items: center; justify-content: center; border: 1.5px solid #fff; }
+/* Extra bottom padding on the create screen so the grid can scroll clear of the (up to 2-row) tray + button — no bottom nav here */
+#s-create { padding-bottom: 280px; }
+
+/* ── In-game back button (matches admin-players.html's .back pill) ── */
+.game-back { display: none; position: fixed; top: 16px; left: 16px; z-index: 999; align-items: center; gap: 6px;
+  padding: 7px 11px; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+  font-family: var(--font); background: #E8472A; border: 1.5px solid #fff; border-radius: 16px; }
+.game-back:active { transform: scale(0.97); }
+.game-back svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.game-back.show { display: inline-flex; }
+
+/* ── Max-selection popup: centered, non-blocking, auto-dismissing ── */
+.max-popup { position: fixed; inset: 0; z-index: 1001; display: flex; align-items: center; justify-content: center;
+  padding: 26px; pointer-events: none; opacity: 0; transition: opacity 0.25s; }
+.max-popup.show { opacity: 1; }
+.max-popup-box { max-width: 320px; text-align: center; background: rgba(20,20,30,0.92); border: 3px solid #E8472A; border-radius: 14px;
+  padding: 16px 22px; color: #fff; font-weight: 800; font-size: 15px; box-shadow: 0 12px 30px rgba(0,0,0,0.4); }
+
+/* ── Leave-room confirmation: blocking overlay, no auto-dismiss ── */
+.confirm-overlay { display: none; position: fixed; inset: 0; z-index: 1002; align-items: center; justify-content: center;
+  padding: 26px; background: rgba(0,0,0,0.5); }
+.confirm-overlay.show { display: flex; }
+.confirm-box { max-width: 320px; width: 100%; text-align: center; background: rgba(20,20,30,0.95); border: 3px solid #E8472A;
+  border-radius: 14px; padding: 20px 22px; color: #fff; box-shadow: 0 12px 30px rgba(0,0,0,0.4); }
+.confirm-text { font-weight: 800; font-size: 15px; margin-bottom: 16px; }
+.confirm-actions { display: flex; gap: 10px; }
+.confirm-btn { flex: 1; padding: 11px; border-radius: var(--radius-sm); font-weight: 700; font-size: 14px; cursor: pointer; border: none; font-family: var(--font); transition: transform 0.1s; }
+.confirm-btn:active { transform: scale(0.97); }
+.confirm-btn-safe { background: var(--blue); color: #fff; }
+.confirm-btn-danger { background: #E8472A; color: #fff; }
 
 /* ── Question layout ── */
 .q-wrapper { margin-top: 8px; display: flex; flex-direction: column; }
@@ -541,10 +598,6 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 #s-shop .ti { color: rgba(255,255,255,0.9) !important; }
 
 /* Lobby / create / join chips -> glass */
-/* Category tiles: dark frosted glass by default, solid green (#5BBD4E) when selected. */
-.cat-opt { background: rgba(20,20,30,0.55); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); border-color: rgba(255,255,255,0.25); }
-.cat-opt.selected { background: #5BBD4E; border-color: #fff; }
-.cat-opt .cname { color: #fff; }
 .player-card { background: rgba(0,0,0,0.16); border-color: rgba(255,255,255,0.22); }
 
 /* Gameplay readability on transparent */
@@ -706,7 +759,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div class="howto-box">
       <div class="howto-item"><div class="howto-num">1</div><div>أنشئ غرفة واختر فئة أو أكثر للأسئلة</div></div>
       <div class="howto-item"><div class="howto-num">2</div><div>شارك كود الغرفة مع أصدقائك</div></div>
-      <div class="howto-item"><div class="howto-num">3</div><div>عندما يصبح الجميع جاهزاً، إبدأ اللعب</div></div>
+      <div class="howto-item"><div class="howto-num">3</div><div>يبدأ المضيف اللعبة فوراً متى شاء</div></div>
       <div class="howto-item"><div class="howto-num">4</div><div>لديك 15 ثانية للإجابة على السؤال</div></div>
       <div class="howto-item"><div class="howto-num">5</div><div>تتكون اللعبة من 3 جولات متدرجة، تبدء من سهل إلى متوسط إلى صعب</div></div>
       <div class="howto-item"><div class="howto-num">6</div><div>تحتوي كل جولة على 12 سؤال</div></div>
@@ -747,43 +800,49 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 <!-- CREATE ROOM -->
 <div id="s-create" class="screen">
   <div class="scr-head">
-    <h2>إنشاء غرفة</h2>
+    <h2>اختر الفئات</h2>
+    <p>اختر من 6 إلى 12 فئة</p>
   </div>
   <div class="card">
-    <div class="section-title">اختر الفئات</div>
-    <div class="cat-grid">
-      <div class="cat-opt" onclick="toggleCat(this,'أساطير')"><div class="cicon">🐉</div><div class="cname">أساطير</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'أنمي')"><div class="cicon">🎌</div><div class="cname">أنمي</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'بباي الطيبين')"><div class="cicon">📺</div><div class="cname">بباي الطيبين</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'دول وسياحة')"><div class="cicon">🚩</div><div class="cname">دول وسياحة</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'أعلام')"><div class="cicon">🏳️</div><div class="cname">أعلام</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'الكويت')"><div class="cicon">🇰🇼</div><div class="cname">الكويت</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'تاريخ')"><div class="cicon">📜</div><div class="cname">تاريخ</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'تكنولوجيا واختراعات')"><div class="cicon">💡</div><div class="cname">تكنولوجيا واختراعات</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'جسم الإنسان')"><div class="cicon">🫀</div><div class="cname">جسم الإنسان</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'جغرافيا')"><div class="cicon">🗺️</div><div class="cname">جغرافيا</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'عالم الحيوان')"><div class="cicon">🐾</div><div class="cname">عالم الحيوان</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'إسلامي')"><div class="cicon">🕌</div><div class="cname">إسلامي</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'قصص الأنبياء')"><div class="cicon">📖</div><div class="cname">قصص الأنبياء</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'رياضة')"><div class="cicon">🏅</div><div class="cname">رياضة</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'رياضيات')"><div class="cicon">➗</div><div class="cname">رياضيات</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'معلومات عامة')"><div class="cicon">🌍</div><div class="cname">معلومات عامة</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'علوم')"><div class="cicon">🔬</div><div class="cname">علوم</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'عملات')"><div class="cicon">🪙</div><div class="cname">عملات</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'عواصم')"><div class="cicon">🏛️</div><div class="cname">عواصم</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'فضاء وفلك')"><div class="cicon">🪐</div><div class="cname">فضاء وفلك</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'فن وأدب')"><div class="cicon">🎨</div><div class="cname">فن وأدب</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'كرة القدم')"><div class="cicon">⚽</div><div class="cname">كرة القدم</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'شعارات كروية')"><div class="cicon">🛡️</div><div class="cname">شعارات كروية</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'اللغة العربية')"><div class="cicon">✍️</div><div class="cname">اللغة العربية</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'أزياء وموضة')"><div class="cicon">👗</div><div class="cname">أزياء وموضة</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'أكلات كويتية')"><div class="cicon">🍲</div><div class="cname">أكلات كويتية</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'عود وعطور')"><div class="cicon">🌸</div><div class="cname">عود وعطور</div></div>
-      <div class="cat-opt" onclick="toggleCat(this,'مكياج')"><div class="cicon">💄</div><div class="cname">مكياج</div></div>
+    <div class="cat-grid" id="cat-grid">
+      <div class="cat-card" onclick="toggleCat(this,'أساطير')" data-cat="أساطير"><img src="/categories/myths.webp" alt="أساطير" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'أنمي')" data-cat="أنمي"><img src="/categories/anime.webp" alt="أنمي" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'بباي الطيبين')" data-cat="بباي الطيبين"><img src="/categories/cartoons.webp" alt="بباي الطيبين" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'دول وسياحة')" data-cat="دول وسياحة"><img src="/categories/countries.webp" alt="دول وسياحة" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'أعلام')" data-cat="أعلام"><img src="/categories/flags.webp" alt="أعلام" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'الكويت')" data-cat="الكويت"><img src="/categories/kuwait.webp" alt="الكويت" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'تاريخ')" data-cat="تاريخ"><img src="/categories/history.webp" alt="تاريخ" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'تكنولوجيا واختراعات')" data-cat="تكنولوجيا واختراعات"><img src="/categories/tech.webp" alt="تكنولوجيا واختراعات" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'جسم الإنسان')" data-cat="جسم الإنسان"><img src="/categories/body.webp" alt="جسم الإنسان" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'جغرافيا')" data-cat="جغرافيا"><img src="/categories/geography.webp" alt="جغرافيا" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'عالم الحيوان')" data-cat="عالم الحيوان"><img src="/categories/animals.webp" alt="عالم الحيوان" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'إسلامي')" data-cat="إسلامي"><img src="/categories/islamic.webp" alt="إسلامي" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'قصص الأنبياء')" data-cat="قصص الأنبياء"><img src="/categories/prophets.webp" alt="قصص الأنبياء" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'رياضة')" data-cat="رياضة"><img src="/categories/sports.webp" alt="رياضة" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'رياضيات')" data-cat="رياضيات"><img src="/categories/math.webp" alt="رياضيات" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'معلومات عامة')" data-cat="معلومات عامة"><img src="/categories/general.webp" alt="معلومات عامة" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'علوم')" data-cat="علوم"><img src="/categories/science.webp" alt="علوم" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'عملات')" data-cat="عملات"><img src="/categories/currencies.webp" alt="عملات" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'عواصم')" data-cat="عواصم"><img src="/categories/capitals.webp" alt="عواصم" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'فضاء وفلك')" data-cat="فضاء وفلك"><img src="/categories/space.webp" alt="فضاء وفلك" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'فن وأدب')" data-cat="فن وأدب"><img src="/categories/art.webp" alt="فن وأدب" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'كرة القدم')" data-cat="كرة القدم"><img src="/categories/football.webp" alt="كرة القدم" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'شعارات كروية')" data-cat="شعارات كروية"><img src="/categories/crests.webp" alt="شعارات كروية" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'اللغة العربية')" data-cat="اللغة العربية"><img src="/categories/arabic.webp" alt="اللغة العربية" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'أزياء وموضة')" data-cat="أزياء وموضة"><img src="/categories/fashion.webp" alt="أزياء وموضة" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'أكلات كويتية')" data-cat="أكلات كويتية"><img src="/categories/food.webp" alt="أكلات كويتية" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'عود وعطور')" data-cat="عود وعطور"><img src="/categories/perfume.webp" alt="عود وعطور" loading="lazy"><div class="cat-badge"></div></div>
+      <div class="cat-card" onclick="toggleCat(this,'مكياج')" data-cat="مكياج"><img src="/categories/makeup.webp" alt="مكياج" loading="lazy"><div class="cat-badge"></div></div>
     </div>
-    <div id="cat-hint" style="text-align:center;font-size:19px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.25);margin-top:10px;">اختر من ٦ إلى ١٢ فئة</div>
-    <button class="btn btn-primary mt" id="create-btn" onclick="createRoom()" disabled>إنشاء الغرفة</button>
   </div>
+</div>
+
+<!-- Selected-categories tray + create button — page-level (not nested in .screen) so the
+     screen enter/exit transform never hijacks its position:fixed containing block. -->
+<div class="cat-footer" id="cat-footer">
+  <div class="cat-footer-hint" id="cat-footer-hint">اضغط أي بطاقة بالأسفل لإزالتها</div>
+  <div class="cat-tray" id="cat-tray"></div>
+  <button class="btn btn-primary" id="create-btn" onclick="createRoom()" disabled>اختر 6 فئات إضافية</button>
 </div>
 
 <!-- JOIN ROOM -->
@@ -807,16 +866,15 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div class="code-label">كود مشاركة الغرفة</div>
     <div class="code-num" id="lobby-code">----</div>
   </div>
-  <span id="lobby-cats" style="display:none;"></span>
   <div class="card">
     <div class="players-title">اللاعبين</div>
     <div class="players-list" id="lobby-players"></div>
+    <div class="lobby-cats-title">الفئات المختارة</div>
+    <div class="lobby-editing-hint" id="lobby-editing-hint">ثواني قاعد أغير الفئات<span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="lobby-cats-grid" id="lobby-cats-grid"></div>
   </div>
   <div id="lobby-host-btn" style="display:none;">
-    <button class="btn btn-success" id="start-btn" onclick="startGame()" disabled>بإنتظار باقي اللاعبين</button>
-  </div>
-  <div id="lobby-ready-btn" style="display:none;">
-    <button class="btn btn-ready-green" id="ready-btn" onclick="toggleReady()">جاهز</button>
+    <button class="btn btn-success" id="start-btn" onclick="startGame()" disabled>▶ ابدأ اللعبة!</button>
   </div>
 </div>
 
@@ -905,6 +963,24 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 </div>
 
 <div class="toast" id="toast"></div>
+<button class="game-back" id="game-back-btn" type="button" aria-label="رجوع">
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+  <span>رجوع</span>
+</button>
+<div class="max-popup" id="max-popup"><div class="max-popup-box">تم اختيار الحد الأقصى من الفئات</div></div>
+
+<!-- Leave-room confirmation: blocking, no auto-dismiss (unlike max-popup/toast) -->
+<div class="confirm-overlay" id="leave-confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-text">هل أنت متأكد من الخروج من الغرفة؟</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-btn-safe" type="button" onclick="closeLeaveConfirm()">لا</button>
+      <button class="confirm-btn confirm-btn-danger" type="button" onclick="confirmLeaveYes()">نعم</button>
+    </div>
+  </div>
+</div>
 <div class="maint-overlay" id="maint-overlay" role="alertdialog" aria-modal="true">
   <div class="maint-box">
     <div class="maint-icon" aria-hidden="true">🛠️</div>
@@ -949,6 +1025,7 @@ function playSound(type) {
 // ── State ──────────────────────────────────────────────────────────────────
 let token=localStorage.getItem('token'), me=null, socket=null, selectedCats=[], isHost=false;
 let currentRoomCode=null, currentFlagQuestion=null, currentFlagOptions=null, reportedThisQuestion=false, reportInFlight=false;
+let editingRoom=false, currentRoomCategories=[];
 let lastPickedAnswer=null, lastAnswerCorrect=false;
 const LEVELS=[
   {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',level:1,min:0,   max:500  },
@@ -960,7 +1037,7 @@ const LEVELS=[
 ];
 
 const NAV_SCREENS = { 's-home':'gnav-home', 's-profile':'gnav-profile', 's-levels':'gnav-levels', 's-shop':'gnav-shop', 's-howto':'gnav-howto' };
-const NAV_VISIBLE = ['s-home','s-profile','s-levels','s-shop','s-howto','s-create','s-join','s-lobby'];
+const NAV_VISIBLE = ['s-home','s-profile','s-levels','s-shop','s-howto','s-join'];
 
 function show(id) {
   const next = document.getElementById(id);
@@ -998,6 +1075,10 @@ function show(id) {
   const nav = document.getElementById('global-nav');
   const showNav = NAV_VISIBLE.includes(id);
   nav.style.display = showNav ? 'flex' : 'none';
+
+  document.getElementById('cat-footer').classList.toggle('show', id === 's-create');
+
+  updateGameBackButton(id);
 
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('has-nav'));
   if (showNav) {
@@ -1137,76 +1218,71 @@ function connectSocket() {
   socket.on('maintenance_blocked',msg=>showMaintenanceOverlay(msg));
 
   socket.on('room_created',({code,categories})=>{
-    isHost=true; currentRoomCode=code;
+    isHost=true; currentRoomCode=code; editingRoom=false;
+    currentRoomCategories=categories; renderLobbyCategories();
     document.getElementById('lobby-code').textContent=code;
-    document.getElementById('lobby-cats').textContent=categories.join(' • ');
     document.getElementById('lobby-host-btn').style.display='block';
-    document.getElementById('lobby-ready-btn').style.display='none';
-    // FIX: if alone, enable start immediately
+    // The host never sees this indicator, but reset it in case stale DOM state
+    // carried over from a previous room this session.
+    stopEditingIndicator();
+    // No ready system — the host can start immediately, solo or with others.
     document.getElementById('start-btn').disabled=false;
     document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
     playSound('click');show('s-lobby');
   });
 
-  socket.on('room_joined',({code,categories})=>{
-    isHost=false; currentRoomCode=code;
+  socket.on('room_joined',({code,categories,hostEditing})=>{
+    isHost=false; currentRoomCode=code; editingRoom=false;
+    currentRoomCategories=categories||[]; renderLobbyCategories();
     document.getElementById('lobby-code').textContent=code;
-    document.getElementById('lobby-cats').textContent=(categories||[]).join(' • ');
     document.getElementById('lobby-host-btn').style.display='none';
-    document.getElementById('lobby-ready-btn').style.display='block';
-    document.getElementById('ready-btn').className='btn btn-ready-green';
-    document.getElementById('ready-btn').disabled=false;
-    document.getElementById('ready-btn').textContent='جاهز';
+    // In case we're joining WHILE the host happens to be mid-edit already.
+    if (hostEditing) startEditingIndicator(); else stopEditingIndicator();
     playSound('enter');show('s-lobby');
   });
 
   socket.on('room_reset',({code,categories,host})=>{
-    isHost=(host===socket.id); currentRoomCode=code;
+    isHost=(host===socket.id); currentRoomCode=code; editingRoom=false;
+    currentRoomCategories=categories||[]; renderLobbyCategories();
     document.getElementById('lobby-code').textContent=code;
-    document.getElementById('lobby-cats').textContent=(categories||[]).join(' • ');
+    stopEditingIndicator();
+    document.getElementById('lobby-host-btn').style.display = isHost ? 'block' : 'none';
     if(isHost){
-      document.getElementById('lobby-host-btn').style.display='block';
-      document.getElementById('lobby-ready-btn').style.display='none';
       document.getElementById('start-btn').disabled=false;
       document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
-    } else {
-      document.getElementById('lobby-host-btn').style.display='none';
-      document.getElementById('lobby-ready-btn').style.display='block';
-      document.getElementById('ready-btn').className='btn btn-ready-green';
-      document.getElementById('ready-btn').disabled=false;
-      document.getElementById('ready-btn').textContent='جاهز';
     }
     showToast('غرفة جديدة — استعدوا!'); playSound('enter'); show('s-lobby');
   });
+
+  // Sent to everyone EXCEPT the host who closed it (they navigate home directly
+  // from backFromCreate()) — so this only ever fires for the other players.
+  socket.on('room_closed',()=>{
+    showCenteredPopup('تم اغلاق الغرفة');
+    currentRoomCode=null; isHost=false; editingRoom=false;
+    selectedCats=[]; renderSelection(); stopEditingIndicator();
+    show('s-home');
+  });
+
+  // Host edited categories from the lobby-back screen and saved — live-refresh
+  // everyone's lobby thumbnails, including the host's own. No popup/toast here on
+  // purpose: the live-updating grid IS the feedback.
+  socket.on('categories_updated',({categories})=>{
+    currentRoomCategories=categories; renderLobbyCategories();
+    stopEditingIndicator();
+  });
+
+  socket.on('host_editing_start',()=>{ startEditingIndicator(); });
+  socket.on('host_editing_end',()=>{ stopEditingIndicator(); });
 
   socket.on('players_update',players=>{
     const el=document.getElementById('lobby-players'); el.innerHTML='';
     players.forEach(p=>{
       const lvl=p.level||{img:'/levels/penguin.png'};
-      let badge;
-      if(p.isHost) badge='<span class="badge-host">المضيف</span>';
-      else badge=p.ready?'<span class="badge-ready">جاهز</span>':'<span class="badge-notready">غير جاهز</span>';
+      const badge=p.isHost?'<span class="badge-host">المضيف</span>':'';
       el.innerHTML+=`<div class="player-card"><img src="${lvl.img}" alt=""><div class="name">${p.display_name}</div>${badge}</div>`;
     });
-    if (isHost) {
-      const nonHost=players.filter(p=>!p.isHost);
-      const allReady=nonHost.length===0||nonHost.every(p=>p.ready);
-      const startBtn=document.getElementById('start-btn');
-      if (startBtn) {
-        startBtn.disabled=!allReady;
-        startBtn.textContent=allReady?'▶ ابدأ اللعبة!':'بإنتظار باقي اللاعبين';
-      }
-    } else {
-      const meP=players.find(p=>p.socketId===socket.id);
-      const rb=document.getElementById('ready-btn');
-      if (rb && meP) {
-        if (meP.ready) { rb.className='btn btn-ready-red'; rb.textContent='غير جاهز'; }
-        else { rb.className='btn btn-ready-green'; rb.textContent='جاهز'; }
-      }
-    }
   });
 
-  socket.on('all_ready',()=>{});
   socket.on('game_loading',({message})=>{document.getElementById('loading-msg').textContent=message;show('s-loading');});
 
   socket.on('phase_start',({phase,name})=>{
@@ -1370,8 +1446,19 @@ function connectSocket() {
     fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(u=>{me=u;updateHomeUI();});
   });
 
-  socket.on('host_changed',()=>{
-    if(!isHost){isHost=true;document.getElementById('lobby-host-btn').style.display='block';document.getElementById('lobby-ready-btn').style.display='none';showToast('أصبحت المضيف الجديد');}
+  socket.on('host_changed',({host})=>{
+    // FIX: this used to flip isHost=true for EVERY remaining non-host client (it
+    // ignored the payload entirely) — now it only promotes the actual new host.
+    const wasHost = isHost;
+    isHost = (host === socket.id);
+    if(isHost && !wasHost){
+      document.getElementById('lobby-host-btn').style.display='block';
+      document.getElementById('start-btn').disabled=false;
+      document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
+      showToast('أصبحت المضيف الجديد');
+    }
+    const active = document.querySelector('.screen.active');
+    if(active) updateGameBackButton(active.id);
   });
 }
 
@@ -1397,23 +1484,170 @@ function renderLB(elId,players){
   });
 }
 
+const CAT_IMAGES = {
+  'أزياء وموضة': '/categories/fashion.webp',
+  'أساطير': '/categories/myths.webp',
+  'أعلام': '/categories/flags.webp',
+  'أكلات كويتية': '/categories/food.webp',
+  'أنمي': '/categories/anime.webp',
+  'إسلامي': '/categories/islamic.webp',
+  'الكويت': '/categories/kuwait.webp',
+  'اللغة العربية': '/categories/arabic.webp',
+  'بباي الطيبين': '/categories/cartoons.webp',
+  'تاريخ': '/categories/history.webp',
+  'تكنولوجيا واختراعات': '/categories/tech.webp',
+  'جسم الإنسان': '/categories/body.webp',
+  'جغرافيا': '/categories/geography.webp',
+  'دول وسياحة': '/categories/countries.webp',
+  'رياضة': '/categories/sports.webp',
+  'رياضيات': '/categories/math.webp',
+  'شعارات كروية': '/categories/crests.webp',
+  'عالم الحيوان': '/categories/animals.webp',
+  'علوم': '/categories/science.webp',
+  'عملات': '/categories/currencies.webp',
+  'عواصم': '/categories/capitals.webp',
+  'عود وعطور': '/categories/perfume.webp',
+  'فضاء وفلك': '/categories/space.webp',
+  'فن وأدب': '/categories/art.webp',
+  'قصص الأنبياء': '/categories/prophets.webp',
+  'كرة القدم': '/categories/football.webp',
+  'معلومات عامة': '/categories/general.webp',
+  'مكياج': '/categories/makeup.webp',
+};
+
 function toggleCat(el,cat){
   if(el.classList.contains('selected')){
-    el.classList.remove('selected'); selectedCats=selectedCats.filter(c=>c!==cat);
+    selectedCats=selectedCats.filter(c=>c!==cat);
   } else {
-    if(selectedCats.length>=12){ showToast('الحد الأقصى ١٢ فئة'); return; }   // can't select more than 12
-    el.classList.add('selected'); selectedCats.push(cat);
+    if(selectedCats.length>=12){ showMaxPopup(); return; }   // can't select more than 12
+    selectedCats.push(cat);
   }
-  const n=selectedCats.length;
-  document.getElementById('cat-hint').textContent =
-    n===0 ? 'اختر من ٦ إلى ١٢ فئة' : (n<6 ? 'اختر ٦ فئات على الأقل' : `${n} فئة محددة`);
-  document.getElementById('create-btn').disabled = (n<6 || n>12);   // can start only with 6–12
+  renderSelection();
 }
+
+function removeCat(cat){
+  selectedCats=selectedCats.filter(c=>c!==cat);
+  renderSelection();
+}
+
+// Single source of truth for grid cards, the selected tray, the hint line, and the create button —
+// called after every selection change so all four always agree with selectedCats.
+function renderSelection(){
+  const n=selectedCats.length;
+  document.querySelectorAll('#cat-grid .cat-card').forEach(card=>{
+    const cat=card.dataset.cat;
+    const idx=selectedCats.indexOf(cat);
+    card.classList.toggle('selected', idx!==-1);
+    card.querySelector('.cat-badge').textContent = idx!==-1 ? (idx+1) : '';
+  });
+  document.getElementById('cat-grid').classList.toggle('maxed', n>=12);
+
+  const tray=document.getElementById('cat-tray');
+  tray.innerHTML = selectedCats.map((cat,i)=>
+    `<div class="cat-tray-thumb" onclick="removeCat('${cat.replace(/'/g,"\'")}')"><img src="${CAT_IMAGES[cat]}" alt="" loading="lazy"><div class="cat-badge">${i+1}</div></div>`
+  ).join('');
+
+  document.getElementById('cat-footer-hint').classList.toggle('show', n>=1);
+
+  const btn=document.getElementById('create-btn');
+  if(n<6){ btn.disabled=true; btn.textContent = `اختر ${6-n} فئات إضافية`; }
+  else { btn.disabled=false; btn.textContent = editingRoom ? 'حفظ التعديلات' : 'أنشئ الغرفة'; }
+}
+
+// Category-selection back button: a fresh visit (no room yet) just goes home.
+// If the host is mid-edit of an already-created room, going back all the way to
+// main CLOSES that room and notifies everyone else in it.
+// The top-left game-back button is shared by s-create and s-lobby, but its label
+// and action depend on context: host in the lobby still gets "رجوع" (edit categories);
+// a non-host in the lobby gets "خروج من الغرفة" (leave, with confirmation).
+function updateGameBackButton(id){
+  const btn = document.getElementById('game-back-btn');
+  const label = btn.querySelector('span');
+  if (id === 's-create') {
+    btn.classList.add('show'); label.textContent='رجوع'; btn.onclick = backFromCreate;
+  } else if (id === 's-lobby') {
+    btn.classList.add('show');
+    if (isHost) { label.textContent='رجوع'; btn.onclick = backFromLobby; }
+    else { label.textContent='خروج من الغرفة'; btn.onclick = confirmLeaveRoom; }
+  } else {
+    btn.classList.remove('show'); btn.onclick = null;
+  }
+}
+
+function backFromCreate(){
+  if(currentRoomCode && isHost){
+    socket.emit('close_room');
+    currentRoomCode=null; isHost=false; editingRoom=false;
+    selectedCats=[]; renderSelection();
+  }
+  show('s-home');
+}
+
+// Lobby back button: go edit categories WITHOUT closing the room or changing its code.
+function backFromLobby(){
+  editingRoom=true;
+  selectedCats=[...currentRoomCategories];
+  renderSelection();
+  if(socket) socket.emit('edit_categories_start');
+  show('s-create');
+}
+
+// Non-host "خروج من الغرفة" flow: blocking confirmation (no auto-dismiss, unlike
+// the toast/max-popup), then actually leaves on "نعم" only.
+function confirmLeaveRoom(){
+  document.getElementById('leave-confirm-overlay').classList.add('show');
+}
+function closeLeaveConfirm(){
+  document.getElementById('leave-confirm-overlay').classList.remove('show');
+}
+function confirmLeaveYes(){
+  closeLeaveConfirm();
+  if(socket) socket.emit('leave_room');
+  currentRoomCode=null; isHost=false; editingRoom=false; currentRoomCategories=[];
+  selectedCats=[]; renderSelection();
+  show('s-home');
+}
+
+function renderLobbyCategories(){
+  const grid=document.getElementById('lobby-cats-grid');
+  grid.innerHTML = currentRoomCategories.map(cat =>
+    `<div class="lobby-cat-thumb"><img src="${CAT_IMAGES[cat]}" alt="${cat}" loading="lazy"></div>`
+  ).join('');
+}
+
+// Non-host-only indicator: the host is on the category screen editing this room.
+function startEditingIndicator(){
+  document.getElementById('lobby-editing-hint').classList.add('show');
+  document.getElementById('lobby-cats-grid').classList.add('editing');
+}
+function stopEditingIndicator(){
+  document.getElementById('lobby-editing-hint').classList.remove('show');
+  document.getElementById('lobby-cats-grid').classList.remove('editing');
+}
+
+// Shared centered popup (dark box, red border) — reused for the max-selection
+// warning and the room-closed notice, just with different text.
+function showCenteredPopup(msg){
+  const p=document.getElementById('max-popup');
+  p.querySelector('.max-popup-box').textContent = msg;
+  p.classList.add('show');
+  clearTimeout(showCenteredPopup._t);
+  showCenteredPopup._t=setTimeout(()=>p.classList.remove('show'),1500);
+}
+function showMaxPopup(){ showCenteredPopup('تم اختيار الحد الأقصى من الفئات'); }
 
 function createRoom(){
   if(!socket) return;
-  if(selectedCats.length<6 || selectedCats.length>12){ showToast('اختر من ٦ إلى ١٢ فئة'); return; }
-  playSound('click'); socket.emit('create_room',{categories:selectedCats});
+  if(selectedCats.length<6 || selectedCats.length>12){ showToast('اختر من 6 إلى 12 فئة'); return; }
+  playSound('click');
+  if(editingRoom && currentRoomCode){
+    if(!isHost){ showToast('فقط المضيف يمكنه تعديل الفئات'); return; }
+    socket.emit('update_room_categories',{categories:selectedCats});
+    editingRoom=false;
+    show('s-lobby');
+  } else {
+    socket.emit('create_room',{categories:selectedCats});
+  }
 }
 function joinRoom(){
   const code=document.getElementById('j-code').value.trim();
@@ -1421,7 +1655,6 @@ function joinRoom(){
   if(code.length!==4){errEl.textContent='الكود يجب أن يكون 4 أرقام';errEl.style.display='block';return;}
   playSound('click');socket.emit('join_room',{code});
 }
-function toggleReady(){socket.emit('player_ready');playSound('click');}
 function startGame(){socket.emit('start_game');show('s-loading');playSound('click');}
 function submitAnswer(answer){lastPickedAnswer=answer;document.querySelectorAll('.opt').forEach(b=>b.disabled=true);socket.emit('submit_answer',{answer});}
 // Build the 2x2 image-tile answer grid for image-type (logo) questions. Tiles carry

@@ -20,6 +20,7 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 ## New-tile workflow
 - Adding a category tile follows the new-tile skill (byte-exact insertion + DB verification).
 - The category grid is currently 28 tiles — keep this number in sync when adding/removing tiles.
+- Tiles are image cards, not emoji+text: served from `public/categories/` as WebP, named by ASCII slug (`animals.webp`, `crests.webp`, …), source ratio 980×1490 rendered with `object-fit: contain` — never `cover`, which crops the baked-in white border. Titles are baked into the artwork, so renaming a category does NOT rename its file, but DOES require re-editing the image itself.
 
 ## Content conventions
 - أنمي: one category (per-title split rejected); every question carries its title, convention «في {Title}، …»; a future split is a prefix-match relabel. Character-image questions will NOT name the anime. Titles/character/technique names in English, question text in Arabic.
@@ -45,3 +46,9 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - Allocation: base 1 per category, cap 2, no cross-category top-up. With exactly 6 categories every category serves exactly 2 per round.
 - Round-building queries retry once (300ms) on failure, then log loudly (room, difficulty, categories). Any AI-fallback contribution is always logged (`ℹ️ AI fallback filled …`) — with the fallback off, that line should never appear.
 - `generateQuestions` returns an empty array (does not throw) on API auth failure — a broken API key shows up only as `aiFilled=0`, not as an error. Known future fix.
+
+## Lobby & room lifecycle
+- Bottom nav (profile/levels/shop/how-to-play) is hidden on the category-selection and lobby screens only — visible everywhere else. Both screens carry a fixed top-left red pill back button reusing the admin panel's `.back` style (from `admin-players.html`).
+- Room lifecycle: host's back button on the LOBBY reopens category selection to edit in place — same room code, same players, new list broadcast live to everyone on save. Host's back button on CATEGORY SELECTION (with a room already open) closes the room entirely; every other player gets the centered «تم اغلاق الغرفة» popup. A non-host's back button instead reads «خروج من الغرفة» — leaves just that player, gated by a blocking نعم/لا confirmation (no auto-dismiss, unlike the toast/popup). Host-only actions (`close_room`, `update_room_categories`) are guarded on both the client (no UI path exposed to non-hosts) and the server (`room.host !== socket.id`) — a tampered client can't bypass either.
+- No ready system: the host's start button begins the game immediately regardless of other players' state. No per-player ready flag exists anywhere in the code.
+- Centered popups (dark box, colored border, same shape as the max-selection one) are reserved for blocking/important events only — room closed, category limit reached. Routine successes (e.g. saving edited categories) get no popup or toast; a live-updating view is the feedback.

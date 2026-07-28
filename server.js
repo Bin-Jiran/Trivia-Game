@@ -704,8 +704,9 @@ io.on('connection', socket => {
     const code = generateCode();
     const cats = categories;
     rooms[code] = { code, host:socket.id, categories:cats, players:{}, phase:0,
-      phaseNames:['easy','medium','hard'], qIndex:0, timer:null, status:'waiting', answered:{} };
-    rooms[code].players[socket.id] = { ...socket.user, sessionScore:0, ready:false };
+      phaseNames:['easy','medium','hard'], qIndex:0, timer:null, status:'waiting', answered:{},
+      hostEditing:false };
+    rooms[code].players[socket.id] = { ...socket.user, sessionScore:0 };
     socket.join(code); socket.roomCode = code;
     socket.emit('room_created', { code, categories:cats });
     io.to(code).emit('players_update', getPlayers(code));
@@ -718,9 +719,83 @@ io.on('connection', socket => {
     const room = rooms[code];
     if (!room) return socket.emit('error_msg', 'الغرفة غير موجودة');
     if (room.status !== 'waiting') return socket.emit('error_msg', 'اللعبة بدأت');
-    room.players[socket.id] = { ...socket.user, sessionScore:0, ready:false };
+    room.players[socket.id] = { ...socket.user, sessionScore:0 };
     socket.join(code); socket.roomCode = code;
-    socket.emit('room_joined', { code, categories:room.categories, host:room.host });
+    // hostEditing lets a player who joins mid-edit see the dimmed grid + indicator
+    // immediately, instead of only finding out on the next broadcast.
+    socket.emit('room_joined', { code, categories:room.categories, host:room.host, hostEditing:!!room.hostEditing });
+    io.to(code).emit('players_update', getPlayers(code));
+  });
+
+  // Host went back from the lobby to category-selection, then all the way back to
+  // main — that closes the room for everyone still in it. socket.to() (not io.to())
+  // excludes the host's own connection since they already navigate home locally.
+  socket.on('close_room', () => {
+    const code = socket.roomCode; const room = rooms[code];
+    if (!room || room.host !== socket.id) return;
+    socket.to(code).emit('room_closed');
+    // Belt-and-suspenders: room_closed already sends everyone home, but explicitly
+    // clearing the editing indicator too means it can never get stuck on, even if
+    // some client is caught in a weird intermediate state.
+    if (room.hostEditing) socket.to(code).emit('host_editing_end');
+    for (const id of Object.keys(room.players)) {
+      const s = io.sockets.sockets.get(id);
+      if (s) { s.leave(code); s.roomCode = null; }
+    }
+    if (room.timer) clearInterval(room.timer);
+    if (room.endTimer) clearTimeout(room.endTimer);
+    delete rooms[code];
+  });
+
+  // Host entered the category-selection screen from the lobby's "رجوع" — tell
+  // everyone else so they can show the "host is editing" indicator.
+  socket.on('edit_categories_start', () => {
+    const code = socket.roomCode; const room = rooms[code];
+    if (!room || room.host !== socket.id) return;
+    room.hostEditing = true;
+    socket.to(code).emit('host_editing_start');
+  });
+
+  // Host edited categories from the lobby-back screen and saved — update the SAME
+  // room in place (code and players unchanged) and push the new list live. This is
+  // also one of the "editing ended" paths — the client clears its own indicator
+  // when it gets categories_updated, so no separate host_editing_end is needed here.
+  socket.on('update_room_categories', ({ categories }) => {
+    const code = socket.roomCode; const room = rooms[code];
+    if (!room || room.host !== socket.id) return;
+    if (!Array.isArray(categories) || categories.length < 6 || categories.length > 12) {
+      return socket.emit('error_msg', 'اختر من 6 إلى 12 فئة');
+    }
+    room.categories = categories;
+    room.hostEditing = false;
+    io.to(code).emit('categories_updated', { categories });
+  });
+
+  // Non-host "خروج من الغرفة": removes just this socket from the room (unlike
+  // close_room, which tears down the whole room). Mirrors the disconnect handler's
+  // cleanup/host-reassignment so a host leaving this way is also handled gracefully
+  // (including clearing a stuck editing indicator, in the unlikely case the host
+  // themselves ever reaches this path while mid-edit).
+  socket.on('leave_room', () => {
+    const code = socket.roomCode; const room = rooms[code];
+    if (!code || !room) return;
+    const wasHost = room.host === socket.id;
+    delete room.players[socket.id];
+    socket.leave(code); socket.roomCode = null;
+    if (Object.keys(room.players).length === 0) {
+      if (room.timer) clearInterval(room.timer);
+      if (room.endTimer) clearTimeout(room.endTimer);
+      delete rooms[code];
+      return;
+    }
+    if (wasHost && room.hostEditing) {
+      room.hostEditing = false;
+      io.to(code).emit('host_editing_end');
+    }
+    if (wasHost) {
+      room.host = Object.keys(room.players)[0];
+      io.to(code).emit('host_changed', { host: room.host });
+    }
     io.to(code).emit('players_update', getPlayers(code));
   });
 
@@ -736,18 +811,10 @@ io.on('connection', socket => {
     room.status = 'waiting'; room.phase = 0; room.qIndex = 0;
     room.answered = {}; room.currentQuestion = null;
     room.allQuestions = null; room.questions = null;
-    Object.values(room.players).forEach(p => { p.sessionScore = 0; p.ready = false; });
+    room.hostEditing = false;
+    Object.values(room.players).forEach(p => { p.sessionScore = 0; });
     io.to(code).emit('room_reset', { code, categories: room.categories, host: room.host });
     io.to(code).emit('players_update', getPlayers(code));
-  });
-
-  socket.on('player_ready', () => {
-    const room = rooms[socket.roomCode]; if (!room) return;
-    const p = room.players[socket.id]; if (!p) return;
-    p.ready = !p.ready;
-    io.to(socket.roomCode).emit('players_update', getPlayers(socket.roomCode));
-    const nonHost = Object.entries(room.players).filter(([id]) => id !== room.host);
-    if (nonHost.length > 0 && nonHost.every(([,pl]) => pl.ready)) io.to(socket.roomCode).emit('all_ready');
   });
 
   socket.on('start_game', async () => {
@@ -798,9 +865,16 @@ io.on('connection', socket => {
   socket.on('disconnect', () => {
     const code = socket.roomCode;
     if (!code || !rooms[code]) return;
+    const wasHost = rooms[code].host === socket.id;
     delete rooms[code].players[socket.id];
     if (Object.keys(rooms[code].players).length === 0) { clearInterval(rooms[code].timer); delete rooms[code]; return; }
-    if (rooms[code].host === socket.id) {
+    // The host can vanish mid-edit (closed the tab, lost connection) — make sure
+    // the remaining players' "host is editing" indicator doesn't get stuck on.
+    if (wasHost && rooms[code].hostEditing) {
+      rooms[code].hostEditing = false;
+      io.to(code).emit('host_editing_end');
+    }
+    if (wasHost) {
       rooms[code].host = Object.keys(rooms[code].players)[0];
       io.to(code).emit('host_changed', { host:rooms[code].host });
     }
