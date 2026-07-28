@@ -34,6 +34,7 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - Bucket floors: 20 rows per difficulty for general categories, 15 for Gulf-niche (أكلات كويتية، عود وعطور، مكياج، أزياء، الكويت).
 
 ## Environment & deploys
+- Local development connects to the LIVE Supabase database — there is no separate local/staging DB. Running the game on localhost reads and writes real data (playing a test game creates real `game_history` rows). Before the currency system ships, a separate Supabase project for local dev is required, since test games would otherwise debit real balances and write to the real ledger.
 - Render's Environment tab is the live config; the local `.env` has NO effect on the deployed site.
 - `MAINTENANCE_MODE`: only the literal lowercase string `true` enables it. The game has never launched — turning maintenance off IS the launch decision, not routine cleanup. Admins bypass maintenance via `users.is_admin`.
 - `AI_FALLBACK_ENABLED` is env-driven (`process.env.AI_FALLBACK_ENABLED !== 'false'`, default ON); the live value is set in Render and is `false`, verified silent in logs (fallback retired — rounds must fill from the bank).
