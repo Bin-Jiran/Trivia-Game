@@ -19,14 +19,14 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 
 ## New-tile workflow
 - Adding a category tile follows the new-tile skill (byte-exact insertion + DB verification).
-- The category grid is currently 29 tiles — keep this number in sync when adding/removing tiles.
+- The category grid is currently 28 tiles — keep this number in sync when adding/removing tiles.
 
 ## Content conventions
 - أنمي: one category (per-title split rejected); every question carries its title, convention «في {Title}، …»; a future split is a prefix-match relabel. Character-image questions will NOT name the anime. Titles/character/technique names in English, question text in Arabic.
-- كرتون: nostalgia cartoons for the Gulf audience up to the 2000s generation. Arabic DUBBED names throughout (titles and characters) — the English-titles rule of أنمي explicitly does NOT apply here. Question prefix «في كرتون {الاسم}،». Image-backed BY DESIGN — append-only forever, even while text-only. No theme-song lyrics reproduction, ever. Overlap guard: shows covered in أنمي (currently Hunter x Hunter, Dragon Ball, Pokémon, and any future additions) must never appear in كرتون and vice versa.
+- بباي الطيبين (formerly كرتون, renamed 2026-07-28): nostalgia cartoons for the Gulf audience up to the 2000s generation. Arabic DUBBED names throughout (titles and characters) — the English-titles rule of أنمي explicitly does NOT apply here. Question prefix «في بباي الطيبين {الاسم}،» going forward — the rows loaded before the rename still literally read «في كرتون {الاسم}،» in their stored question text; the rename only changed the category field, not that stored wording, so this is a known follow-up if it's ever worth a text pass. Image-backed BY DESIGN — append-only forever, even while text-only. No theme-song lyrics reproduction, ever. Overlap guard: shows covered in أنمي (currently Hunter x Hunter, Dragon Ball, Pokémon, and any future additions) must never appear in بباي الطيبين and vice versa.
 - Answer and its three distractors always use the same language/spelling per row.
 - أساطير: answers and distractors in English (names); meaning-answers may stay Arabic.
-- قصص الأنبياء covers past prophets only; سيرة النبي محمد ﷺ stays in دين. Sourcing: Quranic narrative and mainstream tafsir only.
+- قصص الأنبياء covers past prophets only; سيرة النبي محمد ﷺ stays in إسلامي. Sourcing: Quranic narrative and mainstream tafsir only.
 - «بني إسرائيل» in قصص الأنبياء is the Quranic term (children of يعقوب عليه السلام) — it is unrelated to the state and must NEVER be caught by any إسرائيل content cleanup.
 - Flag questions: fixed question «لمن هذا العلم؟», 2-letter lowercase SVG filenames in `public/flags/` (exceptions: `gb-eng`/`gb-sct`/`gb-wls` for England/Scotland/Wales), distractors from visually similar flags, never-pair rule for indistinguishable flags (e.g. Indonesia/Monaco, Romania/Chad, the UK blue-ensign family). Flag `image_url` is now recorded in the master Excel as well (backfilled from the DB, sweep-verified).
 - شعارات كروية (football crests): fixed question «لمن هذا الشعار؟», `image_url` = `/crests/{name}.png` in `public/crests/`; the 1:1 crest frame is applied by path-prefix detection (`/crests/`) in index.html, so the path convention is load-bearing. Saudi club files are suffixed `-ksa`, Kuwaiti `-kw`, European clubs unsuffixed. Image-backed category — append-only FOREVER (no delete+reload).
