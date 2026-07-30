@@ -21,6 +21,7 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - Adding a category tile follows the new-tile skill (byte-exact insertion + DB verification).
 - The category grid is currently 28 tiles — keep this number in sync when adding/removing tiles.
 - Tiles are image cards, not emoji+text: served from `public/categories/` as WebP, named by ASCII slug (`animals.webp`, `crests.webp`, …), source ratio 980×1490 rendered with `object-fit: contain` — never `cover`, which crops the baked-in white border. Titles are baked into the artwork, so renaming a category does NOT rename its file, but DOES require re-editing the image itself.
+- Category-card selected state: the green frame is drawn as a `.cat-card.selected::after` overlay at z-index 1, NOT as a box-shadow on `.cat-card` itself. `.cat-card` has `overflow: hidden` and a fully opaque `<img>` child, so an inset shadow on the card is painted over by the artwork and never appears. The outward green glow must live on `.cat-card.selected` (an element's own shadow escapes its own `overflow: hidden`; a child's cannot). The numbered `.cat-badge` carries `z-index: 2` to stay above the frame. Commit 13efff6.
 
 ## Content conventions
 - أنمي: one category (per-title split rejected); every question carries its title, convention «في {Title}، …»; a future split is a prefix-match relabel. Character-image questions will NOT name the anime. Titles/character/technique names in English, question text in Arabic.
