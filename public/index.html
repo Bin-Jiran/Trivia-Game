@@ -90,7 +90,7 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .btn-secondary { background: rgba(255,255,255,0.5); color: var(--text); border: 1px solid rgba(255,255,255,0.6); margin-top: 8px; }
 .btn-secondary:hover { border-color: var(--blue); color: var(--blue); }
 .btn-success { background: linear-gradient(135deg, var(--green), var(--green-d)); color: #fff; box-shadow: 0 3px 10px rgba(91,189,78,0.3); }
-.btn-logout { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: var(--red); color: #fff; box-shadow: 0 3px 10px rgba(232,71,42,0.3); margin-top: 14px; font-family: var(--font); transition: transform 0.1s; }
+.btn-logout { width: 100%; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700; cursor: pointer; border: 2px solid #fff; background: var(--red); color: #fff; box-shadow: 0 3px 10px rgba(232,71,42,0.3); margin-top: 14px; font-family: var(--font); transition: transform 0.1s; }
 .btn-logout:active { transform: scale(0.97); }
 .btn-logout:hover { background: var(--red-d); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -153,15 +153,16 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .hero-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .hero-btn {
   display: flex; align-items: center; justify-content: center; gap: 12px;
-  border: none; border-radius: 16px; padding: 15px; cursor: pointer;
+  border: 2px solid #fff; border-radius: 16px; padding: 15px; cursor: pointer;
   font-family: var(--font); font-size: 16px; font-weight: 700; color: #fff;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.18);
   transition: transform 0.1s;
 }
-.hero-btn:active { transform: translateY(2px); }
+.hero-btn:active { transform: scale(0.97); }
 .hero-btn img { width: 46px; height: 46px; }
-.hero-btn-blue   { background: var(--blue);   box-shadow: 0 5px 0 var(--blue-d); }
-.hero-btn-green  { background: var(--green);  box-shadow: 0 5px 0 var(--green-d); color: #fff; }
-.hero-btn-yellow { background: var(--yellow); box-shadow: 0 5px 0 var(--yellow-d); color: #fff; }
+.hero-btn-blue   { background: var(--blue); }
+.hero-btn-green  { background: var(--green); color: #fff; }
+.hero-btn-yellow { background: var(--yellow); color: #fff; }
 
 
 /* Fixed global nav bar */
@@ -192,6 +193,10 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .navgroup .gnav-item { box-shadow: none; border-radius: 0; }
 .navgroup .gnav-item:first-child { border-top-right-radius: 17px; border-bottom-right-radius: 17px; }
 .navgroup .gnav-item:last-child  { border-top-left-radius: 17px;  border-bottom-left-radius: 17px; }
+.gnav-item.gnav-active:not(.gnav-home) {
+  border: 2px solid #fff;
+  border-radius: 17px;
+}
 .nav-item-red    { background: var(--red); }
 .nav-item-green  { background: var(--green); }
 .nav-item-yellow { background: var(--yellow); }
@@ -484,6 +489,19 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .info-item { background:rgba(255,255,255,0.65); border-radius:var(--radius-sm); padding:10px 13px; border:1px solid rgba(255,255,255,0.5); }
 .info-item .ilabel { font-size:11px; color:var(--muted); margin-bottom:3px; }
 .info-item .ivalue { font-size:13px; font-weight:600; }
+.level-plaque {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 13px;
+  background: rgba(0,0,0,0.16);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
 .section-title { font-size:12px; color:var(--muted); margin-bottom:8px; letter-spacing:1px; font-weight:600; }
 
 /* ── Loading ── */
@@ -791,7 +809,10 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div style="text-align:center;margin-bottom:14px;">
       <img id="p-emo" style="width:100px;height:100px;display:block;margin:0 auto 6px;" src="" alt="">
       <div id="p-name" style="font-size:18px;font-weight:700;"></div>
-      <span id="p-level-name" style="display:inline-block;margin-top:6px;background:var(--blue);color:#fff;border-radius:20px;padding:3px 14px;font-size:13px;font-weight:600;"></span>
+      <span class="level-plaque">
+        <span class="level-plaque-label">المستوى:</span>
+        <span id="p-level-name"></span>
+      </span>
     </div>
     <div class="info-grid">
       <div class="info-item"><div class="ilabel">الاسم الأول</div><div class="ivalue" id="p-fname"></div></div>
