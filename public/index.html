@@ -1371,7 +1371,7 @@ function connectSocket() {
     const qImage=document.getElementById('q-image'), qImageImg=document.getElementById('q-image-img');
     // crest-frame must be toggled BOTH ways: added for /crests/ images, removed for
     // anything else — otherwise a flag shown after a crest keeps the square frame.
-    if (image_url) { qImageImg.src=image_url; qImage.classList.toggle('crest-frame', image_url.startsWith('/crests/')); qImage.style.display='flex'; }
+    if (image_url) { qImageImg.src=image_url; qImage.classList.toggle('crest-frame', image_url.startsWith('/crests/') || image_url.startsWith('/anime/')); qImage.style.display='flex'; }
     else { qImage.style.display='none'; qImageImg.removeAttribute('src'); qImage.classList.remove('crest-frame'); }
 
     document.getElementById('q-result').style.display='none';
