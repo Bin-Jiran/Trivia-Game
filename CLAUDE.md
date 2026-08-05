@@ -16,6 +16,7 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - Content loads (new categories, bulk inserts, master→DB syncs) always follow the content-loader skill.
 - Category delete+reload is PERMANENTLY FORBIDDEN for أنمي once image rows exist — use append-only or targeted-UPDATE loaders after that point.
 - Spent INSERT files must never be re-run (it duplicates rows) — the content-loader skill handles this and file cleanup.
+- Loaders trim whitespace on insert. The Excel master is NOT trimmed automatically, so an untrimmed master cell creates silent divergence that a per-category sweep will miss. Trim in the master before loading, and run a FULL-BANK divergence sweep — per-category sweeps only prove that one category is clean.
 
 ## New-tile workflow
 - Adding a category tile follows the new-tile skill (byte-exact insertion + DB verification).
@@ -35,7 +36,7 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 
 ## UI conventions
 - White borders follow TWO families, chosen by the element's BACKGROUND, not by its size:
-  - Bold chrome — 2px solid #fff — on saturated colored surfaces: `.hero-btn`, `.gnav-item.gnav-active`, `.btn-logout`, `.opt`, `.q-box`, `.join-box`, `.points-tag`, `.phase-banner`, badges, `.meter .m-bar`. (`.navgroup` is 3px — large container, deliberate outlier.)
+  - Bold chrome — 2px solid #fff — on saturated colored surfaces: `.hero-btn`, `.gnav-item.gnav-active`, `.btn-logout`, `.opt`, `.q-box`, `.join-box`, `.points-tag`, `.phase-banner`, badges, `.meter .m-bar`. (`.navgroup` is 3px — large container, deliberate outlier.) In practice this covers .btn-primary and .btn-success (7 buttons across login, register, room-create/join, lobby start, and final results) plus the red back-to-home button. The rule is stated by background type, not by class — a new saturated-colour button inherits it by using these classes.
   - Smoked glass — 1px rgba(255,255,255,0.22) — on dark translucent surfaces: `.info-item`, `.level-plaque`, `.code-box`, `.glass-chip`, `.howto-box`, `.lb-frost`, `.podium-bg`, `.maint-box`, `.phase-frost`.
   A dark translucent element takes the smoked-glass border even when it sits among bold chrome. Commit 6bf80e7.
 - `.hero-btn` is flat (no "0 5px 0" ledge shadow); press feedback is `transform: scale(0.97)`, matching `.cat-card` and `.btn-logout`.
