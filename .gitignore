@@ -1,6 +1,7 @@
 # Secrets — never commit
 .env
 .env.local
+.env.live-backup
 
 # Dependencies
 node_modules/
