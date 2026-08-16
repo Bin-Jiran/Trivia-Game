@@ -72,14 +72,20 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - Bucket floors: 20 rows per difficulty for general categories, 15 for Gulf-niche (أكلات كويتية، عود وعطور، مكياج، أزياء، الكويت).
 
 ## Environment & deploys
-- Local development connects to the LIVE Supabase database — there is no separate local/staging DB. Running the game on localhost reads and writes real data (playing a test game creates real `game_history` rows). Before the currency system ships, a separate Supabase project for local dev is required, since test games would otherwise debit real balances and write to the real ledger.
-- Render's Environment tab is the live config; the local `.env` has NO effect on the deployed site.
+- Hosting: Render service **Alfalta-EU-Server**, region Frankfurt (EU Central), Starter instance, auto-deploys on push to `main`. The old Ohio service "Trivia-Game" was deleted on 2026-08-16. Render's Environment tab remains the live config; the local `.env` has NO effect on the deployed site.
+- Databases: exactly TWO Supabase projects, both in Frankfurt (eu-central-1):
+  - **Alfalta-Live-EU** = PRODUCTION. Only Render connects to it.
+  - **Alfalta-dev** = local development only. The local `.env` points here.
+  The old Sydney project "Alfalta_Live" was deleted on 2026-08-16. A final CSV snapshot of it (6 tables, 5810 rows) is at `C:/Users/aljir/Trivia-Data/sydney-final-snapshot/`.
+- RULE: local development NEVER connects to production. `.env` holds the dev connection string; `.env.live-backup` holds the production one and exists only so the production string is recoverable. Both are gitignored and must never be committed. Content loads that target production must use the string from `.env.live-backup` explicitly, not whatever `.env` holds.
+- Render environment variables: `DATABASE_URL`, `MAINTENANCE_MODE`, `JWT_SECRET`, `ANTHROPIC_API_KEY`, `AI_FALLBACK_ENABLED`.
 - `MAINTENANCE_MODE`: only the literal lowercase string `true` enables it. The game has never launched — turning maintenance off IS the launch decision, not routine cleanup. Admins bypass maintenance via `users.is_admin`.
-- `AI_FALLBACK_ENABLED` is env-driven (`process.env.AI_FALLBACK_ENABLED !== 'false'`, default ON); the live value is set in Render and is `false`, verified silent in logs (fallback retired — rounds must fill from the bank).
-- Local `.env` omits `AI_FALLBACK_ENABLED`, and `server.js` defaults it to ON when the variable is missing. Render sets it to `false`. Local testing therefore does NOT reproduce production round-filling. Set `AI_FALLBACK_ENABLED=false` in local `.env`.
+- `AI_FALLBACK_ENABLED` is env-driven (`process.env.AI_FALLBACK_ENABLED !== 'false'`, default ON); it is now set explicitly to `false` on the new service (fallback retired — rounds must fill from the bank). CORRECTED: on the old service, `ANTHROPIC_API_KEY` was set to the literal string `"false"` — there has never been a working API key in production, so the AI fallback could not have run regardless of the enable flag.
+- Local `.env` omits `AI_FALLBACK_ENABLED`, and `server.js` defaults it to ON when the variable is missing. Local testing therefore does NOT reproduce production round-filling unless `AI_FALLBACK_ENABLED=false` is also set locally.
 - Pushing to `main` auto-deploys on Render and restarts the server (drops in-memory rooms). Until launch, deploys are free — no players.
 - The خمن الشعار tile was removed at commit 96316a2 (0 DB rows, was AI-fallback-served). DROPPED PERMANENTLY on 2026-08-01 — will not be built, will not be restored from git history.
 - Git tracks folders only via files — use `.gitkeep` for empty folders. New binary assets go through "Add file → Upload files" on GitHub web, or Claude Code copies them locally.
+- Tooling: `pg_dump` is not available in the Claude Code environment. Schema migrations are done by reading `pg_catalog`/`information_schema` directly. Gotcha: `regclass::text` omits the `public.` prefix for tables in the search path — a sequence-matching query that assumes the prefix will silently return nothing.
 
 ## Round contract (server.js)
 - 3 rounds (easy/medium/hard), 12 questions each; players select 6–12 categories.
