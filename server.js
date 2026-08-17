@@ -703,11 +703,10 @@ io.on('connection', socket => {
     }
     const code = generateCode();
     const cats = categories;
-    rooms[code] = { code, host:socket.id, categories:cats, players:{}, phase:0,
+    rooms[code] = { code, host:socket.user.id, categories:cats, players:{}, phase:0,
       phaseNames:['easy','medium','hard'], qIndex:0, timer:null, status:'waiting', answered:{},
       hostEditing:false, idleTimer:null };
-    rooms[code].players[socket.id] = { ...socket.user, sessionScore:0 };
-    socket.join(code); socket.roomCode = code;
+    addOrTakeoverPlayer(rooms[code], socket);
     socket.emit('room_created', { code, categories:cats });
     io.to(code).emit('players_update', getPlayers(code));
     resetRoomIdleTimer(code);
@@ -720,8 +719,7 @@ io.on('connection', socket => {
     const room = rooms[code];
     if (!room) return socket.emit('error_msg', 'الغرفة غير موجودة');
     if (room.status !== 'waiting') return socket.emit('error_msg', 'اللعبة بدأت');
-    room.players[socket.id] = { ...socket.user, sessionScore:0 };
-    socket.join(code); socket.roomCode = code;
+    addOrTakeoverPlayer(room, socket);
     // hostEditing lets a player who joins mid-edit see the dimmed grid + indicator
     // immediately, instead of only finding out on the next broadcast.
     socket.emit('room_joined', { code, categories:room.categories, host:room.host, hostEditing:!!room.hostEditing });
@@ -733,7 +731,7 @@ io.on('connection', socket => {
   // everyone else so they can show the "host is editing" indicator.
   socket.on('edit_categories_start', () => {
     const code = socket.roomCode; const room = rooms[code];
-    if (!room || room.host !== socket.id) return;
+    if (!room || room.host !== socket.user.id) return;
     room.hostEditing = true;
     socket.to(code).emit('host_editing_start');
   });
@@ -744,7 +742,7 @@ io.on('connection', socket => {
   // when it gets categories_updated, so no separate host_editing_end is needed here.
   socket.on('update_room_categories', ({ categories }) => {
     const code = socket.roomCode; const room = rooms[code];
-    if (!room || room.host !== socket.id) return;
+    if (!room || room.host !== socket.user.id) return;
     if (!Array.isArray(categories) || categories.length < 6 || categories.length > 12) {
       return socket.emit('error_msg', 'اختر من 6 إلى 12 فئة');
     }
@@ -787,7 +785,7 @@ io.on('connection', socket => {
 
   socket.on('start_game', async () => {
     const code = socket.roomCode; const room = rooms[code];
-    if (!room || room.host !== socket.id) return;
+    if (!room || room.host !== socket.user.id) return;
     clearRoomIdleTimer(room);   // leaving 'waiting' — idle timeout doesn't apply mid-game
     room.status = 'loading';
     io.to(code).emit('game_loading', { message:'جاري تحضير الأسئلة...' });
@@ -813,11 +811,12 @@ io.on('connection', socket => {
     const code = socket.roomCode; const room = rooms[code];
     if (!room || room.status !== 'playing') return;
     const q = room.currentQuestion;
-    if (!q || room.answered[socket.id]) return;
-    room.answered[socket.id] = true;
+    const uid = socket.user.id;
+    if (!q || room.answered[uid]) return;
+    room.answered[uid] = true;
     const correct = answer === q.answer;
     const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
-    if (correct) room.players[socket.id].sessionScore += pts;
+    if (correct) room.players[uid].sessionScore += pts;
     // FIX #1: Only send correct_answer AFTER player has answered
     socket.emit('answer_result', { correct, correct_answer:q.answer, points:correct?pts:0 });
     io.to(code).emit('players_update', getPlayers(code));
@@ -840,9 +839,48 @@ io.on('connection', socket => {
 });
 
 function getPlayers(code) {
-  return Object.entries(rooms[code].players).map(([id,p]) => ({
-    ...p, socketId:id, isHost:id===rooms[code].host
+  // Only the fields the client actually renders (name, level badge, scores,
+  // host flag) — room.players itself still holds the full safeUser() object
+  // (email, phone, dob, gender, socketId, …), none of which belongs in a
+  // payload broadcast to every other player in the room.
+  return Object.values(rooms[code].players).map(p => ({
+    id: p.id, display_name: p.display_name, level: p.level,
+    total_score: p.total_score, sessionScore: p.sessionScore,
+    isHost: p.id === rooms[code].host
   })).sort((a,b) => b.sessionScore-a.sessionScore);
+}
+
+// Insert a player into a room, keyed by user id — or, if that user id is
+// already present (their previous socket never disconnected cleanly, e.g. a
+// refreshed tab racing the old connection's teardown), TAKE OVER the existing
+// entry instead of creating a duplicate: sessionScore, host status, and
+// answered state are untouched, only the tracked socketId moves to the new
+// socket. The superseded socket is force-disconnected — but only after its
+// own roomCode is cleared, so ITS disconnect handler sees "not in a room" and
+// never reaches removePlayerFromRoom to fight over the entry the new socket
+// just took (removePlayerFromRoom's own socketId check is the second layer
+// of defense against that race — see there for why both matter).
+function addOrTakeoverPlayer(room, socket) {
+  const uid = socket.user.id;
+  const existing = room.players[uid];
+  socket.join(room.code);
+  socket.roomCode = room.code;
+  if (existing) {
+    const oldSocketId = existing.socketId;
+    existing.socketId = socket.id;
+    if (oldSocketId && oldSocketId !== socket.id) {
+      const oldSocket = io.sockets.sockets.get(oldSocketId);
+      if (oldSocket) {
+        oldSocket.roomCode = null;
+        oldSocket.leave(room.code);
+        oldSocket.disconnect(true);
+      }
+    }
+    return existing;
+  }
+  const player = { ...socket.user, sessionScore:0, socketId: socket.id };
+  room.players[uid] = player;
+  return player;
 }
 
 const ROOM_IDLE_MS = 30 * 60 * 1000;
@@ -876,11 +914,21 @@ function clearRoomIdleTimer(room) {
 // are responsible for anything specific to how the player left (e.g.
 // leave_room's socket.leave/roomCode reset, kickUser's error_msg + forced
 // disconnect) — this only touches room state.
+//
+// CRITICAL: only remove the player if THIS socket is still their current one.
+// A takeover (addOrTakeoverPlayer) already force-disconnects the superseded
+// socket, which fires ITS OWN 'disconnect' handler — without this check, that
+// stale disconnect would delete the entry the new socket just took over,
+// kicking the player who simply reconnected. socketId is the source of truth
+// for "who currently owns this player slot," not the socket calling in.
 function removePlayerFromRoom(io, socket, code) {
   const room = rooms[code];
   if (!room) return;
-  const wasHost = room.host === socket.id;
-  delete room.players[socket.id];
+  const uid = socket.user.id;
+  const player = room.players[uid];
+  if (!player || player.socketId !== socket.id) return;
+  const wasHost = room.host === uid;
+  delete room.players[uid];
   if (Object.keys(room.players).length === 0) {
     if (room.timer) clearInterval(room.timer);
     if (room.endTimer) clearTimeout(room.endTimer);
@@ -896,7 +944,7 @@ function removePlayerFromRoom(io, socket, code) {
     io.to(code).emit('host_editing_end');
   }
   if (wasHost) {
-    room.host = Object.keys(room.players)[0];
+    room.host = Number(Object.keys(room.players)[0]);
     io.to(code).emit('host_changed', { host: room.host });
   }
   io.to(code).emit('players_update', getPlayers(code));

@@ -1301,7 +1301,7 @@ function connectSocket() {
   });
 
   socket.on('room_reset',({code,categories,host})=>{
-    isHost=(host===socket.id); currentRoomCode=code; editingRoom=false;
+    isHost=(host===me.id); currentRoomCode=code; editingRoom=false;
     currentRoomCategories=categories||[]; renderLobbyCategories();
     document.getElementById('lobby-code').textContent=code;
     stopEditingIndicator();
@@ -1500,7 +1500,7 @@ function connectSocket() {
     // FIX: this used to flip isHost=true for EVERY remaining non-host client (it
     // ignored the payload entirely) — now it only promotes the actual new host.
     const wasHost = isHost;
-    isHost = (host === socket.id);
+    isHost = (host === me.id);
     if(isHost && !wasHost){
       document.getElementById('lobby-host-btn').style.display='block';
       document.getElementById('start-btn').disabled=false;
