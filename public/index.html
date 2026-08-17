@@ -313,8 +313,16 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 .confirm-actions { display: flex; gap: 10px; }
 .confirm-btn { flex: 1; padding: 11px; border-radius: var(--radius-sm); font-weight: 700; font-size: 14px; cursor: pointer; border: none; font-family: var(--font); transition: transform 0.1s; }
 .confirm-btn:active { transform: scale(0.97); }
-.confirm-btn-safe { background: var(--blue); color: #fff; }
-.confirm-btn-danger { background: #E8472A; color: #fff; }
+/* "-safe"/"-danger" name the BUTTON'S role (لا = the safe/decline choice,
+   نعم = the consequential/confirm choice), fixed colours applied to every
+   yes/no dialog regardless of context. "-neutral" is for the single-button
+   حسناً acknowledgement, which isn't a yes/no choice, so it stays blue. */
+.confirm-btn-safe { background: var(--green); color: #fff; }
+.confirm-btn-danger { background: var(--red); color: #fff; }
+.confirm-btn-neutral { background: var(--blue-d); color: #fff; }
+/* Non-destructive confirmations (host handoff, new-host notice) swap the red
+   border for blue — same box/overlay, no danger cue since nothing is lost. */
+.confirm-box.confirm-box-neutral { border-color: var(--blue); }
 
 /* ── Question layout ── */
 .q-wrapper { margin-top: 8px; display: flex; flex-direction: column; }
@@ -1007,13 +1015,28 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 </button>
 <div class="max-popup" id="max-popup"><div class="max-popup-box">تم اختيار الحد الأقصى من الفئات</div></div>
 
-<!-- Leave-room confirmation: blocking, no auto-dismiss (unlike max-popup/toast) -->
+<!-- Leave-room confirmation: blocking, no auto-dismiss (unlike max-popup/toast).
+     Reused for both the non-host leave and the host's handoff — only the
+     text and the box border (red vs blue) differ per context, set in JS via
+     openLeaveConfirm(). Button colours are fixed: نعم is always red
+     (confirm-btn-danger), لا is always green (confirm-btn-safe). -->
 <div class="confirm-overlay" id="leave-confirm-overlay">
-  <div class="confirm-box">
-    <div class="confirm-text">هل أنت متأكد من الخروج من الغرفة؟</div>
+  <div class="confirm-box" id="leave-confirm-box">
+    <div class="confirm-text" id="leave-confirm-text">هل أنت متأكد من الخروج من الغرفة؟</div>
     <div class="confirm-actions">
       <button class="confirm-btn confirm-btn-safe" type="button" onclick="closeLeaveConfirm()">لا</button>
       <button class="confirm-btn confirm-btn-danger" type="button" onclick="confirmLeaveYes()">نعم</button>
+    </div>
+  </div>
+</div>
+
+<!-- New-host notice: blocking, single acknowledgement button, blue — not a
+     yes/no choice, so it doesn't use the danger/safe colours. -->
+<div class="confirm-overlay" id="new-host-overlay">
+  <div class="confirm-box confirm-box-neutral">
+    <div class="confirm-text">لقد أصبحت المضيف</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-btn-neutral" type="button" onclick="closeNewHostOverlay()">حسناً</button>
     </div>
   </div>
 </div>
@@ -1290,15 +1313,6 @@ function connectSocket() {
     showToast('غرفة جديدة — استعدوا!'); playSound('enter'); show('s-lobby');
   });
 
-  // Sent to everyone EXCEPT the host who closed it (they navigate home directly
-  // from backFromCreate()) — so this only ever fires for the other players.
-  socket.on('room_closed',()=>{
-    showCenteredPopup('تم اغلاق الغرفة');
-    currentRoomCode=null; isHost=false; editingRoom=false;
-    selectedCats=[]; renderSelection(); stopEditingIndicator();
-    show('s-home');
-  });
-
   // Host edited categories from the lobby-back screen and saved — live-refresh
   // everyone's lobby thumbnails, including the host's own. No popup/toast here on
   // purpose: the live-updating grid IS the feedback.
@@ -1491,7 +1505,7 @@ function connectSocket() {
       document.getElementById('lobby-host-btn').style.display='block';
       document.getElementById('start-btn').disabled=false;
       document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
-      showToast('أصبحت المضيف الجديد');
+      showNewHostOverlay();
     }
     const active = document.querySelector('.screen.active');
     if(active) updateGameBackButton(active.id);
@@ -1612,9 +1626,8 @@ function updateGameBackButton(id){
 
 function backFromCreate(){
   if(currentRoomCode && isHost){
-    socket.emit('close_room');
-    currentRoomCode=null; isHost=false; editingRoom=false;
-    selectedCats=[]; renderSelection();
+    confirmHostLeaveRoom();
+    return;
   }
   show('s-home');
 }
@@ -1628,10 +1641,26 @@ function backFromLobby(){
   show('s-create');
 }
 
+// Shared opener for #leave-confirm-overlay: sets the message and toggles the
+// box border between red (non-host leave) and blue (host handoff) — button
+// colours are fixed (نعم red, لا green) regardless of context, so only the
+// border needs to change here.
+function openLeaveConfirm(text, neutral){
+  document.getElementById('leave-confirm-text').textContent = text;
+  document.getElementById('leave-confirm-box').classList.toggle('confirm-box-neutral', neutral);
+  document.getElementById('leave-confirm-overlay').classList.add('show');
+}
+
 // Non-host "خروج من الغرفة" flow: blocking confirmation (no auto-dismiss, unlike
 // the toast/max-popup), then actually leaves on "نعم" only.
 function confirmLeaveRoom(){
-  document.getElementById('leave-confirm-overlay').classList.add('show');
+  openLeaveConfirm('هل أنت متأكد من الخروج من الغرفة؟', false);
+}
+// Host's exit from category-selection: no longer destructive — the room
+// keeps going without them and hosting passes to another player, so this
+// reuses the same overlay in its neutral (blue) box styling.
+function confirmHostLeaveRoom(){
+  openLeaveConfirm('هل أنت متأكد من الخروج؟', true);
 }
 function closeLeaveConfirm(){
   document.getElementById('leave-confirm-overlay').classList.remove('show');
@@ -1642,6 +1671,15 @@ function confirmLeaveYes(){
   currentRoomCode=null; isHost=false; editingRoom=false; currentRoomCategories=[];
   selectedCats=[]; renderSelection();
   show('s-home');
+}
+
+// New-host notice: blocking, single "حسناً" button — the player stays in the
+// lobby, this just confirms they've read it (no auto-dismiss, unlike the toast).
+function showNewHostOverlay(){
+  document.getElementById('new-host-overlay').classList.add('show');
+}
+function closeNewHostOverlay(){
+  document.getElementById('new-host-overlay').classList.remove('show');
 }
 
 function renderLobbyCategories(){
