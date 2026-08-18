@@ -776,7 +776,7 @@ io.on('connection', socket => {
     room.status = 'waiting'; room.phase = 0; room.qIndex = 0;
     room.answered = {}; room.currentQuestion = null;
     room.allQuestions = null; room.questions = null;
-    room.hostEditing = false;
+    room.hostEditing = false; room.advancing = false;
     Object.values(room.players).forEach(p => { p.sessionScore = 0; });
     io.to(code).emit('room_reset', { code, categories: room.categories, host: room.host });
     io.to(code).emit('players_update', getPlayers(code));
@@ -797,11 +797,18 @@ io.on('connection', socket => {
       const easy   = await buildRound(room.categories, 'easy',   usedIds, ctx);
       const medium = await buildRound(room.categories, 'medium', usedIds, ctx);
       const hard   = await buildRound(room.categories, 'hard',   usedIds, ctx);
+      // Every player could have disconnected (room torn down) — or even the
+      // same 4-digit code reused by an unrelated brand-new room — while
+      // these awaits were in flight. Re-check identity before touching room
+      // state or starting the game; if it's gone, abort quietly.
+      if (rooms[code] !== room) return;
       room.allQuestions = { easy, medium, hard };
       room.status = 'playing'; room.phase = 0;
       startPhase(code);
     } catch(e) {
-      console.error(e); room.status = 'waiting';
+      console.error(e);
+      if (rooms[code] !== room) return;   // same staleness check on the failure path
+      room.status = 'waiting';
       io.to(code).emit('error_msg', 'خطأ في تحميل الأسئلة');
       resetRoomIdleTimer(code);   // back to 'waiting' — resume idle tracking
     }
@@ -820,33 +827,37 @@ io.on('connection', socket => {
     // FIX #1: Only send correct_answer AFTER player has answered
     socket.emit('answer_result', { correct, correct_answer:q.answer, points:correct?pts:0 });
     io.to(code).emit('players_update', getPlayers(code));
-    const total = Object.keys(room.players).length;
-    if (Object.keys(room.answered).length >= total) {
-      clearInterval(room.timer);
-      // Reveal correct answer to everyone now that all answered
-      io.to(code).emit('reveal_answer', { correct_answer:q.answer });
-      io.to(code).emit('timer', { seconds:0 });
-      room.qIndex++;
-      setTimeout(() => askQuestion(code), 2500);
-    }
+    maybeAdvanceQuestion(code);
   });
 
+  // A disconnect mid-lobby still removes the player outright (unchanged).
+  // Mid-game (status isn't 'waiting'), a dropped connection must not evict
+  // the player or block the round — mark them disconnected instead so their
+  // score/host status survive and submit_answer/maybeAdvanceQuestion can
+  // stop waiting on them. leave_room and kickUser are deliberate exits, not
+  // covered here — they keep going through removePlayerFromRoom regardless
+  // of room status.
   socket.on('disconnect', () => {
-    const code = socket.roomCode;
-    if (!code || !rooms[code]) return;
-    removePlayerFromRoom(io, socket, code);
+    const code = socket.roomCode; const room = rooms[code];
+    if (!code || !room) return;
+    if (room.status === 'waiting') removePlayerFromRoom(io, socket, code);
+    else markPlayerDisconnected(io, socket, code);
   });
 });
 
 function getPlayers(code) {
   // Only the fields the client actually renders (name, level badge, scores,
-  // host flag) — room.players itself still holds the full safeUser() object
-  // (email, phone, dob, gender, socketId, …), none of which belongs in a
-  // payload broadcast to every other player in the room.
-  return Object.values(rooms[code].players).map(p => ({
+  // host flag, connection/answered state) — room.players itself still holds
+  // the full safeUser() object (email, phone, dob, gender, socketId, …),
+  // none of which belongs in a payload broadcast to every other player in
+  // the room.
+  const room = rooms[code];
+  return Object.values(room.players).map(p => ({
     id: p.id, display_name: p.display_name, level: p.level,
     total_score: p.total_score, sessionScore: p.sessionScore,
-    isHost: p.id === rooms[code].host
+    isHost: p.id === room.host,
+    connected: p.connected,
+    answered: !!room.answered[p.id]
   })).sort((a,b) => b.sessionScore-a.sessionScore);
 }
 
@@ -868,6 +879,7 @@ function addOrTakeoverPlayer(room, socket) {
   if (existing) {
     const oldSocketId = existing.socketId;
     existing.socketId = socket.id;
+    existing.connected = true;   // whoever just (re)claimed this uid's slot is, by definition, connected now
     if (oldSocketId && oldSocketId !== socket.id) {
       const oldSocket = io.sockets.sockets.get(oldSocketId);
       if (oldSocket) {
@@ -878,7 +890,7 @@ function addOrTakeoverPlayer(room, socket) {
     }
     return existing;
   }
-  const player = { ...socket.user, sessionScore:0, socketId: socket.id };
+  const player = { ...socket.user, sessionScore:0, socketId: socket.id, connected: true };
   room.players[uid] = player;
   return player;
 }
@@ -951,6 +963,41 @@ function removePlayerFromRoom(io, socket, code) {
   resetRoomIdleTimer(code);
 }
 
+// Mid-game counterpart to removePlayerFromRoom: an unannounced disconnect
+// while status isn't 'waiting' must NOT evict the player — their score and
+// host status stay exactly where they are, pending a rejoin path that
+// doesn't exist yet. Same socketId staleness guard as removePlayerFromRoom,
+// same reasoning (see there). Only the actual admin/explicit-leave paths
+// (kickUser, leave_room) still fully remove a player regardless of status.
+function markPlayerDisconnected(io, socket, code) {
+  const room = rooms[code];
+  if (!room) return;
+  const uid = socket.user.id;
+  const player = room.players[uid];
+  if (!player || player.socketId !== socket.id) return;
+  player.connected = false;
+
+  const anyoneConnected = Object.values(room.players).some(p => p.connected);
+  if (!anyoneConnected) {
+    // No rejoin path exists yet, so a room with zero connected players is
+    // permanently unreachable — tear it down now rather than let a live
+    // question timer keep ticking with nobody able to answer, or leave the
+    // game to silently grind through the rest of the questions unattended.
+    if (room.timer) clearInterval(room.timer);
+    if (room.endTimer) clearTimeout(room.endTimer);
+    if (room.idleTimer) clearTimeout(room.idleTimer);
+    delete rooms[code];
+    return;
+  }
+
+  io.to(code).emit('players_update', getPlayers(code));
+  // The player who just dropped might have been the only one left who
+  // hadn't answered yet — disconnecting must be able to advance the
+  // question just as answering does, or the round would sit until the 15s
+  // timer times out even though every remaining connected player is done.
+  maybeAdvanceQuestion(code);
+}
+
 // Force every live socket of a banned user out of the game. Reuses
 // removePlayerFromRoom for the room cleanup (drop the player, reassign host
 // or delete an empty room), then disconnects the socket so they can't keep
@@ -979,7 +1026,7 @@ function askQuestion(code) {
   if (!room || room.status !== 'playing') return;
   if (room.qIndex >= room.questions.length) { endPhase(code); return; }
   const q = room.questions[room.qIndex];
-  room.currentQuestion = q; room.answered = {};
+  room.currentQuestion = q; room.answered = {}; room.advancing = false;
   const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
   io.to(code).emit('question', {
     index:room.qIndex+1, total:room.questions.length,
@@ -996,11 +1043,51 @@ function askQuestion(code) {
     io.to(code).emit('timer', { seconds:timeLeft });
     if (timeLeft <= 0) {
       clearInterval(room.timer);
+      // A pre-existing race, unrelated to disconnect handling: a late
+      // submit_answer already in flight when time ran out can call
+      // maybeAdvanceQuestion right around the same moment this fires.
+      // room.advancing is the single flag both paths check-and-set, so
+      // whichever gets here first wins and the other is a no-op.
+      if (room.advancing) return;
+      room.advancing = true;
       io.to(code).emit('time_up', { correct_answer:q.answer });
       room.qIndex++;
       setTimeout(() => askQuestion(code), 2500);
     }
   }, 1000);
+}
+
+// Shared by submit_answer (after an answer arrives) and markPlayerDisconnected
+// (after a connected player drops) — disconnected players must not block
+// advancement, so this must be reachable from BOTH directions: the last
+// connected player might finish the round by ANSWERING or by DISCONNECTING.
+// Only counts connected players on both sides of the comparison — a
+// disconnected player's stale `answered:true` entry (never purged, per
+// design) must not inflate the numerator once they're excluded from the
+// denominator, or the round could cut off a still-present player early.
+//
+// room.advancing is a one-shot guard against firing this twice for the same
+// question: e.g. the last connected player answers (advancing this question)
+// and then immediately disconnects — both paths call this function, and
+// without the guard the second call would double-increment qIndex and leak
+// the first call's timer (askQuestion overwrites room.timer without clearing
+// it). The same flag also protects against the separate, pre-existing race
+// with the 15s timer's own time_up branch (see there).
+function maybeAdvanceQuestion(code) {
+  const room = rooms[code];
+  if (!room || room.status !== 'playing' || !room.currentQuestion || room.advancing) return;
+  const connectedUids = Object.keys(room.players).filter(id => room.players[id].connected);
+  const total = connectedUids.length;
+  if (total === 0) return;   // room cleanup (not advancement) handles the all-disconnected case
+  const answeredCount = connectedUids.filter(id => room.answered[id]).length;
+  if (answeredCount < total) return;
+  room.advancing = true;
+  if (room.timer) clearInterval(room.timer);
+  const q = room.currentQuestion;
+  io.to(code).emit('reveal_answer', { correct_answer:q.answer });
+  io.to(code).emit('timer', { seconds:0 });
+  room.qIndex++;
+  setTimeout(() => askQuestion(code), 2500);
 }
 
 function endPhase(code) {
@@ -1023,6 +1110,13 @@ async function endGame(code) {
     await pool.query('UPDATE users SET total_score=total_score+$1 WHERE id=$2', [pts, p.id]);
     await pool.query('INSERT INTO game_history (user_id,room_code,score) VALUES ($1,$2,$3)', [p.id, code, p.sessionScore]);
   }
+  // Those DB writes are awaited sequentially per player — the room could have
+  // been torn down (every player disconnected) while they were in flight, or
+  // the same 4-digit code could even have been reused by an unrelated new
+  // room. Re-check identity before broadcasting a stale leaderboard to
+  // whoever's actually in that room now, or scheduling this room's post-game
+  // cleanup timer on a room object that isn't (or is no longer) rooms[code].
+  if (rooms[code] !== room) return;
   io.to(code).emit('game_end', { leaderboard });
   if (room.endTimer) clearTimeout(room.endTimer);
   room.endTimer = setTimeout(() => { delete rooms[code]; }, 120000);
