@@ -949,42 +949,54 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <!-- Phase banner -->
     <div class="phase-banner" id="q-phase-banner" style="background:var(--green);">الجولة 1 - سهل</div>
 
-    <!-- Top row: points pill (right) + report-a-problem control (left corner, clear of options) -->
-    <div class="pts-top">
-      <span class="points-tag" id="q-pts">100 نقطة</span>
-      <div class="report-slot" id="report-slot">
-        <button id="report-btn" class="report-btn" type="button" onclick="reportQuestion()" aria-label="الإبلاغ عن مشكلة في السؤال" title="الإبلاغ عن مشكلة في السؤال">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.4 6 14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>
-          <span>الإبلاغ عن مشكلة</span>
-        </button>
-        <div id="report-msg" class="report-msg"></div>
+    <!-- Rejoin-mid-game waiting state: a returning player lands here instead
+         of the live question until the next one actually starts (see the
+         rejoined_game handler). Reuses the s-loading spinner/typography —
+         no new visual language. Hidden by default; the next real 'question'
+         broadcast hides this and re-shows #q-live-content. -->
+    <div id="q-waiting-rejoin" style="display:none;margin-top:60px;text-align:center;">
+      <span class="spinner-big"></span>
+      <h2 style="margin-top:14px;color:var(--text);font-size:24px;font-weight:700;">ستنضم في السؤال التالي</h2>
+    </div>
+
+    <div id="q-live-content">
+      <!-- Top row: points pill (right) + report-a-problem control (left corner, clear of options) -->
+      <div class="pts-top">
+        <span class="points-tag" id="q-pts">100 نقطة</span>
+        <div class="report-slot" id="report-slot">
+          <button id="report-btn" class="report-btn" type="button" onclick="reportQuestion()" aria-label="الإبلاغ عن مشكلة في السؤال" title="الإبلاغ عن مشكلة في السؤال">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.4 6 14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>
+            <span>الإبلاغ عن مشكلة</span>
+          </button>
+          <div id="report-msg" class="report-msg"></div>
+        </div>
       </div>
-    </div>
 
-    <div id="logo-box" style="display:none;"></div>
+      <div id="logo-box" style="display:none;"></div>
 
-    <!-- Question inside bordered box; question number bottom-left inside -->
-    <div class="q-box">
-      <div class="q-text" id="q-text" style="margin-bottom:0;">...</div>
-      <div class="q-num-inside" id="q-num">سؤال <bdi>1</bdi>/<bdi>12</bdi></div>
-    </div>
-
-    <!-- Image-in-question (classic path, e.g. flags): directly below the question box, no box styling. Hidden unless the question has image_url -->
-    <div id="q-image" class="q-image" style="display:none;"><img id="q-image-img" src="" alt=""></div>
-
-    <!-- Timer ring centered below question box -->
-    <div style="display:flex;justify-content:center;margin:14px 0;">
-      <div class="timer-wrap" id="timer-wrap">
-        <svg class="timer-svg" viewBox="0 0 108 108">
-          <circle class="timer-track" cx="54" cy="54" r="46"></circle>
-          <circle id="timer-ring" class="timer-prog" cx="54" cy="54" r="46"></circle>
-        </svg>
-        <div class="timer-num" id="timer-el">15</div>
+      <!-- Question inside bordered box; question number bottom-left inside -->
+      <div class="q-box">
+        <div class="q-text" id="q-text" style="margin-bottom:0;">...</div>
+        <div class="q-num-inside" id="q-num">سؤال <bdi>1</bdi>/<bdi>12</bdi></div>
       </div>
-    </div>
 
-    <div class="options-grid" id="q-opts"></div>
-    <div id="q-result"></div>
+      <!-- Image-in-question (classic path, e.g. flags): directly below the question box, no box styling. Hidden unless the question has image_url -->
+      <div id="q-image" class="q-image" style="display:none;"><img id="q-image-img" src="" alt=""></div>
+
+      <!-- Timer ring centered below question box -->
+      <div style="display:flex;justify-content:center;margin:14px 0;">
+        <div class="timer-wrap" id="timer-wrap">
+          <svg class="timer-svg" viewBox="0 0 108 108">
+            <circle class="timer-track" cx="54" cy="54" r="46"></circle>
+            <circle id="timer-ring" class="timer-prog" cx="54" cy="54" r="46"></circle>
+          </svg>
+          <div class="timer-num" id="timer-el">15</div>
+        </div>
+      </div>
+
+      <div class="options-grid" id="q-opts"></div>
+      <div id="q-result"></div>
+    </div>
   </div>
 </div>
 
@@ -1040,6 +1052,23 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     </div>
   </div>
 </div>
+
+<!-- Rejoin-prompt: blocking, offered once per connection when a stored
+     in-progress room code exists and the server confirms it's still valid.
+     Not destructive — blue border, like the host-handoff dialog — but
+     within THIS dialog «لا» is the consequential choice (declining gives
+     up easy return to a game already in progress), so the button colours
+     are the mirror of the other two yes/no dialogs: لا is red, نعم is
+     green. Same class system, just pointed at the other button. -->
+<div class="confirm-overlay" id="rejoin-confirm-overlay">
+  <div class="confirm-box confirm-box-neutral">
+    <div class="confirm-text">هل تريد أن تكمل اللعبة؟</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-btn-danger" type="button" onclick="declineRejoin()">لا</button>
+      <button class="confirm-btn confirm-btn-safe" type="button" onclick="confirmRejoin()">نعم</button>
+    </div>
+  </div>
+</div>
 <div class="maint-overlay" id="maint-overlay" role="alertdialog" aria-modal="true">
   <div class="maint-box">
     <div class="maint-icon" aria-hidden="true">🛠️</div>
@@ -1083,6 +1112,10 @@ function playSound(type) {
 
 // ── State ──────────────────────────────────────────────────────────────────
 let token=localStorage.getItem('token'), me=null, socket=null, selectedCats=[], isHost=false;
+let awaitingRejoinConfirm=false;
+// pendingRejoinCode is keyed per user id so different accounts on the same
+// device never see or clobber each other's stored in-progress-game code.
+function rejoinCodeKey(){ return (me && me.id) ? `pendingRejoinCode_${me.id}` : null; }
 let currentRoomCode=null, currentFlagQuestion=null, currentFlagOptions=null, reportedThisQuestion=false, reportInFlight=false;
 let editingRoom=false, currentRoomCategories=[];
 let lastPickedAnswer=null, lastAnswerCorrect=false;
@@ -1272,9 +1305,30 @@ function connectSocket() {
   if (socket) return;
   socket=io({auth:{token}});
   socket.on('connect_error',e=>showToast('خطأ: '+e.message));
-  socket.on('error_msg',msg=>showToast('⚠️ '+msg));
+  socket.on('error_msg',msg=>{
+    // A rejoin attempt triggered by the prompt (confirmRejoin) failed —
+    // the stored code is dead (room gone, race with the check), so don't
+    // keep re-offering it on future loads.
+    if (awaitingRejoinConfirm) {
+      awaitingRejoinConfirm=false;
+      const key=rejoinCodeKey(); if (key) localStorage.removeItem(key);
+    }
+    showToast('⚠️ '+msg);
+  });
   // Maintenance rejections get a centered red overlay instead of the small toast.
   socket.on('maintenance_blocked',msg=>showMaintenanceOverlay(msg));
+
+  // Offered once per connection: a stored code from a previous session means
+  // this user was in a game that may still be running. The server's answer
+  // is a bare boolean — no room details leak either way.
+  socket.on('rejoin_available',({available})=>{
+    const key=rejoinCodeKey();
+    if (!available) { if (key) localStorage.removeItem(key); return; }
+    document.getElementById('rejoin-confirm-overlay').classList.add('show');
+  });
+  const rejoinKey=rejoinCodeKey();
+  const storedRejoinCode=rejoinKey?localStorage.getItem(rejoinKey):null;
+  if (storedRejoinCode) socket.emit('check_rejoin',{code:storedRejoinCode});
 
   socket.on('room_created',({code,categories})=>{
     isHost=true; currentRoomCode=code; editingRoom=false;
@@ -1291,6 +1345,7 @@ function connectSocket() {
   });
 
   socket.on('room_joined',({code,categories,hostEditing})=>{
+    awaitingRejoinConfirm=false;   // rare race: check said yes, but by the time نعم was clicked the room had reset to 'waiting'
     isHost=false; currentRoomCode=code; editingRoom=false;
     currentRoomCategories=categories||[]; renderLobbyCategories();
     document.getElementById('lobby-code').textContent=code;
@@ -1298,6 +1353,20 @@ function connectSocket() {
     // In case we're joining WHILE the host happens to be mid-edit already.
     if (hostEditing) startEditingIndicator(); else stopEditingIndicator();
     playSound('enter');show('s-lobby');
+  });
+
+  // A game already in progress — join_room let this socket through because
+  // it's an existing member reconnecting, not a new player. Skip the lobby
+  // entirely and land on the question screen in its waiting state; the next
+  // real 'question' broadcast (sent to everyone, this player included from
+  // now on) clears that state and shows the live question normally.
+  socket.on('rejoined_game',({code,phase,phaseName,isHost:hostFlag})=>{
+    awaitingRejoinConfirm=false;
+    currentRoomCode=code; isHost=hostFlag;
+    document.getElementById('q-phase-banner').textContent=`الجولة ${phase} - ${phaseName}`;
+    document.getElementById('q-live-content').style.display='none';
+    document.getElementById('q-waiting-rejoin').style.display='block';
+    show('s-question');
   });
 
   socket.on('room_reset',({code,categories,host})=>{
@@ -1333,7 +1402,13 @@ function connectSocket() {
     });
   });
 
-  socket.on('game_loading',({message})=>{document.getElementById('loading-msg').textContent=message;show('s-loading');});
+  socket.on('game_loading',({message})=>{
+    // First unambiguous "a game has started" signal — store the code so a
+    // disconnect/reload from here on (even before the first question ever
+    // arrives) can still offer a rejoin.
+    const key=rejoinCodeKey(); if (key && currentRoomCode) localStorage.setItem(key, currentRoomCode);
+    document.getElementById('loading-msg').textContent=message;show('s-loading');
+  });
 
   socket.on('phase_start',({phase,name})=>{
     document.getElementById('phase-num').textContent=phase;
@@ -1360,6 +1435,10 @@ function connectSocket() {
   }
 
   socket.on('question',({index,total,question,options,points,phase,is_logo,is_image,images,image_url})=>{
+    // Clear a rejoin's waiting state, if any — a no-op otherwise (this
+    // element is already hidden and #q-live-content already showing).
+    document.getElementById('q-waiting-rejoin').style.display='none';
+    document.getElementById('q-live-content').style.display='';
     const phaseColors=[`var(--green)`,`var(--blue)`,`var(--red)`];
     const phaseNames=['سهل','متوسط','صعب'];
     document.getElementById('q-num').innerHTML=`سؤال <bdi>${index}</bdi>/<bdi>${total}</bdi>`;
@@ -1486,11 +1565,30 @@ function connectSocket() {
     playSound('wrong');
   });
 
+  // A room's frozen question got silently retired (everyone had
+  // disconnected, someone just rejoined) — NOT a reveal, so unlike
+  // time_up/reveal_answer this carries no correct_answer. Purely defensive:
+  // nothing in this app currently re-joins a room on a bare socket
+  // reconnect, so no client should actually be showing a stale question
+  // when this arrives — but if that ever changes, this clears it without
+  // leaking the answer. The next real 'question' broadcast already rebuilds
+  // everything from scratch regardless, so this only matters in that gap.
+  socket.on('question_reset',()=>{
+    document.querySelectorAll('.opt').forEach(b=>{
+      b.disabled=true;
+      b.classList.remove('correct-glow','wrong-glow','faded','pulse1','pulse3');
+    });
+    const res=document.getElementById('q-result');
+    res.style.display='none'; res.textContent='';
+    lastPickedAnswer=null; lastAnswerCorrect=false;
+  });
+
   socket.on('phase_transition',()=>{
     show('s-leaderboard'); // shows the "preparing next round" spinner screen
   });
 
   socket.on('game_end',({leaderboard})=>{
+    const key=rejoinCodeKey(); if (key) localStorage.removeItem(key);
     renderPodium(leaderboard);
     playSound('leaderboard'); show('s-gameover');
     fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(u=>{me=u;updateHomeUI();});
@@ -1770,8 +1868,24 @@ function reportQuestion(){
     })
     .catch(()=>{ reportInFlight=false; showStatus(false); });
 }
-function leaveRoom(){if(socket){socket.disconnect();socket=null;}connectSocket();show('s-home');}
+function leaveRoom(){
+  const key=rejoinCodeKey(); if (key) localStorage.removeItem(key);
+  if(socket){socket.disconnect();socket=null;}connectSocket();show('s-home');
+}
 function playAgain(){ if(!socket){show('s-home');return;} playSound('click'); socket.emit('play_again'); }
+
+// Rejoin-prompt actions (see the rejoin_available handler in connectSocket).
+function declineRejoin(){
+  document.getElementById('rejoin-confirm-overlay').classList.remove('show');
+  const key=rejoinCodeKey(); if (key) localStorage.removeItem(key);
+}
+function confirmRejoin(){
+  document.getElementById('rejoin-confirm-overlay').classList.remove('show');
+  const key=rejoinCodeKey(); const code=key?localStorage.getItem(key):null;
+  if (!code || !socket) { if (key) localStorage.removeItem(key); return; }
+  awaitingRejoinConfirm=true;
+  socket.emit('join_room',{code});
+}
 
 init();
 </script>

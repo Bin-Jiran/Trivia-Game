@@ -717,14 +717,44 @@ io.on('connection', socket => {
       return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
     }
     const room = rooms[code];
-    if (!room) return socket.emit('error_msg', 'الغرفة غير موجودة');
-    if (room.status !== 'waiting') return socket.emit('error_msg', 'اللعبة بدأت');
+    // A room mid-cleanup (room.endTimer is only ever set in the post-game
+    // window, awaiting play_again or its 120s auto-delete) is treated as
+    // gone for join/rejoin purposes too — same message as not existing.
+    if (!room || room.endTimer) return socket.emit('error_msg', 'الغرفة غير موجودة');
+    const uid = socket.user.id;
+    // Someone already IN this room (by user id) is allowed back in even
+    // after the game has started — everyone else still gets the usual
+    // rejection. No new player may enter a started game.
+    const isReturningPlayer = room.status !== 'waiting' && !!room.players[uid];
+    if (room.status !== 'waiting' && !isReturningPlayer) {
+      return socket.emit('error_msg', 'اللعبة بدأت');
+    }
     addOrTakeoverPlayer(room, socket);
-    // hostEditing lets a player who joins mid-edit see the dimmed grid + indicator
-    // immediately, instead of only finding out on the next broadcast.
-    socket.emit('room_joined', { code, categories:room.categories, host:room.host, hostEditing:!!room.hostEditing });
+    if (room.status === 'waiting') {
+      // hostEditing lets a player who joins mid-edit see the dimmed grid +
+      // indicator immediately, instead of only finding out on the next broadcast.
+      socket.emit('room_joined', { code, categories:room.categories, host:room.host, hostEditing:!!room.hostEditing });
+    } else {
+      resumeAbandonedRoom(room);
+      sendRejoinState(room, socket);
+    }
     io.to(code).emit('players_update', getPlayers(code));
     resetRoomIdleTimer(code);
+  });
+
+  // Side-effect-free peek for the client's automatic rejoin prompt: does a
+  // stored code from a previous session still point at something this user
+  // could actually rejoin? Mirrors join_room's own real gate exactly (same
+  // three conditions: exists, in progress, still a member) so the answer is
+  // a true prediction — but the response is a bare boolean either way, no
+  // room details, so a dead/foreign code leaks nothing about what it was.
+  socket.on('check_rejoin', ({ code }) => {
+    if (MAINTENANCE_MODE && !socket.isAdmin) {
+      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
+    }
+    const room = rooms[code];
+    const available = !!room && room.status !== 'waiting' && !room.endTimer && !!room.players[socket.user.id];
+    socket.emit('rejoin_available', { available });
   });
 
   // Host entered the category-selection screen from the lobby's "رجوع" — tell
@@ -777,7 +807,7 @@ io.on('connection', socket => {
     room.answered = {}; room.currentQuestion = null;
     room.allQuestions = null; room.questions = null;
     room.hostEditing = false; room.advancing = false;
-    Object.values(room.players).forEach(p => { p.sessionScore = 0; });
+    Object.values(room.players).forEach(p => { p.sessionScore = 0; p.excludedThisQuestion = false; });
     io.to(code).emit('room_reset', { code, categories: room.categories, host: room.host });
     io.to(code).emit('players_update', getPlayers(code));
     resetRoomIdleTimer(code);
@@ -819,7 +849,7 @@ io.on('connection', socket => {
     if (!room || room.status !== 'playing') return;
     const q = room.currentQuestion;
     const uid = socket.user.id;
-    if (!q || room.answered[uid]) return;
+    if (!q || room.answered[uid] || room.players[uid].excludedThisQuestion) return;
     room.answered[uid] = true;
     const correct = answer === q.answer;
     const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
@@ -895,7 +925,51 @@ function addOrTakeoverPlayer(room, socket) {
   return player;
 }
 
+// A returning player (join_room let them through because they're already in
+// room.players) skips the lobby entirely — no room_joined here — and lands
+// straight on the question screen in a waiting state until the next question
+// actually starts. If a question is currently live and unrevealed, exclude
+// them from THAT one only (see maybeAdvanceQuestion / askQuestion's
+// per-question reset of the flag). room.advancing being true means we're
+// between questions or between phases, where nothing is currently
+// answerable by anyone — so a rejoin then needs no exclusion at all, they're
+// simply ready in time for whatever's broadcast next.
+function sendRejoinState(room, socket) {
+  const uid = socket.user.id;
+  const midQuestion = room.status === 'playing' && room.currentQuestion && !room.advancing;
+  if (midQuestion) room.players[uid].excludedThisQuestion = true;
+  const phaseName = { easy:'سهل', medium:'متوسط', hard:'صعب' }[room.phaseNames[room.phase]] || '';
+  socket.emit('rejoined_game', { code: room.code, phase: room.phase + 1, phaseName, isHost: room.host === uid });
+}
+
+// A rejoin arriving while the room was abandoned (see markPlayerDisconnected)
+// cancels the abandonment countdown and, if a question was frozen mid-flight,
+// silently retires it — NOT a reveal: nobody was present to see the
+// countdown end, so broadcasting the correct answer now would just hand it
+// out for free. question_reset clears any stale per-question UI on a client
+// that's still (somehow) showing it, without leaking the answer, then the
+// same 2.5s gap as a normal advance before the next question. Whatever
+// answers/scores were already recorded before the room emptied out are
+// untouched — this only concludes the one question nobody was left to
+// finish. The rejoining player does NOT get handed this question to answer
+// — sendRejoinState (called right after this) routes them the same way any
+// other mid-game rejoin is routed, so they join in properly from the NEXT
+// question (room.advancing stays true for the full 2.5s gap, same as a
+// normal advance, so they're correctly treated as a between-questions
+// rejoin, not excluded from anything).
+function resumeAbandonedRoom(room) {
+  if (!room.abandonTimer) return;
+  clearTimeout(room.abandonTimer);
+  room.abandonTimer = null;
+  if (room.status !== 'playing' || !room.currentQuestion || room.advancing) return;
+  room.advancing = true;
+  io.to(room.code).emit('question_reset');
+  room.qIndex++;
+  setTimeout(() => askQuestion(room.code), 2500);
+}
+
 const ROOM_IDLE_MS = 30 * 60 * 1000;
+const ROOM_ABANDON_MS = 2 * 60 * 1000;
 
 // Idle-lobby cleanup: a room sitting in 'waiting' with no join/leave/edit
 // activity for 30 minutes deletes itself (there's no other way for a
@@ -965,10 +1039,11 @@ function removePlayerFromRoom(io, socket, code) {
 
 // Mid-game counterpart to removePlayerFromRoom: an unannounced disconnect
 // while status isn't 'waiting' must NOT evict the player — their score and
-// host status stay exactly where they are, pending a rejoin path that
-// doesn't exist yet. Same socketId staleness guard as removePlayerFromRoom,
-// same reasoning (see there). Only the actual admin/explicit-leave paths
-// (kickUser, leave_room) still fully remove a player regardless of status.
+// host status stay exactly where they are, and a rejoin path now exists
+// (join_room's mid-game branch + resumeAbandonedRoom) to bring them back.
+// Same socketId staleness guard as removePlayerFromRoom, same reasoning
+// (see there). Only the actual admin/explicit-leave paths (kickUser,
+// leave_room) still fully remove a player regardless of status.
 function markPlayerDisconnected(io, socket, code) {
   const room = rooms[code];
   if (!room) return;
@@ -979,14 +1054,23 @@ function markPlayerDisconnected(io, socket, code) {
 
   const anyoneConnected = Object.values(room.players).some(p => p.connected);
   if (!anyoneConnected) {
-    // No rejoin path exists yet, so a room with zero connected players is
-    // permanently unreachable — tear it down now rather than let a live
-    // question timer keep ticking with nobody able to answer, or leave the
-    // game to silently grind through the rest of the questions unattended.
-    if (room.timer) clearInterval(room.timer);
-    if (room.endTimer) clearTimeout(room.endTimer);
-    if (room.idleTimer) clearTimeout(room.idleTimer);
-    delete rooms[code];
+    // Not necessarily abandoned for good — a rejoin path exists now, so
+    // give everyone ROOM_ABANDON_MS to come back instead of deleting the
+    // room outright. Stop the live question timer (nobody's there to
+    // answer it — askQuestion won't start a new one either while empty,
+    // see there) but leave room.players, scores, and host status intact;
+    // resumeAbandonedRoom cancels this and concludes the frozen question
+    // when someone does return.
+    if (room.timer) { clearInterval(room.timer); room.timer = null; }
+    if (room.abandonTimer) clearTimeout(room.abandonTimer);
+    room.abandonTimer = setTimeout(() => {
+      const r = rooms[code];
+      if (!r) return;
+      if (r.timer) clearInterval(r.timer);
+      if (r.endTimer) clearTimeout(r.endTimer);
+      if (r.idleTimer) clearTimeout(r.idleTimer);
+      delete rooms[code];
+    }, ROOM_ABANDON_MS);
     return;
   }
 
@@ -1027,6 +1111,10 @@ function askQuestion(code) {
   if (room.qIndex >= room.questions.length) { endPhase(code); return; }
   const q = room.questions[room.qIndex];
   room.currentQuestion = q; room.answered = {}; room.advancing = false;
+  // Whoever rejoined mid-question was excluded from THAT one only — clear it
+  // for everyone (a no-op for anyone who didn't have it set) now that a new
+  // question is actually starting, so they're back in the count from here on.
+  Object.values(room.players).forEach(p => { p.excludedThisQuestion = false; });
   const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
   io.to(code).emit('question', {
     index:room.qIndex+1, total:room.questions.length,
@@ -1038,6 +1126,14 @@ function askQuestion(code) {
   });
   let timeLeft = 15;
   io.to(code).emit('timer', { seconds:timeLeft });
+  // The advance timeouts that lead here aren't connectivity-aware and can't
+  // be cancelled (no stored id) — so this can still run with zero connected
+  // players (e.g. the last one left during the brief gap before this fired).
+  // Set the question up as normal (so a rejoin sees accurate state via
+  // resumeAbandonedRoom) but don't start a ticking timer nobody's there to
+  // see — that would just tick to time_up unattended and keep the cascade
+  // going. The room sits frozen here until someone rejoins.
+  if (!Object.values(room.players).some(p => p.connected)) return;
   room.timer = setInterval(() => {
     timeLeft--;
     io.to(code).emit('timer', { seconds:timeLeft });
@@ -1076,10 +1172,16 @@ function askQuestion(code) {
 function maybeAdvanceQuestion(code) {
   const room = rooms[code];
   if (!room || room.status !== 'playing' || !room.currentQuestion || room.advancing) return;
-  const connectedUids = Object.keys(room.players).filter(id => room.players[id].connected);
-  const total = connectedUids.length;
+  // Connected AND not sitting out this specific question — a player who just
+  // rejoined mid-question doesn't count until the NEXT question starts (the
+  // flag is cleared for everyone in askQuestion once that happens).
+  const eligibleUids = Object.keys(room.players).filter(id => {
+    const p = room.players[id];
+    return p.connected && !p.excludedThisQuestion;
+  });
+  const total = eligibleUids.length;
   if (total === 0) return;   // room cleanup (not advancement) handles the all-disconnected case
-  const answeredCount = connectedUids.filter(id => room.answered[id]).length;
+  const answeredCount = eligibleUids.filter(id => room.answered[id]).length;
   if (answeredCount < total) return;
   room.advancing = true;
   if (room.timer) clearInterval(room.timer);
