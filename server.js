@@ -25,7 +25,20 @@ const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true';
 const AI_FALLBACK_ENABLED = process.env.AI_FALLBACK_ENABLED !== 'false';
 const QUESTIONS_PER_ROUND = { easy: 12, medium: 12, hard: 12 };
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+// Supabase free-tier (Nano) session pooler caps each database-role at a
+// "Pool Size" of 15 concurrent server connections, shared with the dashboard's
+// SQL editor and any local scripts hitting the same project. max:10 leaves
+// headroom under that shared budget for a single Render instance.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+});
+pool.on('error', (err) => {
+  console.error('❌ Unexpected pg pool error:', err);
+});
 
 async function initDB() {
   await pool.query(`
