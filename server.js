@@ -80,12 +80,15 @@ async function initDB() {
   // The ADMIN_EMAIL account is the OWNER: it is both admin and super-admin. Idempotent —
   // safe to run every boot. Only this account may promote/demote other admins.
   if (process.env.ADMIN_EMAIL) {
+    // lower(email) so this still matches regardless of how the stored value
+    // is cased — same reasoning as the login query below.
+    const adminEmail = process.env.ADMIN_EMAIL.trim().toLowerCase();
     const r = await pool.query(
-      'UPDATE users SET is_admin = TRUE, is_super_admin = TRUE WHERE email = $1',
-      [process.env.ADMIN_EMAIL]
+      'UPDATE users SET is_admin = TRUE, is_super_admin = TRUE WHERE lower(email) = $1',
+      [adminEmail]
     );
-    if (r.rowCount > 0) console.log(`👑 Owner (super-admin) privileges ensured for ${process.env.ADMIN_EMAIL}`);
-    else console.log(`👑 ADMIN_EMAIL set to ${process.env.ADMIN_EMAIL} — no matching account yet (will apply once they register)`);
+    if (r.rowCount > 0) console.log(`👑 Owner (super-admin) privileges ensured for ${adminEmail}`);
+    else console.log(`👑 ADMIN_EMAIL set to ${adminEmail} — no matching account yet (will apply once they register)`);
   }
 }
 initDB().catch(console.error);
@@ -162,10 +165,18 @@ function shuffleOptions(options, answer) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Format only — no verification email. Case/whitespace normalized on the
+// SERVER (register + login below), never trusted from the client, so
+// Khalifa@x.com and khalifa@x.com are always the same account.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 app.post('/api/register', async (req, res) => {
-  const { first_name, last_name, phone, email, dob, gender, password } = req.body;
+  const { first_name, last_name, phone, dob, gender, password } = req.body;
+  const email = (req.body.email || '').trim().toLowerCase();
   if (!first_name||!last_name||!phone||!email||!dob||!gender||!password)
     return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
+  if (!EMAIL_RE.test(email))
+    return res.status(400).json({ error: 'صيغة البريد الإلكتروني غير صحيحة' });
   try {
     const hash = await bcrypt.hash(password, 10);
     const r = await pool.query(
@@ -181,8 +192,11 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-  const r = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+  const { password } = req.body;
+  const email = (req.body.email || '').trim().toLowerCase();
+  // lower(email): matches regardless of how the stored value is cased, so
+  // this is correct even before every row is backfilled to lowercase.
+  const r = await pool.query('SELECT * FROM users WHERE lower(email)=$1', [email]);
   const user = r.rows[0];
   if (!user) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
   const ok = await bcrypt.compare(password, user.password);

@@ -1288,8 +1288,12 @@ async function register() {
   const errEl=document.getElementById('reg-err'); errEl.style.display='none';
   const pass=document.getElementById('r-pass').value;
   if (pass!==document.getElementById('r-pass2').value){errEl.textContent='كلمتا المرور غير متطابقتين';errEl.style.display='block';return;}
+  const regEmail=document.getElementById('r-email').value.trim();
+  // Immediate feedback only — the server re-validates and normalizes on its own,
+  // so this check doesn't need to (and doesn't) lowercase/trim what's sent.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail)){errEl.textContent='صيغة البريد الإلكتروني غير صحيحة';errEl.style.display='block';return;}
   const body={first_name:document.getElementById('r-fname').value.trim(),last_name:document.getElementById('r-lname').value.trim(),
-    phone:document.getElementById('r-phone').value.trim(),email:document.getElementById('r-email').value.trim(),
+    phone:document.getElementById('r-phone').value.trim(),email:regEmail,
     dob:document.getElementById('r-dob').value,gender:document.getElementById('r-gender').value,password:pass};
   const res=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json();
