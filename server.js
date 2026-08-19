@@ -714,6 +714,9 @@ io.on('connection', socket => {
     if (!Array.isArray(categories) || categories.length < 6 || categories.length > 12) {
       return socket.emit('error_msg', 'اختر من ٦ إلى ١٢ فئة');
     }
+    // One account, one room: a brand-new code can't already be in `rooms`, so
+    // any membership found here is unambiguously a DIFFERENT room — evict it.
+    leaveOtherRooms(socket);
     const code = generateCode();
     const cats = categories;
     rooms[code] = { code, host:socket.user.id, categories:cats, players:{}, phase:0,
@@ -742,6 +745,10 @@ io.on('connection', socket => {
     if (room.status !== 'waiting' && !isReturningPlayer) {
       return socket.emit('error_msg', 'اللعبة بدأت');
     }
+    // One account, one room: drop membership in any OTHER room first. Excluding
+    // `code` itself means rejoining THIS room never hits this path — that stays
+    // the takeover flow in addOrTakeoverPlayer below, untouched.
+    leaveOtherRooms(socket, code);
     addOrTakeoverPlayer(room, socket);
     if (room.status === 'waiting') {
       // hostEditing lets a player who joins mid-edit see the dimmed grid +
@@ -1048,6 +1055,39 @@ function removePlayerFromRoom(io, socket, code) {
   }
   io.to(code).emit('players_update', getPlayers(code));
   resetRoomIdleTimer(code);
+}
+
+// Prevents one account from being a member of two rooms at once (the
+// double-spend path: two rooms, two currency charges once that ships).
+// Called before create_room/join_room actually add the player anywhere.
+// A deliberate create/join elsewhere is a stronger, unambiguous signal than a
+// disconnect — disconnects get ROOM_ABANDON_MS of grace because the drop
+// might be accidental, but a user actively starting a different room has
+// clearly decided not to return to the old one. So this evicts regardless of
+// the old room's status (waiting, mid-game, whatever) using the exact same
+// removePlayerFromRoom cleanup leave_room already relies on — host
+// reassigned, room deleted if they were last, remaining players get the same
+// players_update/host_changed broadcast as any ordinary leave. No new
+// cleanup logic, just an automatic call to the existing one.
+//
+// If the stale membership's socket is still alive (e.g. another tab/device
+// sitting in that old room), it's notified and disconnected the same way
+// kickUser handles a ban — otherwise that tab's UI would silently go stale,
+// still showing a room it's no longer part of.
+function leaveOtherRooms(socket, exceptCode) {
+  const uid = socket.user.id;
+  for (const code of Object.keys(rooms)) {
+    if (code === exceptCode) continue;
+    const room = rooms[code];
+    const player = room.players[uid];
+    if (!player) continue;
+    const liveSocket = io.sockets.sockets.get(player.socketId);
+    removePlayerFromRoom(io, liveSocket || { user: { id: uid }, id: player.socketId }, code);
+    if (liveSocket) {
+      liveSocket.emit('error_msg', 'تم إخراجك من هذه الغرفة لأنك انضممت لغرفة أخرى');
+      liveSocket.disconnect(true);
+    }
+  }
 }
 
 // Mid-game counterpart to removePlayerFromRoom: an unannounced disconnect
