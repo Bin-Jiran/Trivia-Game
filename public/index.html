@@ -519,6 +519,28 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 /* ── Toast ── */
 .toast { position:fixed; bottom:20px; right:50%; transform:translateX(50%); background:var(--text); color:var(--bg); border-radius:var(--radius-sm); padding:10px 22px; font-size:13px; z-index:999; opacity:0; transition:opacity 0.3s; pointer-events:none; white-space:nowrap; font-weight:600; }
 .toast.show { opacity:1; }
+
+/* ── In-game presence banner (player_presence: mid-game leave/rejoin) ──
+   Smoked-glass convention (dark translucent surface -> 1px rgba border, not
+   the bold-chrome 2px white). Floats above q-live-content's points-tag/
+   report-btn without displacing them — position:fixed, own stacking layer,
+   z-index above ordinary content but below .confirm-overlay (1002) so a
+   blocking dialog still wins if both are ever live together. */
+.presence-banner { position:fixed; top:calc(env(safe-area-inset-top,0px) + 12px); left:50%;
+  width:calc(100% - 32px); max-width:488px; z-index:1000;
+  background:rgba(28,28,34,0.78); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,0.24); border-radius:var(--radius-sm);
+  box-shadow:0 8px 24px rgba(0,0,0,0.35); padding:8px 14px;
+  opacity:0; pointer-events:none;
+  transform:translateX(-50%) translateY(-16px);
+  transition:transform 0.3s cubic-bezier(0.22,0.61,0.36,1), opacity 0.3s ease; }
+.presence-banner.show { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
+/* One line, guaranteed — a long name gets an ellipsis instead of wrapping
+   and breaking the 3-row height budget. */
+.presence-row { font-size:13px; font-weight:700; line-height:1.6;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.presence-row.leave { color:#FF8C74; }
+.presence-row.join { color:#8FE07F; }
 /* Maintenance overlay — centered dark-red frosted-glass box (only for maintenance_blocked) */
 .maint-overlay { position:fixed; inset:0; z-index:10000; display:none; align-items:center; justify-content:center; padding:26px;
   background:rgba(0,0,0,0.55); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
@@ -1076,6 +1098,15 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
   </div>
 </div>
 
+<!-- In-game presence banner: player_presence events (mid-game leave/rejoin).
+     Deliberately a BODY-LEVEL sibling, not nested inside #s-question — that
+     screen gets a CSS transform during its enter/exit animation, and a
+     position:fixed descendant of a transformed ancestor is positioned
+     relative to THAT ancestor instead of the viewport. Living here sidesteps
+     that entirely. Visibility/content is driven purely by JS (see
+     presence banner section below), not by which .screen is active. -->
+<div class="presence-banner" id="presence-banner" aria-live="polite"></div>
+
 <script>
 // ── Sounds ──────────────────────────────────────────────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -1119,6 +1150,12 @@ function rejoinCodeKey(){ return (me && me.id) ? `pendingRejoinCode_${me.id}` : 
 let currentRoomCode=null, currentFlagQuestion=null, currentFlagOptions=null, reportedThisQuestion=false, reportInFlight=false;
 let editingRoom=false, currentRoomCategories=[];
 let lastPickedAnswer=null, lastAnswerCorrect=false;
+// In-game presence banner (player_presence: mid-game leave/rejoin). Newest
+// first, capped at 3 — see pushPresenceRow. One shared timer, reset on every
+// arrival, fires PRESENCE_MS after the MOST RECENT row (not per-row).
+let presenceQueue=[];
+let presenceTimer=null;
+const PRESENCE_MS=3000;
 const LEVELS=[
   {name:'البطريق',emoji:'🐧',img:'/levels/penguin.png',level:1,min:0,   max:500  },
   {name:'الذئب',  emoji:'🐺',img:'/levels/wolf.png',   level:2,min:501, max:1500 },
@@ -1185,6 +1222,55 @@ function show(id) {
   }
 }
 function showToast(msg,d=2500) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),d); }
+
+// ── In-game presence banner ───────────────────────────────────────────────
+// Rebuilds the banner from presenceQueue (newest already at index 0 — see
+// pushPresenceRow) and shows it. Called on every arrival; NOT the
+// appear/disappear transition itself — that's driven by toggling .show,
+// which only actually animates on the hidden->visible edge (CSS transition
+// on a property that isn't changing is a no-op), so a 2nd/3rd row arriving
+// while already visible just re-renders in place, no extra slide.
+function renderPresenceBanner(){
+  const el=document.getElementById('presence-banner');
+  el.innerHTML=presenceQueue.map(r=>`<div class="presence-row ${r.cls}">${r.text}</div>`).join('');
+  el.classList.add('show');
+}
+// Clears everything and slides the banner back up. Shared by the 3s
+// auto-timer AND both manual dismiss gestures (tap, swipe-up) — one path,
+// so "how it disappears" never drifts between the two triggers.
+function dismissPresenceBanner(){
+  clearTimeout(presenceTimer); presenceTimer=null;
+  presenceQueue=[];
+  document.getElementById('presence-banner').classList.remove('show');
+}
+// New row goes to the front (newest on top); trim to 3 — older rows drop
+// off the end silently, no "N more" indicator. Every arrival resets the
+// single shared timer, so the whole banner clears PRESENCE_MS after the
+// MOST RECENT message, never per-row.
+function pushPresenceRow(text,cls){
+  presenceQueue.unshift({text,cls});
+  presenceQueue=presenceQueue.slice(0,3);
+  renderPresenceBanner();
+  clearTimeout(presenceTimer);
+  presenceTimer=setTimeout(dismissPresenceBanner,PRESENCE_MS);
+}
+// Tap-anywhere and swipe-up both call dismissPresenceBanner() directly, no
+// preventDefault anywhere — these listeners are scoped to the banner
+// element itself, so a touch that starts on the page behind/around it is
+// never seen here and normal scrolling elsewhere is untouched.
+(function setupPresenceBannerDismiss(){
+  const el=document.getElementById('presence-banner');
+  el.addEventListener('click', dismissPresenceBanner);
+  let touchStartY=null;
+  el.addEventListener('touchstart', e=>{ touchStartY=e.touches[0].clientY; }, {passive:true});
+  el.addEventListener('touchend', e=>{
+    if (touchStartY===null) return;
+    const dy=e.changedTouches[0].clientY-touchStartY;
+    touchStartY=null;
+    if (dy<-24) dismissPresenceBanner();   // swiped up at least 24px
+  }, {passive:true});
+})();
+
 // Centered red frosted-glass overlay for maintenance rejections (tap the backdrop to dismiss).
 function showMaintenanceOverlay(msg) {
   const ov=document.getElementById('maint-overlay');
@@ -1374,6 +1460,7 @@ function connectSocket() {
   });
 
   socket.on('room_reset',({code,categories,host})=>{
+    dismissPresenceBanner();
     isHost=(host===me.id); currentRoomCode=code; editingRoom=false;
     currentRoomCategories=categories||[]; renderLobbyCategories();
     document.getElementById('lobby-code').textContent=code;
@@ -1406,6 +1493,19 @@ function connectSocket() {
     });
   });
 
+  // Mid-game leave/rejoin only (server never emits this from the lobby) —
+  // the banner element itself only actually renders while #s-question is
+  // the active screen, since it's hidden along with every other descendant
+  // whenever a non-question .screen is showing... actually it's a body-level
+  // sibling, not a descendant of #s-question, so it CAN render over any
+  // screen. That's fine: the server only emits this mid-game, and the
+  // explicit dismissPresenceBanner() calls on phase change / game end /
+  // leaving the room (see there) keep it from surviving onto a screen where
+  // it'd be showing stale/irrelevant info.
+  socket.on('player_presence',({display_name,verb,type})=>{
+    pushPresenceRow(`${display_name} ${verb}`, type==='leave' ? 'leave' : 'join');
+  });
+
   socket.on('game_loading',({message})=>{
     // First unambiguous "a game has started" signal — store the code so a
     // disconnect/reload from here on (even before the first question ever
@@ -1415,6 +1515,7 @@ function connectSocket() {
   });
 
   socket.on('phase_start',({phase,name})=>{
+    dismissPresenceBanner();   // don't let a round-1 banner survive into round 2
     document.getElementById('phase-num').textContent=phase;
     document.getElementById('phase-name-big').textContent=name;
     playSound('leaderboard');show('s-phase');
@@ -1592,6 +1693,7 @@ function connectSocket() {
   });
 
   socket.on('game_end',({leaderboard})=>{
+    dismissPresenceBanner();
     const key=rejoinCodeKey(); if (key) localStorage.removeItem(key);
     renderPodium(leaderboard);
     playSound('leaderboard'); show('s-gameover');
@@ -1769,6 +1871,7 @@ function closeLeaveConfirm(){
 }
 function confirmLeaveYes(){
   closeLeaveConfirm();
+  dismissPresenceBanner();
   if(socket) socket.emit('leave_room');
   currentRoomCode=null; isHost=false; editingRoom=false; currentRoomCategories=[];
   selectedCats=[]; renderSelection();
@@ -1873,6 +1976,7 @@ function reportQuestion(){
     .catch(()=>{ reportInFlight=false; showStatus(false); });
 }
 function leaveRoom(){
+  dismissPresenceBanner();
   const key=rejoinCodeKey(); if (key) localStorage.removeItem(key);
   if(socket){socket.disconnect();socket=null;}connectSocket();show('s-home');
 }

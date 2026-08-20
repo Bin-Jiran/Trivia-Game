@@ -771,6 +771,14 @@ io.on('connection', socket => {
     } else {
       resumeAbandonedRoom(room);
       sendRejoinState(room, socket);
+      // In-game presence banner for everyone ELSE in the room — socket.to()
+      // (not io.to()) so the rejoining player is never told they rejoined.
+      // gender never leaves the server: only the already-conjugated verb does.
+      socket.to(code).emit('player_presence', {
+        display_name: room.players[uid].display_name,
+        verb: room.players[uid].gender === 'female' ? 'انضمت' : 'انضم',
+        type: 'join'
+      });
     }
     io.to(code).emit('players_update', getPlayers(code));
     resetRoomIdleTimer(code);
@@ -1142,6 +1150,15 @@ function markPlayerDisconnected(io, socket, code) {
   }
 
   io.to(code).emit('players_update', getPlayers(code));
+  // In-game presence banner for whoever's left. The disconnecting socket is
+  // already gone by this point (this runs from the 'disconnect' handler), so
+  // io.to() here can never reach them anyway — no explicit exclusion needed,
+  // unlike the rejoin side of this event in join_room.
+  io.to(code).emit('player_presence', {
+    display_name: player.display_name,
+    verb: player.gender === 'female' ? 'غادرت' : 'غادر',
+    type: 'leave'
+  });
   // The player who just dropped might have been the only one left who
   // hadn't answered yet — disconnecting must be able to advance the
   // question just as answering does, or the round would sit until the 15s
