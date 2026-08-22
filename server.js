@@ -66,6 +66,20 @@ async function initDB() {
       resolution TEXT,
       UNIQUE (question_key, user_id)
     );
+    CREATE TABLE IF NOT EXISTS admin_actions (
+      id SERIAL PRIMARY KEY,
+      actor_id INTEGER NOT NULL,
+      actor_name TEXT NOT NULL,
+      action TEXT NOT NULL,
+      target_id INTEGER,
+      target_name TEXT,
+      before_value TEXT,
+      after_value TEXT,
+      reason TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_actions_target_id ON admin_actions(target_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at ON admin_actions(created_at);
   `);
   // Backward-compatible: add new columns to pre-existing tables without touching data.
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
@@ -75,6 +89,27 @@ async function initDB() {
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolution TEXT');
   await pool.query('ALTER TABLE questions ADD COLUMN IF NOT EXISTS image_url TEXT');
+  // admin_actions is append-only: enforced here at the DB level (not just by never
+  // writing an UPDATE/DELETE path in code) so it holds even against a future mistake.
+  // Both triggers in one call so they're created atomically — either both exist or
+  // neither does. Idempotent (CREATE OR REPLACE / DROP...IF EXISTS), safe every boot.
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION admin_actions_block_mutation() RETURNS trigger AS $fn$
+    BEGIN
+      RAISE EXCEPTION 'admin_actions is append-only: % not allowed', TG_OP;
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS admin_actions_no_update_delete ON admin_actions;
+    CREATE TRIGGER admin_actions_no_update_delete
+      BEFORE UPDATE OR DELETE ON admin_actions
+      FOR EACH ROW EXECUTE FUNCTION admin_actions_block_mutation();
+
+    DROP TRIGGER IF EXISTS admin_actions_no_truncate ON admin_actions;
+    CREATE TRIGGER admin_actions_no_truncate
+      BEFORE TRUNCATE ON admin_actions
+      FOR EACH STATEMENT EXECUTE FUNCTION admin_actions_block_mutation();
+  `);
   console.log('✅ Database ready');
 
   // The ADMIN_EMAIL account is the OWNER: it is both admin and super-admin. Idempotent —
@@ -131,7 +166,10 @@ async function requireAdmin(req, res, next) {
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
   try {
-    const r = await pool.query('SELECT id, is_admin, is_super_admin FROM users WHERE id=$1', [payload.id]);
+    const r = await pool.query(
+      'SELECT id, is_admin, is_super_admin, first_name, last_name FROM users WHERE id=$1',
+      [payload.id]
+    );
     const user = r.rows[0];
     if (!user) return res.status(404).json({ error: 'غير موجود' });
     if (!user.is_admin) return res.status(403).json({ error: 'ممنوع' });
@@ -139,11 +177,62 @@ async function requireAdmin(req, res, next) {
     // Super-admin (owner) status, read fresh from the DB. Endpoints that manage
     // admins gate on this; never trust a token claim for it.
     req.isSuperAdmin = !!user.is_super_admin;
+    // The acting admin's own name, snapshotted into every admin_actions row this
+    // request writes — see logAdminAction.
+    req.adminName = `${user.first_name} ${user.last_name}`;
     next();
   } catch (e) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 }
+
+// Thrown inside an admin-action transaction to abort with a specific HTTP status
+// (403/404) instead of the generic 500 every other failure gets. withTransaction
+// rolls back on this exactly like any other throw — this only changes what the
+// ROUTE handler responds with once the rollback is done.
+class AdminActionAbort extends Error {
+  constructor(status, body) { super('admin action aborted'); this.status = status; this.body = body; }
+}
+
+// Run fn(client) inside BEGIN/COMMIT; ROLLBACK+release on any throw (including
+// AdminActionAbort), so a rejected permission check never leaves the transaction
+// open and never writes an admin_actions row. The ROLLBACK is guarded in its own
+// try/catch so a rollback failure can't mask the original error.
+async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    try { await client.query('ROLLBACK'); }
+    catch (rollbackErr) {
+      console.error('❌ ROLLBACK failed:', rollbackErr.message, '(original error:', e.message + ')');
+    }
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+// Single insert point for admin_actions — append-only at the DB level too (see the
+// triggers created in initDB()).
+async function logAdminAction(client, { actorId, actorName, action, targetId, targetName, beforeValue, afterValue, reason }) {
+  await client.query(
+    `INSERT INTO admin_actions (actor_id, actor_name, action, target_id, target_name, before_value, after_value, reason)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [actorId, actorName, action, targetId ?? null, targetName ?? null, beforeValue ?? null, afterValue ?? null, reason]
+  );
+}
+
+// Shared row-lock read every mutating admin endpoint below uses. FOR UPDATE holds
+// the row lock for the rest of the transaction, so a concurrent write elsewhere
+// (e.g. endGame's total_score update) blocks until this transaction commits,
+// instead of racing a read-then-write and silently losing an update.
+const ADMIN_TARGET_LOCK_SQL =
+  `SELECT id, is_admin, is_super_admin, is_banned, total_score, first_name, last_name
+     FROM users WHERE id=$1 FOR UPDATE`;
 
 // FIX #2: Shuffle options while keeping track of correct answer
 function shuffleOptions(options, answer) {
@@ -401,43 +490,74 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 });
 
 // Adjust points by a SIGNED amount (e.g. +500 / -200). Floors at 0 (never negative)
-// and returns the recomputed level.
+// and returns the recomputed level. The target row is read-locked (FOR UPDATE) inside
+// the same transaction as the write and the admin_actions log — see ADMIN_TARGET_LOCK_SQL
+// and withTransaction — so a concurrent write (e.g. endGame crediting this same user at
+// round end) can never be silently lost, and before_value is guaranteed accurate.
 app.post('/api/admin/users/:id/points', requireAdmin, async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
   const amount = parseInt(req.body?.amount, 10);
+  const reason = (req.body?.reason || '').toString().trim();
   if (!Number.isInteger(targetId) || !Number.isInteger(amount))
     return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
   try {
-    const target = await getUserRow(targetId);
-    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
-    // Regular (non-owner) admins may only act on non-admin players. Only the owner
-    // may touch any admin/owner account (including their own).
-    if ((target.is_admin || target.is_super_admin) && !req.isSuperAdmin)
-      return res.status(403).json({ error: 'لا يمكنك تعديل حساب مشرف' });
-    const newPoints = Math.max(0, (target.total_score || 0) + amount);
-    await pool.query('UPDATE users SET total_score=$1 WHERE id=$2', [newPoints, targetId]);
-    const lvl = getLevel(newPoints);
-    res.json({ ok: true, points: newPoints, level_name: lvl.name, level: lvl.level });
+    const result = await withTransaction(async (client) => {
+      const r = await client.query(ADMIN_TARGET_LOCK_SQL, [targetId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'المستخدم غير موجود' });
+      // Regular (non-owner) admins may only act on non-admin players. Only the owner
+      // may touch any admin/owner account (including their own).
+      if ((target.is_admin || target.is_super_admin) && !req.isSuperAdmin)
+        throw new AdminActionAbort(403, { error: 'لا يمكنك تعديل حساب مشرف' });
+      const before = target.total_score || 0;
+      const newPoints = Math.max(0, before + amount);
+      await client.query('UPDATE users SET total_score=$1 WHERE id=$2', [newPoints, targetId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'points_adjust',
+        targetId, targetName: `${target.first_name} ${target.last_name}`,
+        beforeValue: String(before), afterValue: String(newPoints), reason
+      });
+      const lvl = getLevel(newPoints);
+      return { points: newPoints, level_name: lvl.name, level: lvl.level };
+    });
+    res.json({ ok: true, ...result });
   } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// Ban: block future logins/sockets and kick any live session immediately.
+// Ban: block future logins/sockets and kick any live session immediately. kickUser is
+// an in-memory socket operation, so it stays OUTSIDE the transaction, run only after
+// the ban + log have committed.
 app.post('/api/admin/users/:id/ban', requireAdmin, async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
+  const reason = (req.body?.reason || '').toString().trim();
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
   try {
-    const target = await getUserRow(targetId);
-    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
-    if (target.is_super_admin) return res.status(403).json({ error: 'لا يمكن حظر المالك' });
-    // Regular (non-owner) admins may only ban non-admin players.
-    if (target.is_admin && !req.isSuperAdmin) return res.status(403).json({ error: 'لا يمكنك حظر مشرف' });
-    if (req.adminId === targetId) return res.status(403).json({ error: 'لا يمكنك حظر نفسك' });
-    await pool.query('UPDATE users SET is_banned=TRUE WHERE id=$1', [targetId]);
+    await withTransaction(async (client) => {
+      const r = await client.query(ADMIN_TARGET_LOCK_SQL, [targetId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'المستخدم غير موجود' });
+      if (target.is_super_admin) throw new AdminActionAbort(403, { error: 'لا يمكن حظر المالك' });
+      // Regular (non-owner) admins may only ban non-admin players.
+      if (target.is_admin && !req.isSuperAdmin) throw new AdminActionAbort(403, { error: 'لا يمكنك حظر مشرف' });
+      if (req.adminId === targetId) throw new AdminActionAbort(403, { error: 'لا يمكنك حظر نفسك' });
+      await client.query('UPDATE users SET is_banned=TRUE WHERE id=$1', [targetId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'ban',
+        targetId, targetName: `${target.first_name} ${target.last_name}`,
+        beforeValue: String(!!target.is_banned), afterValue: 'true', reason
+      });
+    });
     kickUser(targetId);
     res.json({ ok: true, is_banned: true });
   } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -445,16 +565,28 @@ app.post('/api/admin/users/:id/ban', requireAdmin, async (req, res) => {
 // Unban: restore login/socket access.
 app.post('/api/admin/users/:id/unban', requireAdmin, async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
+  const reason = (req.body?.reason || '').toString().trim();
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
   try {
-    const target = await getUserRow(targetId);
-    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
-    // Regular (non-owner) admins may only act on non-admin players.
-    if ((target.is_admin || target.is_super_admin) && !req.isSuperAdmin)
-      return res.status(403).json({ error: 'لا يمكنك تعديل حساب مشرف' });
-    await pool.query('UPDATE users SET is_banned=FALSE WHERE id=$1', [targetId]);
+    await withTransaction(async (client) => {
+      const r = await client.query(ADMIN_TARGET_LOCK_SQL, [targetId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'المستخدم غير موجود' });
+      // Regular (non-owner) admins may only act on non-admin players.
+      if ((target.is_admin || target.is_super_admin) && !req.isSuperAdmin)
+        throw new AdminActionAbort(403, { error: 'لا يمكنك تعديل حساب مشرف' });
+      await client.query('UPDATE users SET is_banned=FALSE WHERE id=$1', [targetId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'unban',
+        targetId, targetName: `${target.first_name} ${target.last_name}`,
+        beforeValue: String(!!target.is_banned), afterValue: 'false', reason
+      });
+    });
     res.json({ ok: true, is_banned: false });
   } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -463,13 +595,25 @@ app.post('/api/admin/users/:id/unban', requireAdmin, async (req, res) => {
 app.post('/api/admin/users/:id/promote', requireAdmin, async (req, res) => {
   if (!req.isSuperAdmin) return res.status(403).json({ error: 'صلاحية المالك مطلوبة' });
   const targetId = parseInt(req.params.id, 10);
+  const reason = (req.body?.reason || '').toString().trim();
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
   try {
-    const target = await getUserRow(targetId);
-    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
-    await pool.query('UPDATE users SET is_admin=TRUE WHERE id=$1', [targetId]);
+    await withTransaction(async (client) => {
+      const r = await client.query(ADMIN_TARGET_LOCK_SQL, [targetId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'المستخدم غير موجود' });
+      await client.query('UPDATE users SET is_admin=TRUE WHERE id=$1', [targetId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'promote',
+        targetId, targetName: `${target.first_name} ${target.last_name}`,
+        beforeValue: String(!!target.is_admin), afterValue: 'true', reason
+      });
+    });
     res.json({ ok: true, is_admin: true });
   } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -479,14 +623,62 @@ app.post('/api/admin/users/:id/promote', requireAdmin, async (req, res) => {
 app.post('/api/admin/users/:id/demote', requireAdmin, async (req, res) => {
   if (!req.isSuperAdmin) return res.status(403).json({ error: 'صلاحية المالك مطلوبة' });
   const targetId = parseInt(req.params.id, 10);
+  const reason = (req.body?.reason || '').toString().trim();
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
   try {
-    const target = await getUserRow(targetId);
-    if (!target) return res.status(404).json({ error: 'المستخدم غير موجود' });
-    if (target.is_super_admin) return res.status(403).json({ error: 'لا يمكن إزالة صلاحية المالك' });
-    if (req.adminId === targetId) return res.status(403).json({ error: 'لا يمكنك إزالة صلاحياتك' });
-    await pool.query('UPDATE users SET is_admin=FALSE WHERE id=$1', [targetId]);
+    await withTransaction(async (client) => {
+      const r = await client.query(ADMIN_TARGET_LOCK_SQL, [targetId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'المستخدم غير موجود' });
+      if (target.is_super_admin) throw new AdminActionAbort(403, { error: 'لا يمكن إزالة صلاحية المالك' });
+      if (req.adminId === targetId) throw new AdminActionAbort(403, { error: 'لا يمكنك إزالة صلاحياتك' });
+      await client.query('UPDATE users SET is_admin=FALSE WHERE id=$1', [targetId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'demote',
+        targetId, targetName: `${target.first_name} ${target.last_name}`,
+        beforeValue: String(!!target.is_admin), afterValue: 'false', reason
+      });
+    });
     res.json({ ok: true, is_admin: false });
+  } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Audit trail — read-only, newest first, capped at 200 rows + a total count so the UI
+// can show how many are hidden. Actor/target names are resolved twice: the LEFT JOIN's
+// CURRENT name is preferred, falling back to the actor_name/target_name snapshot taken
+// at insert time so the log stays readable after a user is renamed or deleted.
+app.get('/api/admin/actions', requireAdmin, async (req, res) => {
+  try {
+    const totalR = await pool.query('SELECT COUNT(*)::int AS c FROM admin_actions');
+    const total = totalR.rows[0].c;
+    const r = await pool.query(`
+      SELECT aa.id, aa.action, aa.target_id, aa.actor_name, aa.target_name,
+             aa.before_value, aa.after_value, aa.reason, aa.created_at,
+             actor.first_name  AS actor_first,  actor.last_name  AS actor_last,
+             target.first_name AS target_first, target.last_name AS target_last
+        FROM admin_actions aa
+        LEFT JOIN users actor  ON actor.id  = aa.actor_id
+        LEFT JOIN users target ON target.id = aa.target_id
+       ORDER BY aa.id DESC
+       LIMIT 200
+    `);
+    const actions = r.rows.map(row => ({
+      id: row.id,
+      action: row.action,
+      actor_name: (row.actor_first ? `${row.actor_first} ${row.actor_last}` : null) || row.actor_name,
+      target_id: row.target_id,
+      target_name: (row.target_first ? `${row.target_first} ${row.target_last}` : null) || row.target_name,
+      before_value: row.before_value,
+      after_value: row.after_value,
+      reason: row.reason,
+      created_at: row.created_at
+    }));
+    res.json({ actions, total });
   } catch (e) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }

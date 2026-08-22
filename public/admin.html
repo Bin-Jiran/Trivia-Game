@@ -106,6 +106,13 @@
     <button class="glass denybtn" type="button" onclick="goHome()">العودة للرئيسية</button>
   </div>
 
+  <!-- SERVER ERROR (network failure / 500 / timeout — NOT a permission problem) -->
+  <div id="error" style="display:none;">
+    <div class="big">⚠ تعذّر الاتصال بالخادم</div>
+    <div class="sub">حدث خطأ في الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.</div>
+    <button class="glass denybtn" type="button" onclick="init()">إعادة المحاولة</button>
+  </div>
+
   <!-- DASHBOARD -->
   <div id="dash" class="wrap" style="display:none;">
     <div class="topbar">
@@ -134,6 +141,9 @@
     <div class="bar glass btn-red" onclick="go('/admin-flags.html')">
       <div class="bar-main" id="bar-flags">عدد الأسئلة التي تم التبليغ عنها: …</div>
     </div>
+    <div class="bar glass btn-blue" onclick="go('/admin-actions.html')">
+      <div class="bar-main">سجل الإجراءات</div>
+    </div>
 
     <!-- Management cards (placeholder routes for now) -->
     <div class="manage">
@@ -158,7 +168,7 @@
     function go(path){ location.href = path; }
 
     function showOnly(id){
-      ['loading','denied','dash'].forEach(s=>{
+      ['loading','denied','error','dash'].forEach(s=>{
         document.getElementById(s).style.display = (s===id) ? (s==='dash' ? 'block' : 'flex') : 'none';
       });
     }
@@ -216,14 +226,16 @@
       else { stopAuto(); }
     });
 
-    (async function(){
+    async function init(){
       if(!token){ showOnly('denied'); return; }   // not logged in
-      const r = await fetchStats();               // initial: any non-ok => denied
-      if(r !== 'ok'){ showOnly('denied'); return; }
+      const r = await fetchStats();
+      if(r === 'denied'){ showOnly('denied'); return; }   // real 401/403 — not an admin
+      if(r !== 'ok'){ showOnly('error'); return; }         // 500 / network failure — server problem, not a permission one
       onDash = true;
       showOnly('dash');
       startAuto();
-    })();
+    }
+    init();
   </script>
 </body>
 </html>

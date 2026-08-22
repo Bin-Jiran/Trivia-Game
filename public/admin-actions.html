@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سجل الإجراءات</title>
+  <style>
+    :root{
+      --yellow:#F5C200; --green:#2F9E44; --red:#E8472A; --blue:#2090BB;
+      --glass:rgba(20,20,30,0.55); --glass-border:rgba(255,255,255,0.20);
+      --font:'Segoe UI', Tahoma, sans-serif;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    body{
+      min-height:100vh; direction:rtl; color:#fff; font-family:var(--font);
+      background-color:var(--yellow);
+      background-image:
+        radial-gradient(circle at 50% 34%, rgba(255,243,180,0.95), rgba(245,194,0,0) 58%),
+        repeating-conic-gradient(from 0deg at 50% 50%, var(--yellow) 0deg, #FFD64A 7.5deg, var(--yellow) 15deg);
+      background-attachment:fixed;
+      display:flex; justify-content:center; align-items:flex-start;
+      padding:18px 14px 40px;
+    }
+    .wrap{ width:100%; max-width:620px; }
+
+    .glass{
+      background:var(--glass);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      border:1px solid var(--glass-border); border-radius:16px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.22);
+    }
+
+    /* Top bar: back (top-left), right-aligned title */
+    .topbar{ position:relative; display:flex; align-items:center; min-height:42px; margin-bottom:16px; }
+    .back{
+      position:absolute; top:0; left:0; display:inline-flex; align-items:center; gap:6px;
+      padding:7px 11px; font-size:13px; font-weight:700; color:#fff; cursor:pointer;
+      font-family:var(--font); background:#E8472A; border:1.5px solid #fff; border-radius:16px;
+    }
+    .back:active{ transform:scale(0.97); }
+    .back svg{ width:16px; height:16px; flex:0 0 auto; }
+    .page-title{ width:100%; text-align:right; font-size:23px; font-weight:800; color:#000; text-decoration:underline; }
+
+    /* Count line — same pattern as admin-players.html's .count */
+    .count{ font-size:13px; font-weight:800; color:#000; margin:0 2px 14px; }
+
+    /* Action cards */
+    .acard{ padding:16px; margin-bottom:14px; }
+    .ameta{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:12.5px; font-weight:700; opacity:0.92; margin-bottom:8px; }
+    .alabel{ padding:3px 9px; border-radius:999px; background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.25); }
+    .amain{ font-size:16px; font-weight:800; line-height:1.5; margin-bottom:6px; word-break:break-word; }
+    .abva{ font-size:13.5px; font-weight:700; opacity:0.85; margin-bottom:8px; direction:rtl; }
+    .areason{ font-size:14px; font-weight:600; line-height:1.5; opacity:0.95; padding-top:8px; border-top:1px solid rgba(255,255,255,0.14); }
+
+    /* States */
+    #loading, #denied, #empty{ min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+    #loading .l-txt{ font-weight:700; font-size:16px; }
+    #denied .big, #empty .big{ font-size:21px; font-weight:800; }
+    #denied .sub{ font-size:14px; opacity:0.9; max-width:300px; }
+    .statebtn{ padding:10px 22px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; font-family:var(--font); background:var(--blue); border:1.5px solid #fff; border-radius:12px; }
+    .spinner{ width:42px; height:42px; border:4px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING (default) -->
+  <div id="loading"><div class="spinner"></div><div class="l-txt">جاري التحميل...</div></div>
+
+  <!-- ACCESS DENIED -->
+  <div id="denied" style="display:none;">
+    <div class="big">✗ لا تملك صلاحية الدخول</div>
+    <div class="sub">يجب تسجيل الدخول بحساب مشرف لعرض هذه الصفحة.</div>
+    <button class="statebtn" type="button" onclick="goHome()">العودة للرئيسية</button>
+  </div>
+
+  <!-- SERVER ERROR (network failure / 500 / timeout — NOT a permission problem) -->
+  <div id="error" style="display:none;">
+    <div class="big">⚠ تعذّر الاتصال بالخادم</div>
+    <div class="sub">حدث خطأ في الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.</div>
+    <button class="statebtn" type="button" onclick="init()">إعادة المحاولة</button>
+  </div>
+
+  <!-- EMPTY STATE -->
+  <div id="empty" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="back" type="button" onclick="goDash()" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>رجوع</span>
+      </button>
+      <div class="page-title">سجل الإجراءات</div>
+    </div>
+    <div class="glass" style="padding:40px 16px; text-align:center; font-size:18px; font-weight:800;">لا توجد إجراءات مسجلة بعد</div>
+  </div>
+
+  <!-- LIST -->
+  <div id="list-screen" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="back" type="button" onclick="goDash()" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>رجوع</span>
+      </button>
+      <div class="page-title">سجل الإجراءات</div>
+    </div>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+
+    function goHome(){ location.href = '/'; }
+    function goDash(){ location.href = '/admin.html'; }
+    function showOnly(id){
+      ['loading','denied','error','empty','list-screen'].forEach(s=>{
+        document.getElementById(s).style.display = (s===id) ? (s==='loading'||s==='denied'||s==='error' ? 'flex' : 'block') : 'none';
+      });
+    }
+    const ar = (v)=> (v==null ? 0 : v).toLocaleString('ar');
+    function fmtDate(ts){
+      try { return new Date(ts).toLocaleString('ar', { dateStyle:'medium', timeStyle:'short' }); }
+      catch(e){ return ''; }
+    }
+    function el(tag, cls, text){
+      const e = document.createElement(tag);
+      if(cls) e.className = cls;
+      if(text != null) e.textContent = text;
+      return e;
+    }
+
+    // Action code -> Arabic label. An action code not in this map (e.g. from a
+    // feature that logs to admin_actions but hasn't been added here yet) falls
+    // back to rendering its raw code instead of "undefined".
+    const ACTION_LABELS = {
+      ban: 'حظر', unban: 'إلغاء حظر', promote: 'ترقية لمشرف',
+      demote: 'إزالة مشرف', points_adjust: 'تعديل نقاط'
+    };
+
+    function actionCard(a){
+      const card = el('div','acard glass');
+      card.dataset.id = a.id;
+
+      const meta = el('div','ameta');
+      meta.appendChild(el('span','alabel', ACTION_LABELS[a.action] || a.action));
+      meta.appendChild(el('span', null, fmtDate(a.created_at)));
+      card.appendChild(meta);
+
+      // actor -> target. Omitted target entirely when target_id is null (not
+      // applicable to this action). actor_name/target_name already fall back
+      // server-side to the snapshot taken at insert time when the LEFT JOIN to
+      // a since-renamed/deleted user comes back null.
+      const main = el('div','amain');
+      let mainText = a.actor_name || '—';
+      if (a.target_id != null) mainText += ' ← ' + (a.target_name || ('#' + a.target_id));
+      main.textContent = mainText;
+      card.appendChild(main);
+
+      if (a.before_value != null || a.after_value != null) {
+        const bva = el('div','abva');
+        bva.textContent = (a.before_value ?? '—') + ' ← ' + (a.after_value ?? '—');
+        card.appendChild(bva);
+      }
+
+      card.appendChild(el('div','areason', a.reason || ''));
+      return card;
+    }
+
+    function render(actions, total){
+      if (!actions.length) { showOnly('empty'); return; }
+      showOnly('list-screen');
+      document.getElementById('count').textContent =
+        total > 200 ? ('عرض آخر 200 من أصل ' + ar(total)) : ('عدد الإجراءات: ' + ar(total));
+      const wrap = document.getElementById('list');
+      wrap.innerHTML = '';
+      actions.forEach(a => wrap.appendChild(actionCard(a)));
+    }
+
+    async function init(){
+      if(!token){ showOnly('denied'); return; }
+      try{
+        const res = await fetch('/api/admin/actions', { headers:{ Authorization:'Bearer ' + token } });
+        if(res.status === 401 || res.status === 403){ showOnly('denied'); return; }   // real permission denial
+        if(!res.ok){ showOnly('error'); return; }   // 500 / other server failure — not a permission problem
+        const d = await res.json().catch(()=> ({}));
+        render(Array.isArray(d.actions) ? d.actions : [], d.total || 0);
+      }catch(e){ showOnly('error'); }   // network failure/timeout — not a permission problem
+    }
+    init();
+  </script>
+</body>
+</html>

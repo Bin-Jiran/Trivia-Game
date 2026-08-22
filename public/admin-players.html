@@ -84,6 +84,12 @@
       color:#fff; font-size:15px; font-weight:800; font-family:var(--font); cursor:pointer; margin-top:2px; }
     .loadmore:active{ transform:scale(0.99); }
 
+    /* Reason field inside the confirm modal — same dark-translucent input style as .pe-amount */
+    .reason-input{ width:100%; min-height:54px; resize:vertical; padding:10px 12px; border-radius:10px;
+      border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.25); color:#fff; font-size:14px;
+      font-family:var(--font); margin-bottom:14px; }
+    .reason-input::placeholder{ color:rgba(255,255,255,0.7); }
+
     /* Confirmation modal — centered frosted card on a dimmed, blurred backdrop */
     .modal-overlay{ position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
       padding:20px; background:rgba(0,0,0,0.55); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
@@ -120,6 +126,13 @@
     <button class="statebtn" type="button" onclick="goHome()">العودة للرئيسية</button>
   </div>
 
+  <!-- SERVER ERROR (network failure / 500 / timeout — NOT a permission problem) -->
+  <div id="error" style="display:none;">
+    <div class="big">⚠ تعذّر الاتصال بالخادم</div>
+    <div class="sub">حدث خطأ في الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.</div>
+    <button class="statebtn" type="button" onclick="init()">إعادة المحاولة</button>
+  </div>
+
   <!-- MAIN -->
   <div id="screen" class="wrap" style="display:none;">
     <div class="topbar">
@@ -143,6 +156,7 @@
   <div id="confirm-modal" class="modal-overlay" style="display:none;" aria-hidden="true">
     <div class="modal-card glass" role="dialog" aria-modal="true">
       <div class="modal-msg" id="confirm-msg"></div>
+      <textarea id="confirm-reason" class="reason-input" maxlength="500" placeholder="السبب (مطلوب)..." rows="2"></textarea>
       <div class="modal-actions">
         <button id="confirm-ok" class="mbtn" type="button"></button>
         <button id="confirm-cancel" class="mbtn mbtn-cancel" type="button">إلغاء</button>
@@ -158,7 +172,7 @@
     function goHome(){ location.href = '/'; }
     function goDash(){ location.href = '/admin.html'; }
     function showOnly(id){
-      ['loading','denied','screen'].forEach(s=>{
+      ['loading','denied','error','screen'].forEach(s=>{
         document.getElementById(s).style.display = (s===id) ? (s==='screen' ? 'block' : 'flex') : 'none';
       });
     }
@@ -182,6 +196,7 @@
     function showConfirm(message, onConfirm, opts){
       opts = opts || {};
       document.getElementById('confirm-msg').textContent = message;
+      document.getElementById('confirm-reason').value = '';   // clear any stale reason from a previous action
       const ok = document.getElementById('confirm-ok');
       ok.textContent = opts.confirmText || 'تأكيد';
       ok.className = 'mbtn ' + (opts.danger ? 'mbtn-danger' : 'mbtn-ok');
@@ -195,7 +210,10 @@
       _confirmCb = null;
     }
     document.getElementById('confirm-ok').addEventListener('click', ()=>{
-      const cb = _confirmCb; hideConfirm(); if(cb) cb();
+      const reasonEl = document.getElementById('confirm-reason');
+      const reason = reasonEl.value.trim();
+      if(!reason){ alert('السبب مطلوب'); reasonEl.focus(); return; }   // block — modal stays open
+      const cb = _confirmCb; hideConfirm(); if(cb) cb(reason);
     });
     document.getElementById('confirm-cancel').addEventListener('click', hideConfirm);
     document.getElementById('confirm-modal').addEventListener('click', (e)=>{
@@ -296,11 +314,11 @@
       const mag = parseInt(inp.value, 10);
       if(!Number.isInteger(mag) || mag <= 0){ alert('أدخل مبلغاً صحيحاً أكبر من صفر'); return; }
       const msg = sign > 0 ? ('إضافة ' + mag + ' نقطة؟') : ('خصم ' + mag + ' نقطة؟');
-      showConfirm(msg, async ()=>{
+      showConfirm(msg, async (reason)=>{
         try{
           const res = await fetch('/api/admin/users/' + u.id + '/points', {
             method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
-            body: JSON.stringify({ amount: sign * mag })
+            body: JSON.stringify({ amount: sign * mag, reason })
           });
           const d = await res.json().catch(()=> ({}));
           if(!res.ok){ alert(d.error || 'تعذّر التعديل'); return; }
@@ -311,32 +329,36 @@
     }
 
     // ---- Permission actions ----
-    async function act(url){
+    async function act(url, reason){
       try{
-        const res = await fetch(url, { method:'POST', headers:{ Authorization:'Bearer ' + token } });
+        const res = await fetch(url, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
+          body: JSON.stringify({ reason })
+        });
         const d = await res.json().catch(()=> ({}));
         if(!res.ok){ alert(d.error || 'تعذّرت العملية'); return null; }
         return d;
       }catch(e){ alert('تعذّرت العملية، حاول مجدداً'); return null; }
     }
     function onBan(u, card){
-      showConfirm('حظر هذا اللاعب؟ سيتم إخراجه من اللعبة فوراً.', async ()=>{
-        if(await act('/api/admin/users/' + u.id + '/ban')){ u.is_banned = true; replaceCard(u, card); }
+      showConfirm('حظر هذا اللاعب؟ سيتم إخراجه من اللعبة فوراً.', async (reason)=>{
+        if(await act('/api/admin/users/' + u.id + '/ban', reason)){ u.is_banned = true; replaceCard(u, card); }
       }, { danger:true, confirmText:'حظر' });
     }
     function onUnban(u, card){
-      showConfirm('إلغاء الحظر عن هذا اللاعب؟', async ()=>{
-        if(await act('/api/admin/users/' + u.id + '/unban')){ u.is_banned = false; replaceCard(u, card); }
+      showConfirm('إلغاء الحظر عن هذا اللاعب؟', async (reason)=>{
+        if(await act('/api/admin/users/' + u.id + '/unban', reason)){ u.is_banned = false; replaceCard(u, card); }
       }, { confirmText:'إلغاء الحظر' });
     }
     function onPromote(u, card){
-      showConfirm('ترقية هذا اللاعب إلى مشرف؟', async ()=>{
-        if(await act('/api/admin/users/' + u.id + '/promote')){ u.is_admin = true; replaceCard(u, card); }
+      showConfirm('ترقية هذا اللاعب إلى مشرف؟', async (reason)=>{
+        if(await act('/api/admin/users/' + u.id + '/promote', reason)){ u.is_admin = true; replaceCard(u, card); }
       }, { confirmText:'ترقية' });
     }
     function onDemote(u, card){
-      showConfirm('إزالة صلاحية المشرف عن هذا اللاعب؟', async ()=>{
-        if(await act('/api/admin/users/' + u.id + '/demote')){ u.is_admin = false; replaceCard(u, card); }
+      showConfirm('إزالة صلاحية المشرف عن هذا اللاعب؟', async (reason)=>{
+        if(await act('/api/admin/users/' + u.id + '/demote', reason)){ u.is_admin = false; replaceCard(u, card); }
       }, { danger:true, confirmText:'إزالة' });
     }
 
@@ -361,22 +383,24 @@
     let searchTimer = null;
     function onSearchInput(){ clearTimeout(searchTimer); searchTimer = setTimeout(()=> fetchUsers(true), 300); }
 
-    (async function(){
+    async function init(){
       if(!token){ showOnly('denied'); return; }
       // Identify the viewer — we need their super-admin status to decide which
       // controls to show. /api/me also confirms admin access.
       try{
         const meRes = await fetch('/api/me', { headers:{ Authorization:'Bearer ' + token } });
-        if(!meRes.ok){ showOnly('denied'); return; }
+        if(meRes.status === 401 || meRes.status === 403){ showOnly('denied'); return; }   // real permission denial
+        if(!meRes.ok){ showOnly('error'); return; }   // 500 / other server failure — not a permission problem
         const me = await meRes.json();
         if(!me.is_admin){ showOnly('denied'); return; }
         viewer = { id: me.id, is_super_admin: !!me.is_super_admin };
-      }catch(e){ showOnly('denied'); return; }
+      }catch(e){ showOnly('error'); return; }   // network failure/timeout — not a permission problem
 
       showOnly('screen');
       document.getElementById('search').addEventListener('input', onSearchInput);
       await fetchUsers(true);
-    })();
+    }
+    init();
   </script>
 </body>
 </html>

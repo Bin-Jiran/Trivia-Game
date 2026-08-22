@@ -94,6 +94,13 @@
     <button class="statebtn" type="button" onclick="goHome()">العودة للرئيسية</button>
   </div>
 
+  <!-- SERVER ERROR (network failure / 500 / timeout — NOT a permission problem) -->
+  <div id="error" style="display:none;">
+    <div class="big">⚠ تعذّر الاتصال بالخادم</div>
+    <div class="sub">حدث خطأ في الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.</div>
+    <button class="statebtn" type="button" onclick="init()">إعادة المحاولة</button>
+  </div>
+
   <!-- EMPTY STATE -->
   <div id="empty" class="wrap" style="display:none;">
     <div class="topbar">
@@ -129,8 +136,8 @@
     function goHome(){ location.href = '/'; }
     function goDash(){ location.href = '/admin.html'; }
     function showOnly(id){
-      ['loading','denied','empty','list-screen'].forEach(s=>{
-        document.getElementById(s).style.display = (s===id) ? (s==='loading'||s==='denied' ? 'flex' : 'block') : 'none';
+      ['loading','denied','error','empty','list-screen'].forEach(s=>{
+        document.getElementById(s).style.display = (s===id) ? (s==='loading'||s==='denied'||s==='error' ? 'flex' : 'block') : 'none';
       });
     }
     const ar = (v)=> (v==null ? 0 : v).toLocaleString('ar');
@@ -300,16 +307,18 @@
     }
 
     // ---- Load ----
-    (async function(){
+    async function init(){
       if(!token){ showOnly('denied'); return; }
       try{
         const res = await fetch('/api/admin/flags', { headers:{ Authorization:'Bearer ' + token } });
-        if(!res.ok){ showOnly('denied'); return; }   // 401/403 => not admin / not logged in
+        if(res.status === 401 || res.status === 403){ showOnly('denied'); return; }   // real permission denial
+        if(!res.ok){ showOnly('error'); return; }   // 500 / other server failure — not a permission problem
         const d = await res.json().catch(()=> ({}));
         flags = Array.isArray(d.flags) ? d.flags : [];
         render();
-      }catch(e){ showOnly('denied'); }
-    })();
+      }catch(e){ showOnly('error'); }   // network failure/timeout — not a permission problem
+    }
+    init();
   </script>
 </body>
 </html>
