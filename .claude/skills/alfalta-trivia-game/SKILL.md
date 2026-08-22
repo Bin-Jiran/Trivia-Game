@@ -14,7 +14,7 @@ A real-time, room-based Arabic trivia game. Players join 4-character rooms and
 play 3 difficulty phases (easy → medium → hard) of questions, scoring points with
 a leveling system. UI is right-to-left (RTL) Arabic.
 
-- **Live site:** alfalta.com (also trivia-game-9m2d.onrender.com)
+- **Live site:** [www.alfalta.com](https://www.alfalta.com)
 - **Repo:** github.com/Bin-Jiran/Trivia-Game (main branch)
 - **Owner/dev:** Khalifa (commits as Bin-Jiran / aljiran89@gmail.com)
 
