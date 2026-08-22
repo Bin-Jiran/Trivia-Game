@@ -1147,7 +1147,7 @@ let awaitingRejoinConfirm=false;
 // pendingRejoinCode is keyed per user id so different accounts on the same
 // device never see or clobber each other's stored in-progress-game code.
 function rejoinCodeKey(){ return (me && me.id) ? `pendingRejoinCode_${me.id}` : null; }
-let currentRoomCode=null, currentFlagQuestion=null, currentFlagOptions=null, reportedThisQuestion=false, reportInFlight=false;
+let currentRoomCode=null, currentFlagQuestionId=null, reportedThisQuestion=false, reportInFlight=false;
 let editingRoom=false, currentRoomCategories=[];
 let lastPickedAnswer=null, lastAnswerCorrect=false;
 // In-game presence banner (player_presence: mid-game leave/rejoin). Newest
@@ -1539,7 +1539,7 @@ function connectSocket() {
     step();
   }
 
-  socket.on('question',({index,total,question,options,points,phase,is_logo,is_image,images,image_url})=>{
+  socket.on('question',({id,index,total,question,options,points,phase,is_logo,is_image,images,image_url})=>{
     // Clear a rejoin's waiting state, if any — a no-op otherwise (this
     // element is already hidden and #q-live-content already showing).
     document.getElementById('q-waiting-rejoin').style.display='none';
@@ -1577,8 +1577,11 @@ function connectSocket() {
     lastPickedAnswer=null; lastAnswerCorrect=false;
 
     // Reset the report-a-problem control for this new question (fresh button reappears).
-    currentFlagQuestion=question; currentFlagOptions=options; reportedThisQuestion=false; reportInFlight=false;
-    document.getElementById('report-btn').classList.remove('hidden');
+    // id is only absent for an AI-fallback row (dead in practice — fallback is retired) —
+    // there's nothing a report could validate against, so the button stays hidden rather
+    // than offering a control that would always fail.
+    currentFlagQuestionId=id; reportedThisQuestion=false; reportInFlight=false;
+    document.getElementById('report-btn').classList.toggle('hidden', id==null);
     const _rm=document.getElementById('report-msg'); _rm.classList.remove('show','ok','err');
 
     if (is_image && Array.isArray(images)) {
@@ -1953,13 +1956,19 @@ function buildImageTiles(images){
   });
 }
 function reportQuestion(){
-  if(reportedThisQuestion || reportInFlight || !currentFlagQuestion) return;
+  if(reportedThisQuestion || reportInFlight || currentFlagQuestionId==null) return;
   reportInFlight=true; // guard against double-tap while the request is in flight
   const btn=document.getElementById('report-btn'), msg=document.getElementById('report-msg');
   // Show a status box in the button's spot: green on success, black on failure.
-  const showStatus=(ok)=>{
+  // text is passed in per-case — success, rate-limited, and every other rejection each
+  // get their own wording, but never the server's raw error string (the room/membership
+  // rejections are internal validation, not something a player did wrong — under normal
+  // use, seeing this button at all already means the id was genuinely served to them in
+  // this room, so those paths are effectively unreachable here; a generic message
+  // covers them without exposing internals, but the failure is never silent).
+  const showStatus=(ok, text)=>{
     btn.classList.add('hidden');                       // button disappears
-    msg.textContent = ok ? 'تم الإبلاغ، شكراً لك' : 'تعذّر الإبلاغ، حاول مجدداً';
+    msg.textContent = text;
     msg.classList.remove('ok','err'); msg.classList.add(ok?'ok':'err','show'); // fade in
     setTimeout(()=>{
       msg.classList.remove('show');                    // fade out after 1.5s
@@ -1967,13 +1976,15 @@ function reportQuestion(){
     },1500);
   };
   fetch('/api/flag-question',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-    body:JSON.stringify({question:currentFlagQuestion,options:currentFlagOptions,code:currentRoomCode})})
-    .then(r=>r.json()).then(d=>{
+    body:JSON.stringify({question_id:currentFlagQuestionId,code:currentRoomCode})})
+    .then(r=>r.json().then(d=>({status:r.status,body:d})))
+    .then(({status,body})=>{
       reportInFlight=false;
-      if(d&&d.ok){ reportedThisQuestion=true; showStatus(true); }  // success: button stays gone for this question
-      else { showStatus(false); }                                 // failure: retry allowed
+      if(status===200 && body && body.ok){ reportedThisQuestion=true; showStatus(true,'تم الإبلاغ، شكراً لك'); }
+      else if(status===429){ showStatus(false,'وصلت للحد الأقصى من البلاغات، حاول لاحقاً'); }
+      else { showStatus(false,'تعذّر الإبلاغ، حاول مجدداً'); }
     })
-    .catch(()=>{ reportInFlight=false; showStatus(false); });
+    .catch(()=>{ reportInFlight=false; showStatus(false,'تعذّر الإبلاغ، حاول مجدداً'); });
 }
 function leaveRoom(){
   dismissPresenceBanner();

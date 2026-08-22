@@ -6,7 +6,7 @@
   <title>الأسئلة المُبلغ عنها</title>
   <style>
     :root{
-      --yellow:#F5C200; --green:#2F9E44; --red:#E8472A; --blue:#2090BB;
+      --yellow:#F5C200; --green:#2F9E44; --red:#E8472A; --blue:#2090BB; --orange:#EF6C00;
       --glass:rgba(20,20,30,0.55); --glass-border:rgba(255,255,255,0.20);
       --font:'Segoe UI', Tahoma, sans-serif;
     }
@@ -44,9 +44,18 @@
 
     /* Question cards */
     .qcard{ padding:16px; margin-bottom:14px; }
-    .qmeta{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:12.5px; font-weight:700; opacity:0.92; margin-bottom:10px; }
+    .qmeta{ display:flex; justify-content:space-between; gap:8px 14px; flex-wrap:wrap; font-size:12px; font-weight:700; opacity:0.92; margin-bottom:10px; }
     .qmeta .count{ color:#ff6a52; }
+    .qbadges{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+    .badge{ font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; border:1.5px solid #fff; white-space:nowrap; background:rgba(255,255,255,0.14); }
+    .badge-inactive{ background:var(--red); }
     .qtext{ font-size:17px; font-weight:800; line-height:1.5; margin-bottom:12px; }
+
+    /* Image review — one generic frame for all four image folders (flags/crests/anime/cartoons).
+       Admin judgment doesn't need the gameplay UI's per-folder aspect toggling — object-fit:contain
+       inside a fixed max-height reads correctly regardless of the source image's own aspect ratio. */
+    .review-image{ display:block; width:100%; max-height:220px; object-fit:contain; border-radius:10px;
+      background:rgba(255,255,255,0.08); margin-bottom:12px; }
 
     .opts{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
     .opt{ padding:9px 12px; border-radius:10px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.18); font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; }
@@ -54,15 +63,18 @@
     .opt .tick{ width:18px; height:18px; flex:0 0 auto; }
     .opt .tick.hidden{ visibility:hidden; }
 
-    .actions{ display:flex; gap:9px; }
-    /* flex:1 1 0 + min-width:0 => every button gets an equal share of the row, regardless of label length */
-    .btn{ flex:1 1 0; min-width:0; padding:10px 8px; border-radius:10px; border:1.5px solid #fff; color:#fff; font-size:14px; font-weight:800; font-family:var(--font); cursor:pointer; text-align:center; }
+    /* flex-wrap so 3-4 buttons reflow instead of squeezing on narrow screens — same
+       pattern already used by admin-players.html's .uactions. */
+    .actions{ display:flex; flex-wrap:wrap; gap:9px; }
+    .btn{ flex:1 1 0; min-width:110px; padding:10px 8px; border-radius:10px; border:1.5px solid #fff; color:#fff; font-size:13.5px; font-weight:800; font-family:var(--font); cursor:pointer; text-align:center; }
     .btn:active{ transform:scale(0.98); }
     .btn-edit{ background:var(--blue); }
     .btn-del{ background:var(--red); }
     .btn-keep{ background:var(--green); }
     .btn-save{ background:var(--green); }
     .btn-cancel{ background:var(--red); }
+    .btn-deactivate{ background:var(--orange); }
+    .btn-reactivate{ background:var(--green); }
 
     /* Edit mode */
     .edit-field{ margin-bottom:10px; }
@@ -71,6 +83,22 @@
     .edit-opt-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
     .edit-opt-row input[type=text]{ flex:1 1 auto; padding:9px 11px; border-radius:10px; border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.25); color:#fff; font-size:14px; font-family:var(--font); }
     .edit-opt-row label{ font-size:12px; font-weight:700; opacity:0.9; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; cursor:pointer; }
+    .reason-input{ width:100%; min-height:54px; resize:vertical; padding:10px 12px; border-radius:10px;
+      border:1px solid rgba(255,255,255,0.3); background:rgba(0,0,0,0.25); color:#fff; font-size:14px;
+      font-family:var(--font); }
+    .reason-input::placeholder{ color:rgba(255,255,255,0.7); }
+
+    /* Confirmation modal (deactivate/reactivate) — same shape as admin-players.html's */
+    .modal-overlay{ position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+      padding:20px; background:rgba(0,0,0,0.55); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
+    .modal-card{ width:100%; max-width:340px; padding:22px 20px; text-align:center; }
+    .modal-msg{ font-size:16px; font-weight:800; line-height:1.55; margin-bottom:14px; }
+    .modal-actions{ display:flex; gap:10px; margin-top:14px; }
+    .mbtn{ flex:1 1 0; min-width:0; padding:11px 10px; border-radius:11px; border:1.5px solid #fff; color:#fff;
+      font-size:14.5px; font-weight:800; font-family:var(--font); cursor:pointer; }
+    .mbtn:active{ transform:scale(0.98); }
+    .mbtn-ok{ background:var(--orange); }
+    .mbtn-cancel{ background:rgba(255,255,255,0.16); }
 
     /* States */
     #loading, #denied, #empty{ min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
@@ -129,9 +157,22 @@
     <div id="list"></div>
   </div>
 
+  <!-- Deactivate/reactivate confirmation modal -->
+  <div id="confirm-modal" class="modal-overlay" style="display:none;" aria-hidden="true">
+    <div class="modal-card glass" role="dialog" aria-modal="true">
+      <div class="modal-msg" id="confirm-msg"></div>
+      <textarea id="confirm-reason" class="reason-input" maxlength="500" placeholder="السبب (مطلوب)..." rows="2"></textarea>
+      <div class="modal-actions">
+        <button id="confirm-ok" class="mbtn mbtn-ok" type="button">تأكيد</button>
+        <button id="confirm-cancel" class="mbtn mbtn-cancel" type="button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const token = localStorage.getItem('token');
     let flags = [];
+    const DIFF_AR = { easy:'سهل', medium:'متوسط', hard:'صعب' };
 
     function goHome(){ location.href = '/'; }
     function goDash(){ location.href = '/admin.html'; }
@@ -155,6 +196,34 @@
     }
     const checkSVG = '<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
+    // ---- Reusable confirm modal (deactivate/reactivate — the only actions here that need a reason via a modal; edit collects its own reason inline) ----
+    let _confirmCb = null;
+    function showConfirm(message, onConfirm, opts){
+      opts = opts || {};
+      document.getElementById('confirm-msg').textContent = message;
+      document.getElementById('confirm-reason').value = '';
+      const ok = document.getElementById('confirm-ok');
+      ok.textContent = opts.confirmText || 'تأكيد';
+      _confirmCb = onConfirm;
+      const overlay = document.getElementById('confirm-modal');
+      overlay.style.display = 'flex'; overlay.setAttribute('aria-hidden','false');
+    }
+    function hideConfirm(){
+      const overlay = document.getElementById('confirm-modal');
+      overlay.style.display = 'none'; overlay.setAttribute('aria-hidden','true');
+      _confirmCb = null;
+    }
+    document.getElementById('confirm-ok').addEventListener('click', ()=>{
+      const reasonEl = document.getElementById('confirm-reason');
+      const reason = reasonEl.value.trim();
+      if(!reason){ alert('السبب مطلوب'); reasonEl.focus(); return; }
+      const cb = _confirmCb; hideConfirm(); if(cb) cb(reason);
+    });
+    document.getElementById('confirm-cancel').addEventListener('click', hideConfirm);
+    document.getElementById('confirm-modal').addEventListener('click', (e)=>{
+      if(e.target.id === 'confirm-modal') hideConfirm();
+    });
+
     function render(){
       const wrap = document.getElementById('list');
       wrap.innerHTML = '';
@@ -163,58 +232,84 @@
       flags.forEach(f => wrap.appendChild(viewCard(f)));
     }
 
+    function findCard(questionId){ return document.querySelector(`.qcard[data-id="${questionId}"]`); }
+
     // ---- View card ----
     function viewCard(f){
       const card = el('div','qcard glass');
-      card.dataset.id = f.id;
+      card.dataset.id = f.question_id;
+      const isImage = f.image_url != null;
+
+      const badges = el('div','qbadges');
+      badges.appendChild(el('span','badge', f.category));
+      badges.appendChild(el('span','badge', DIFF_AR[f.difficulty] || f.difficulty));
+      badges.appendChild(el('span','badge', 'رقم السؤال: ' + ar(f.question_id)));
+      if(!f.active) badges.appendChild(el('span','badge badge-inactive','معطّل'));
+      card.appendChild(badges);
 
       const meta = el('div','qmeta');
-      // No category is stored on flags yet, so show only the report count (in red).
       meta.appendChild(el('span','count', 'عدد البلاغات: ' + ar(f.report_count)));
       meta.appendChild(el('span', null, fmtDate(f.first_reported)));
       card.appendChild(meta);
 
       card.appendChild(el('div','qtext', f.question || '—'));
 
-      const opts = el('div','opts');
-      if(f.options && f.options.length){
-        f.options.forEach(o=>{
-          const isCorrect = f.correct_answer != null && o === f.correct_answer;
-          const row = el('div', 'opt' + (isCorrect ? ' correct' : ''));
-          const tick = document.createElement('span');
-          tick.innerHTML = checkSVG;
-          const svg = tick.firstChild;
-          if(!isCorrect) svg.classList.add('hidden');
-          row.appendChild(svg);
-          row.appendChild(el('span', null, o));
-          opts.appendChild(row);
-        });
-      } else {
-        opts.appendChild(el('div','opt','— لا توجد خيارات محفوظة —'));
+      if(isImage){
+        const img = document.createElement('img');
+        img.className = 'review-image';
+        img.src = f.image_url;
+        img.alt = f.question || '';
+        card.appendChild(img);
       }
+
+      // Answer + three distractors, in the RAW stored order (choice1..4) — never the
+      // gameplay-shuffled order. This is load-bearing for the edit form's answer_index
+      // (position IS the master-format letter), and correct for review either way.
+      const opts = el('div','opts');
+      (f.choices || []).forEach(o=>{
+        const isCorrect = f.answer != null && o === f.answer;
+        const row = el('div', 'opt' + (isCorrect ? ' correct' : ''));
+        const tick = document.createElement('span');
+        tick.innerHTML = checkSVG;
+        const svg = tick.firstChild;
+        if(!isCorrect) svg.classList.add('hidden');
+        row.appendChild(svg);
+        row.appendChild(el('span', null, o));
+        opts.appendChild(row);
+      });
       card.appendChild(opts);
 
       const actions = el('div','actions');
-      const editBtn = el('button','btn btn-edit','تعديل');
-      editBtn.onclick = ()=> card.replaceWith(editCard(f));
+      if(!isImage){
+        const editBtn = el('button','btn btn-edit','تعديل');
+        editBtn.onclick = ()=> card.replaceWith(editCard(f));
+        actions.appendChild(editBtn);
+      }
+      if(f.active){
+        const deactBtn = el('button','btn btn-deactivate','تعطيل');
+        deactBtn.onclick = ()=> onDeactivate(f, card);
+        actions.appendChild(deactBtn);
+      } else {
+        const reactBtn = el('button','btn btn-reactivate','إعادة تفعيل');
+        reactBtn.onclick = ()=> onReactivate(f, card);
+        actions.appendChild(reactBtn);
+      }
+      const delBtn = el('button','btn btn-del','تجاهل البلاغ');
+      delBtn.onclick = ()=> onDismiss(f, card);
+      actions.appendChild(delBtn);
       const keepBtn = el('button','btn btn-keep','لا يوجد خطأ');
       keepBtn.onclick = ()=> onKeep(f, card);
-      const delBtn = el('button','btn btn-del','حذف');
-      delBtn.onclick = ()=> onDelete(f, card);
-      actions.appendChild(editBtn);
-      actions.appendChild(delBtn);
       actions.appendChild(keepBtn);
       card.appendChild(actions);
 
       return card;
     }
 
-    // ---- Edit card ----
+    // ---- Edit card (text rows only — never reachable for image rows) ----
     function editCard(f){
       const card = el('div','qcard glass');
-      card.dataset.id = f.id;
+      card.dataset.id = f.question_id;
 
-      // Question text
       const qf = el('div','edit-field');
       qf.appendChild(el('div','edit-label','نص السؤال'));
       const qta = el('textarea','edit-q');
@@ -222,18 +317,17 @@
       qf.appendChild(qta);
       card.appendChild(qf);
 
-      // Options + correct radio
       const of = el('div','edit-field');
       of.appendChild(el('div','edit-label','الخيارات (حدد الإجابة الصحيحة)'));
       const optInputs = [];
-      const radioName = 'correct-' + Math.abs(hashStr(f.id));
-      const baseOpts = (f.options && f.options.length) ? f.options : ['','','',''];
-      baseOpts.forEach((o)=>{
+      const radioName = 'correct-' + f.question_id;
+      const baseOpts = (f.choices && f.choices.length === 4) ? f.choices : ['','','',''];
+      baseOpts.forEach((o, idx)=>{
         const row = el('div','edit-opt-row');
         const inp = el('input'); inp.type='text'; inp.value = o;
         const radioLabel = el('label');
-        const radio = el('input'); radio.type='radio'; radio.name = radioName;
-        if(f.correct_answer != null && o === f.correct_answer) radio.checked = true;
+        const radio = el('input'); radio.type='radio'; radio.name = radioName; radio.value = idx;
+        if(f.answer != null && o === f.answer) radio.checked = true;
         radioLabel.appendChild(radio);
         radioLabel.appendChild(el('span', null, 'صحيحة'));
         row.appendChild(inp);
@@ -243,17 +337,33 @@
       });
       card.appendChild(of);
 
-      // Actions
+      const rf = el('div','edit-field');
+      rf.appendChild(el('div','edit-label','سبب التعديل'));
+      const reasonTa = el('textarea','reason-input');
+      reasonTa.maxLength = 500;
+      reasonTa.placeholder = 'السبب (مطلوب)...';
+      reasonTa.rows = 2;
+      rf.appendChild(reasonTa);
+      card.appendChild(rf);
+
       const actions = el('div','actions');
+      actions.style.marginTop = '12px';
       const saveBtn = el('button','btn btn-save','حفظ');
       saveBtn.onclick = ()=>{
         const question = qta.value.trim();
         if(!question){ alert('نص السؤال مطلوب'); return; }
-        const options = optInputs.map(x=> x.inp.value.trim()).filter(v=> v.length);
-        let correct_answer = null;
+        const choiceVals = optInputs.map(x=> x.inp.value.trim());
+        if(choiceVals.some(v=> !v.length)){ alert('كل الخيارات مطلوبة'); return; }
         const chosen = optInputs.find(x=> x.radio.checked);
-        if(chosen){ const v = chosen.inp.value.trim(); if(v.length) correct_answer = v; }
-        onSave(f, { question, options, correct_answer }, card);
+        if(!chosen){ alert('حدد الإجابة الصحيحة'); return; }
+        const reason = reasonTa.value.trim();
+        if(!reason){ alert('السبب مطلوب'); return; }
+        onSave(f, {
+          question,
+          choice1: choiceVals[0], choice2: choiceVals[1], choice3: choiceVals[2], choice4: choiceVals[3],
+          answer_index: parseInt(chosen.radio.value, 10),
+          reason
+        }, card);
       };
       const cancelBtn = el('button','btn btn-cancel','إلغاء');
       cancelBtn.onclick = ()=> card.replaceWith(viewCard(f));
@@ -264,46 +374,89 @@
       return card;
     }
 
-    function hashStr(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h<<5)-h+s.charCodeAt(i); h|=0; } return h; }
-
     // ---- Actions ----
     async function onSave(f, payload, card){
       try{
-        const res = await fetch('/api/admin/flags/' + encodeURIComponent(f.id), {
+        const res = await fetch('/api/admin/questions/' + f.question_id, {
           method:'PUT',
           headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
           body: JSON.stringify(payload)
         });
-        if(!res.ok){ alert('تعذّر الحفظ، حاول مجدداً'); return; }
-        flags = flags.filter(x=> x.id !== f.id);   // fixed -> leaves pending list
+        const d = await res.json().catch(()=> ({}));
+        if(!res.ok){ alert(d.error || 'تعذّر الحفظ، حاول مجدداً'); return; }
+        flags = flags.filter(x=> x.question_id !== f.question_id);   // fixed -> leaves pending list
         render();
       }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
     }
 
-    // "لا مشكلة" — resolve the report, leave the question intact (no edit, no delete).
+    // Dismiss a report (the report was bad) — resolves it, leaves the question untouched.
+    async function onDismiss(f, card){
+      if(!confirm('تجاهل هذا البلاغ؟')) return;
+      try{
+        const res = await fetch('/api/admin/flags/' + f.question_id + '/dismiss', {
+          method:'POST', headers:{ Authorization:'Bearer ' + token }
+        });
+        if(!res.ok){ alert('تعذّر الحفظ، حاول مجدداً'); return; }
+        flags = flags.filter(x=> x.question_id !== f.question_id);
+        render();
+      }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
+    }
+
+    // "لا مشكلة" — the reported question is actually fine. Resolves the report,
+    // leaves the question snapshot completely unchanged.
     async function onKeep(f, card){
       try{
-        const res = await fetch('/api/admin/flags/' + encodeURIComponent(f.id) + '/keep', {
-          method:'POST',
-          headers:{ Authorization:'Bearer ' + token }
+        const res = await fetch('/api/admin/flags/' + f.question_id + '/keep', {
+          method:'POST', headers:{ Authorization:'Bearer ' + token }
         });
         if(!res.ok){ alert('تعذّر الحفظ، حاول مجدداً'); return; }
-        flags = flags.filter(x=> x.id !== f.id);   // resolved -> leaves pending list
+        flags = flags.filter(x=> x.question_id !== f.question_id);
         render();
       }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
     }
 
-    async function onDelete(f, card){
-      if(!confirm('هل أنت متأكد؟')) return;
+    // Deactivate/reactivate does NOT resolve the flag report and does NOT remove the
+    // card from the pending list — it's an independent rotation control, not a fix.
+    // Only that one card's active-state is updated in place.
+    async function onDeactivate(f, card){
+      let msg = 'تعطيل هذا السؤال؟ سيتوقف عن الظهور في الجولات.';
       try{
-        const res = await fetch('/api/admin/flags/' + encodeURIComponent(f.id), {
-          method:'DELETE',
-          headers:{ Authorization:'Bearer ' + token }
-        });
-        if(!res.ok){ alert('تعذّر الحذف، حاول مجدداً'); return; }
-        flags = flags.filter(x=> x.id !== f.id);
-        render();
-      }catch(e){ alert('تعذّر الحذف، حاول مجدداً'); }
+        const cRes = await fetch('/api/admin/questions/active-count?category=' + encodeURIComponent(f.category) + '&difficulty=' + encodeURIComponent(f.difficulty), { headers:{ Authorization:'Bearer ' + token } });
+        if(cRes.ok){
+          const { count } = await cRes.json();
+          msg = `تعطيل هذا السؤال؟ فئة «${f.category}» صعوبة «${DIFF_AR[f.difficulty]||f.difficulty}» لديها حالياً ${ar(count)} سؤال نشط — سيتبقى ${ar(Math.max(0,count-1))} بعد التعطيل.`;
+        }
+      }catch(e){ /* count is informational only — proceed with the generic message if it fails */ }
+
+      showConfirm(msg, async (reason)=>{
+        try{
+          const res = await fetch('/api/admin/questions/' + f.question_id + '/deactivate', {
+            method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
+            body: JSON.stringify({ reason })
+          });
+          const d = await res.json().catch(()=> ({}));
+          if(!res.ok){ alert(d.error || 'تعذّرت العملية'); return; }
+          f.active = false;
+          const cur = findCard(f.question_id);
+          if(cur) cur.replaceWith(viewCard(f));
+        }catch(e){ alert('تعذّرت العملية، حاول مجدداً'); }
+      }, { confirmText:'تعطيل' });
+    }
+
+    async function onReactivate(f, card){
+      showConfirm('إعادة تفعيل هذا السؤال؟ سيعود للظهور في الجولات.', async (reason)=>{
+        try{
+          const res = await fetch('/api/admin/questions/' + f.question_id + '/reactivate', {
+            method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
+            body: JSON.stringify({ reason })
+          });
+          const d = await res.json().catch(()=> ({}));
+          if(!res.ok){ alert(d.error || 'تعذّرت العملية'); return; }
+          f.active = true;
+          const cur = findCard(f.question_id);
+          if(cur) cur.replaceWith(viewCard(f));
+        }catch(e){ alert('تعذّرت العملية، حاول مجدداً'); }
+      }, { confirmText:'إعادة تفعيل' });
     }
 
     // ---- Load ----

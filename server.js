@@ -6,7 +6,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
-const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -38,6 +37,18 @@ const pool = new Pool({
 });
 pool.on('error', (err) => {
   console.error('❌ Unexpected pg pool error:', err);
+});
+
+// Backstop, not a fix: a future await pool.query() (or any other promise) missing its
+// own try/catch would otherwise crash the entire process on rejection — every room and
+// every connected player gone at once, since rooms are in-memory only. This logs loudly
+// and keeps the process alive instead. It only ever fires for a rejection that had NO
+// other handler anywhere — by definition it cannot swallow or suppress anything that
+// already surfaces via a try/catch, a .catch(), or Express's own handling; those never
+// reach here in the first place. Registered before initDB() runs so it's live for the
+// very first async operation this process performs.
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ UNHANDLED REJECTION (process kept alive):', reason && reason.stack || reason);
 });
 
 async function initDB() {
@@ -80,6 +91,19 @@ async function initDB() {
     );
     CREATE INDEX IF NOT EXISTS idx_admin_actions_target_id ON admin_actions(target_id);
     CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at ON admin_actions(created_at);
+    CREATE TABLE IF NOT EXISTS question_pending_master_edits (
+      id SERIAL PRIMARY KEY,
+      question_id INTEGER NOT NULL UNIQUE REFERENCES questions(id) ON DELETE CASCADE,
+      category TEXT NOT NULL,
+      difficulty TEXT NOT NULL,
+      old_question TEXT NOT NULL,       new_question TEXT NOT NULL,
+      old_choice1 TEXT NOT NULL,        new_choice1 TEXT NOT NULL,
+      old_choice2 TEXT NOT NULL,        new_choice2 TEXT NOT NULL,
+      old_choice3 TEXT NOT NULL,        new_choice3 TEXT NOT NULL,
+      old_choice4 TEXT NOT NULL,        new_choice4 TEXT NOT NULL,
+      old_answer_letter TEXT NOT NULL,  new_answer_letter TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
   `);
   // Backward-compatible: add new columns to pre-existing tables without touching data.
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
@@ -88,6 +112,57 @@ async function initDB() {
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved BOOLEAN NOT NULL DEFAULT FALSE');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP');
   await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS resolution TEXT');
+  // question_flags migration: question_key (a client-supplied SHA-256 hash of question
+  // text, unable to identify any of the 551 image-backed rows sharing an identical fixed
+  // stem) is replaced by a real FK on questions.id. ON DELETE CASCADE so the guarded
+  // single-row DELETE precedent (CLAUDE.md, id 2910) is never blocked by a flag report
+  // pointing at the row being removed. The constraint names below are explicit (not left
+  // to Postgres's auto-naming) so the DROP/guarded-re-add statements match on every
+  // environment: both dev and production created the dropped ones from this same
+  // original CREATE TABLE statement, so the generated names are guaranteed identical.
+  await pool.query('ALTER TABLE question_flags DROP CONSTRAINT IF EXISTS question_flags_question_key_user_id_key');
+  await pool.query('ALTER TABLE question_flags DROP COLUMN IF EXISTS question_key');
+  await pool.query('ALTER TABLE question_flags DROP COLUMN IF EXISTS question_text');
+  await pool.query('ALTER TABLE question_flags DROP COLUMN IF EXISTS options');
+  await pool.query('ALTER TABLE question_flags DROP COLUMN IF EXISTS correct_answer');
+  // question_id is added NULLABLE first — Postgres cannot add a NOT NULL column with no
+  // default to a table that already has rows, and this runs on every boot forever, so it
+  // must be safe regardless of row count, not just on the empty table it happened to run
+  // against first. Any row still NULL after this (pre-migration rows keyed on the dropped
+  // hash) has nothing to backfill question_id from, so it's deleted rather than kept
+  // invalid — then SET NOT NULL is safe unconditionally.
+  await pool.query('ALTER TABLE question_flags ADD COLUMN IF NOT EXISTS question_id INTEGER');
+  // This runs on EVERY boot, forever. It is a no-op on every boot after the first only
+  // because question_id is made NOT NULL immediately below — once that holds, no row can
+  // ever have a NULL question_id again, so there is nothing left for this to match. If
+  // that NOT NULL constraint is ever relaxed for any reason, this line becomes live and
+  // destructive again, silently deleting whatever rows happened to have a NULL
+  // question_id at that moment. This is the one destructive statement in initDB().
+  await pool.query('DELETE FROM question_flags WHERE question_id IS NULL');
+  // Verified empirically: SET NOT NULL on an already-NOT-NULL column is a native no-op
+  // (no guard needed) — unlike the two ADD CONSTRAINT calls below, which both need one.
+  await pool.query('ALTER TABLE question_flags ALTER COLUMN question_id SET NOT NULL');
+  // Postgres has no ADD CONSTRAINT IF NOT EXISTS — a bare re-run errors, which would
+  // silently truncate every statement after it on every boot following the first.
+  // Verified empirically per constraint type, since the SQLSTATE differs between them:
+  // a duplicate FOREIGN KEY is 42710/duplicate_object, but a duplicate UNIQUE constraint
+  // is 42P07/duplicate_table (it's backed by an index, so it hits the relation-name
+  // class instead) — tested each bare re-run before picking its guard, not assumed.
+  await pool.query(`
+    DO $mig$
+    BEGIN
+      ALTER TABLE question_flags ADD CONSTRAINT question_flags_question_id_fkey
+        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $mig$;
+  `);
+  await pool.query(`
+    DO $mig2$
+    BEGIN
+      ALTER TABLE question_flags ADD CONSTRAINT question_flags_question_id_user_id_key UNIQUE (question_id, user_id);
+    EXCEPTION WHEN duplicate_table THEN NULL;
+    END $mig2$;
+  `);
   await pool.query('ALTER TABLE questions ADD COLUMN IF NOT EXISTS image_url TEXT');
   // admin_actions is append-only: enforced here at the DB level (not just by never
   // writing an UPDATE/DELETE path in code) so it holds even against a future mistake.
@@ -283,28 +358,36 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { password } = req.body;
   const email = (req.body.email || '').trim().toLowerCase();
-  // lower(email): matches regardless of how the stored value is cased, so
-  // this is correct even before every row is backfilled to lowercase.
-  const r = await pool.query('SELECT * FROM users WHERE lower(email)=$1', [email]);
-  const user = r.rows[0];
-  if (!user) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
-  // Banned accounts cannot obtain a fresh session.
-  if (user.is_banned) return res.status(403).json({ error: 'تم حظر حسابك. للاستفسار تواصل مع الإدارة.' });
-  const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: safeUser(user) });
+  try {
+    // lower(email): matches regardless of how the stored value is cased, so
+    // this is correct even before every row is backfilled to lowercase.
+    const r = await pool.query('SELECT * FROM users WHERE lower(email)=$1', [email]);
+    const user = r.rows[0];
+    if (!user) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(400).json({ error: 'البريد أو كلمة المرور غير صحيحة' });
+    // Banned accounts cannot obtain a fresh session.
+    if (user.is_banned) return res.status(403).json({ error: 'تم حظر حسابك. للاستفسار تواصل مع الإدارة.' });
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token, user: safeUser(user) });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 app.get('/api/me', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
-  const r = await pool.query('SELECT * FROM users WHERE id=$1', [payload.id]);
-  if (!r.rows[0]) return res.status(404).json({ error: 'غير موجود' });
-  res.json({ ...safeUser(r.rows[0]),
-    is_admin: r.rows[0].is_admin || false,
-    is_super_admin: r.rows[0].is_super_admin || false });
+  try {
+    const r = await pool.query('SELECT * FROM users WHERE id=$1', [payload.id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'غير موجود' });
+    res.json({ ...safeUser(r.rows[0]),
+      is_admin: r.rows[0].is_admin || false,
+      is_super_admin: r.rows[0].is_super_admin || false });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // Protected test endpoint — only reachable by admins (foundation for the dashboard).
@@ -334,101 +417,328 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
     "SELECT COUNT(DISTINCT room_code)::int AS c FROM game_history " +
     "WHERE (played_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kuwait') >= date_trunc('day', now() AT TIME ZONE 'Asia/Kuwait')"
   );
-  const flaggedCount = await count('SELECT COUNT(DISTINCT question_key)::int AS c FROM question_flags WHERE resolved = FALSE');
+  const flaggedCount = await count('SELECT COUNT(DISTINCT question_id)::int AS c FROM question_flags WHERE resolved = FALSE');
+  const pendingMirrorCount = await count('SELECT COUNT(*)::int AS c FROM question_pending_master_edits');
 
-  res.json({ activeGames, playersOnline, totalUsers, gamesToday, flaggedCount });
+  res.json({ activeGames, playersOnline, totalUsers, gamesToday, flaggedCount, pendingMirrorCount });
 });
 
-// Flagged questions for review. Questions are AI-generated (no master bank), so we
-// review the snapshots saved in question_flags. Rows are grouped by question_key:
-// one entry per distinct question, with a report count and the earliest report date.
-// Pending only (resolved = FALSE), oldest first.
+const ANSWER_LETTERS = ['A', 'B', 'C', 'D'];
+
+// Flagged questions for review, grouped by the real questions.id they point at (not
+// a client-supplied text hash — see /api/flag-question). Content is joined LIVE from
+// `questions` rather than duplicated into question_flags, so the review screen always
+// shows the current row, never a stale report-time snapshot. Pending only
+// (resolved = FALSE), oldest-first. image_url tells the client whether this is a
+// read-only image row or a panel-editable text row.
 app.get('/api/admin/flags', requireAdmin, async (req, res) => {
   try {
     const r = await pool.query(`
-      SELECT question_key,
-             COUNT(*)::int AS report_count,
-             MIN(created_at) AS first_reported,
-             (ARRAY_AGG(question_text   ORDER BY created_at DESC))[1] AS question_text,
-             (ARRAY_AGG(options         ORDER BY (options IS NULL),        created_at DESC))[1] AS options,
-             (ARRAY_AGG(correct_answer  ORDER BY (correct_answer IS NULL), created_at DESC))[1] AS correct_answer
-      FROM question_flags
-      WHERE resolved = FALSE
-      GROUP BY question_key
-      ORDER BY first_reported ASC
+      SELECT q.id, q.category, q.difficulty, q.question,
+             q.choice1, q.choice2, q.choice3, q.choice4, q.answer,
+             q.image_url, q.active,
+             COUNT(qf.id)::int AS report_count,
+             MIN(qf.created_at) AS first_reported
+        FROM question_flags qf
+        JOIN questions q ON q.id = qf.question_id
+       WHERE qf.resolved = FALSE
+       GROUP BY q.id
+       ORDER BY first_reported ASC
     `);
-    const flags = r.rows.map(row => {
-      let options = [];
-      try { const p = JSON.parse(row.options || '[]'); if (Array.isArray(p)) options = p; } catch (e) { options = []; }
-      return {
-        id: row.question_key,
-        question: row.question_text || '',
-        options,
-        correct_answer: row.correct_answer || null,
-        report_count: row.report_count,
-        first_reported: row.first_reported
-      };
-    });
+    const flags = r.rows.map(row => ({
+      question_id: row.id,
+      category: row.category,
+      difficulty: row.difficulty,
+      question: row.question,
+      choices: [row.choice1, row.choice2, row.choice3, row.choice4],
+      answer: row.answer,
+      image_url: row.image_url,
+      active: row.active,
+      report_count: row.report_count,
+      first_reported: row.first_reported
+    }));
     res.json({ flags });
   } catch (e) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// Save a corrected version of a flagged question and mark it resolved (leaves the
-// pending list). :id is the question_key (the group). Operates on all rows of the group.
-app.put('/api/admin/flags/:id', requireAdmin, async (req, res) => {
-  const questionKey = req.params.id;
-  const { question, options, correct_answer } = req.body || {};
-  if (!question || typeof question !== 'string') return res.status(400).json({ error: 'سؤال غير صالح' });
-  const optionsJson = Array.isArray(options) ? JSON.stringify(options) : null;
-  const correct = (typeof correct_answer === 'string' && correct_answer.length) ? correct_answer : null;
+// Live active-row count for one category+difficulty bucket. Used by the review
+// screen's deactivate confirmation to show what would remain — informational only,
+// never a block; the admin decides what leaves rotation, not this number.
+app.get('/api/admin/questions/active-count', requireAdmin, async (req, res) => {
+  const category = (req.query.category || '').toString();
+  const difficulty = (req.query.difficulty || '').toString();
+  if (!category || !difficulty) return res.status(400).json({ error: 'بيانات غير صالحة' });
   try {
     const r = await pool.query(
-      `UPDATE question_flags
-         SET question_text = $1,
-             options = $2,
-             correct_answer = COALESCE($3, correct_answer),
-             resolved = TRUE,
-             resolved_at = now(),
-             resolution = 'edited'
-       WHERE question_key = $4 AND resolved = FALSE`,
-      [question, optionsJson, correct, questionKey]
+      'SELECT COUNT(*)::int AS c FROM questions WHERE category=$1 AND difficulty=$2 AND active',
+      [category, difficulty]
     );
-    res.json({ ok: true, updated: r.rowCount });
+    res.json({ count: r.rows[0].c });
   } catch (e) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// Dismiss a flagged question (the report was bad). We mark resolved (keep history)
-// rather than deleting; the question snapshot is left intact.
-app.delete('/api/admin/flags/:id', requireAdmin, async (req, res) => {
-  const questionKey = req.params.id;
+const QUESTION_EDIT_FIELDS = ['question', 'choice1', 'choice2', 'choice3', 'choice4', 'answer_index', 'reason'];
+
+// Edits a TEXT question's content — the question, its four choices, and which one is
+// correct. Image-backed rows are refused outright: image questions are
+// review-and-deactivate only, the fix happens in the master, never here. The fixed
+// field list above is the only thing ever read from the body; any other key is
+// rejected rather than silently ignored. category/difficulty/image_url/active never
+// appear in the UPDATE's column list at all, so this cannot touch them regardless of
+// what the request contains. answer_index (0-3) selects by POSITION among the four
+// submitted choices — not by matching text — so the master-format letter (A-D) is
+// derived directly from that position with no text-matching ambiguity. Writes
+// questions, the admin_actions audit row, and the pending-master-edit upsert (see
+// question_pending_master_edits) all in ONE transaction, and resolves any pending
+// flag reports for this question — the fix has been made.
+app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
+  const questionId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+
+  const body = req.body || {};
+  const unexpected = Object.keys(body).filter(k => !QUESTION_EDIT_FIELDS.includes(k));
+  if (unexpected.length) return res.status(400).json({ error: 'حقول غير متوقعة: ' + unexpected.join(', ') });
+
+  const { question, choice1, choice2, choice3, choice4, answer_index } = body;
+  const reason = (body.reason || '').toString().trim();
+  const newChoicesRaw = [choice1, choice2, choice3, choice4];
+  if (typeof question !== 'string' || !question.trim())
+    return res.status(400).json({ error: 'سؤال غير صالح' });
+  if (newChoicesRaw.some(c => typeof c !== 'string' || !c.trim()))
+    return res.status(400).json({ error: 'الخيارات غير صالحة' });
+  if (!Number.isInteger(answer_index) || answer_index < 0 || answer_index > 3)
+    return res.status(400).json({ error: 'إجابة غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
+
+  const newQuestion = question.trim();
+  const newChoices = newChoicesRaw.map(c => c.trim());
+  const newAnswer = newChoices[answer_index];
+  const newAnswerLetter = ANSWER_LETTERS[answer_index];
+
   try {
-    const r = await pool.query(
-      `UPDATE question_flags SET resolved = TRUE, resolved_at = now(), resolution = 'dismissed'
-       WHERE question_key = $1 AND resolved = FALSE`,
-      [questionKey]
-    );
-    res.json({ ok: true, resolved: r.rowCount });
+    await withTransaction(async (client) => {
+      const r = await client.query(
+        `SELECT id, category, difficulty, question, choice1, choice2, choice3, choice4, answer, image_url
+           FROM questions WHERE id=$1 FOR UPDATE`,
+        [questionId]
+      );
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'السؤال غير موجود' });
+      if (target.image_url != null)
+        throw new AdminActionAbort(400, { error: 'الأسئلة المصوّرة للمراجعة فقط، لا يمكن تعديلها من هنا' });
+
+      const oldChoices = [target.choice1, target.choice2, target.choice3, target.choice4];
+      const oldAnswerIndex = oldChoices.indexOf(target.answer);
+      const oldAnswerLetter = ANSWER_LETTERS[oldAnswerIndex] || null;
+
+      await client.query(
+        'UPDATE questions SET question=$1, choice1=$2, choice2=$3, choice3=$4, choice4=$5, answer=$6 WHERE id=$7',
+        [newQuestion, newChoices[0], newChoices[1], newChoices[2], newChoices[3], newAnswer, questionId]
+      );
+
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'question_edit',
+        targetId: questionId, targetName: target.question,
+        beforeValue: JSON.stringify({
+          question: target.question, choice1: target.choice1, choice2: target.choice2,
+          choice3: target.choice3, choice4: target.choice4, answer: target.answer
+        }),
+        afterValue: JSON.stringify({
+          question: newQuestion, choice1: newChoices[0], choice2: newChoices[1],
+          choice3: newChoices[2], choice4: newChoices[3], answer: newAnswer
+        }),
+        reason
+      });
+
+      // Upsert, not insert: if this row already has an outstanding pending edit, the
+      // old_* values stay exactly as they were (they describe what the MASTER still
+      // has) — only new_* moves forward to this latest edit. Collapses multiple edits
+      // before a mirror into a single (master-value) -> (current DB value) delta.
+      await client.query(
+        `INSERT INTO question_pending_master_edits
+           (question_id, category, difficulty, old_question, new_question,
+            old_choice1, new_choice1, old_choice2, new_choice2,
+            old_choice3, new_choice3, old_choice4, new_choice4,
+            old_answer_letter, new_answer_letter)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         ON CONFLICT (question_id) DO UPDATE SET
+           new_question = EXCLUDED.new_question,
+           new_choice1 = EXCLUDED.new_choice1, new_choice2 = EXCLUDED.new_choice2,
+           new_choice3 = EXCLUDED.new_choice3, new_choice4 = EXCLUDED.new_choice4,
+           new_answer_letter = EXCLUDED.new_answer_letter`,
+        [questionId, target.category, target.difficulty, target.question, newQuestion,
+         target.choice1, newChoices[0], target.choice2, newChoices[1],
+         target.choice3, newChoices[2], target.choice4, newChoices[3],
+         oldAnswerLetter, newAnswerLetter]
+      );
+
+      await client.query(
+        `UPDATE question_flags SET resolved=TRUE, resolved_at=now(), resolution='edited'
+         WHERE question_id=$1 AND resolved=FALSE`,
+        [questionId]
+      );
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Deactivate / reactivate — pulls a question out of round-building rotation (or back
+// in) without touching its content. Deliberately NOT automatic from flag state: the
+// admin decides what leaves rotation, the review queue never does on its own. `active`
+// has no equivalent column in the Excel master (DB-only operational state), so neither
+// of these ever touches question_pending_master_edits — there is nothing to mirror.
+app.post('/api/admin/questions/:id/deactivate', requireAdmin, async (req, res) => {
+  const questionId = parseInt(req.params.id, 10);
+  const reason = (req.body?.reason || '').toString().trim();
+  if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
+  try {
+    await withTransaction(async (client) => {
+      const r = await client.query('SELECT id, question, active FROM questions WHERE id=$1 FOR UPDATE', [questionId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'السؤال غير موجود' });
+      await client.query('UPDATE questions SET active=FALSE WHERE id=$1', [questionId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'question_deactivate',
+        targetId: questionId, targetName: target.question,
+        beforeValue: String(!!target.active), afterValue: 'false', reason
+      });
+    });
+    res.json({ ok: true, active: false });
+  } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+app.post('/api/admin/questions/:id/reactivate', requireAdmin, async (req, res) => {
+  const questionId = parseInt(req.params.id, 10);
+  const reason = (req.body?.reason || '').toString().trim();
+  if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
+  try {
+    await withTransaction(async (client) => {
+      const r = await client.query('SELECT id, question, active FROM questions WHERE id=$1 FOR UPDATE', [questionId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'السؤال غير موجود' });
+      await client.query('UPDATE questions SET active=TRUE WHERE id=$1', [questionId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'question_reactivate',
+        targetId: questionId, targetName: target.question,
+        beforeValue: String(!!target.active), afterValue: 'true', reason
+      });
+    });
+    res.json({ ok: true, active: true });
+  } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Dismiss a flag report (the report was bad) — resolves every pending report for this
+// question_id. Touches only question_flags, never questions itself.
+app.post('/api/admin/flags/:questionId/dismiss', requireAdmin, async (req, res) => {
+  const questionId = parseInt(req.params.questionId, 10);
+  if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  try {
+    await withTransaction(async (client) => {
+      const qr = await client.query('SELECT question FROM questions WHERE id=$1', [questionId]);
+      await client.query(
+        `UPDATE question_flags SET resolved=TRUE, resolved_at=now(), resolution='dismissed'
+         WHERE question_id=$1 AND resolved=FALSE`,
+        [questionId]
+      );
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'flag_dismiss',
+        targetId: questionId, targetName: qr.rows[0]?.question || null,
+        beforeValue: null, afterValue: null, reason: 'dismissed via triage'
+      });
+    });
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// "لا مشكلة" — the reported question is actually fine. Mark the group resolved and
-// leave the question snapshot completely unchanged (no edit, no delete).
-app.post('/api/admin/flags/:id/keep', requireAdmin, async (req, res) => {
-  const questionKey = req.params.id;
+// "لا مشكلة" — the reported question is actually fine. Resolves every pending report
+// for this question_id, leaves the question itself completely unchanged.
+app.post('/api/admin/flags/:questionId/keep', requireAdmin, async (req, res) => {
+  const questionId = parseInt(req.params.questionId, 10);
+  if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
   try {
-    const r = await pool.query(
-      `UPDATE question_flags SET resolved = TRUE, resolved_at = now(), resolution = 'ok'
-       WHERE question_key = $1 AND resolved = FALSE`,
-      [questionKey]
-    );
-    res.json({ ok: true, resolved: r.rowCount });
+    await withTransaction(async (client) => {
+      const qr = await client.query('SELECT question FROM questions WHERE id=$1', [questionId]);
+      await client.query(
+        `UPDATE question_flags SET resolved=TRUE, resolved_at=now(), resolution='ok'
+         WHERE question_id=$1 AND resolved=FALSE`,
+        [questionId]
+      );
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'flag_keep',
+        targetId: questionId, targetName: qr.rows[0]?.question || null,
+        beforeValue: null, afterValue: null, reason: 'marked no issue via triage'
+      });
+    });
+    res.json({ ok: true });
   } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Outstanding master-mirror obligations — one row per question with a DB edit not yet
+// reflected in the Excel master. Oldest first.
+app.get('/api/admin/master-sync', requireAdmin, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT id, question_id, category, difficulty,
+             old_question, new_question,
+             old_choice1, new_choice1, old_choice2, new_choice2,
+             old_choice3, new_choice3, old_choice4, new_choice4,
+             old_answer_letter, new_answer_letter, created_at
+        FROM question_pending_master_edits
+       ORDER BY created_at ASC
+    `);
+    res.json({ pending: r.rows });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Confirms a pending edit has been transcribed by hand into the Excel master. Deletes
+// the work-queue row — question_pending_master_edits is a queue, not a log; the
+// permanent record of the DB edit itself is the question_edit row already in
+// admin_actions, which this does not touch.
+app.post('/api/admin/master-sync/:id/mirrored', requireAdmin, async (req, res) => {
+  const pendingId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(pendingId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
+  try {
+    await withTransaction(async (client) => {
+      const r = await client.query(
+        'SELECT question_id, new_question FROM question_pending_master_edits WHERE id=$1 FOR UPDATE',
+        [pendingId]
+      );
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'لا يوجد سجل بهذا الرقم' });
+      await client.query('DELETE FROM question_pending_master_edits WHERE id=$1', [pendingId]);
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName, action: 'master_mirror_confirmed',
+        targetId: target.question_id, targetName: target.new_question,
+        beforeValue: null, afterValue: null, reason: 'confirmed mirrored to Excel master'
+      });
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -652,6 +962,14 @@ app.post('/api/admin/users/:id/demote', requireAdmin, async (req, res) => {
 // can show how many are hidden. Actor/target names are resolved twice: the LEFT JOIN's
 // CURRENT name is preferred, falling back to the actor_name/target_name snapshot taken
 // at insert time so the log stays readable after a user is renamed or deleted.
+//
+// The target join is restricted to the five user-management actions. target_id means
+// different things for different action types now (a users.id for ban/promote/etc.,
+// a questions.id for question_edit/question_deactivate/flag_dismiss/etc.) — joining
+// unconditionally against `users` would occasionally match a question id that happens
+// to collide with an unrelated user id and show the wrong name. For every other action
+// type the join is meant to miss, falling back to the stored snapshot exactly as
+// designed.
 app.get('/api/admin/actions', requireAdmin, async (req, res) => {
   try {
     const totalR = await pool.query('SELECT COUNT(*)::int AS c FROM admin_actions');
@@ -664,6 +982,7 @@ app.get('/api/admin/actions', requireAdmin, async (req, res) => {
         FROM admin_actions aa
         LEFT JOIN users actor  ON actor.id  = aa.actor_id
         LEFT JOIN users target ON target.id = aa.target_id
+                               AND aa.action IN ('points_adjust','ban','unban','promote','demote')
        ORDER BY aa.id DESC
        LIMIT 200
     `);
@@ -684,34 +1003,47 @@ app.get('/api/admin/actions', requireAdmin, async (req, res) => {
   }
 });
 
-// Player flags a problematic AI-generated question. Identified by a hash of the
-// question text; the text/options are stored so it can be reviewed later, and the
-// correct answer is enriched from authoritative live room state (never from the
-// client). Idempotent: one flag per (question, user) thanks to ON CONFLICT.
+const FLAG_RATE_LIMIT_PER_HOUR = 10;
+
+// Player flags a problematic question, identified by questions.id — never trusted as
+// client-supplied text. Validated, in order, against what the server itself knows was
+// actually served to THIS player in THIS room this game:
+//   1. question_id/code well-typed
+//   2. rooms[code] exists
+//   3. the flagging user is (or was) a player in that room
+//   4. question_id is in that room's servedQuestionIds (accumulated the whole game,
+//      not just the current question — see askQuestion)
+// A report arriving after the room has already been cleaned up is rejected outright,
+// by design — once the room is gone there is no way to verify same-room-serving, and
+// accepting an unverifiable claim would reopen the client-controlled-target hole this
+// closes. Idempotent per (question_id, user_id) via ON CONFLICT. Rate-limited per user
+// to stop the queue being flooded with arbitrary served ids.
 app.post('/api/flag-question', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
 
-  const { question, options, code } = req.body || {};
-  if (!question || typeof question !== 'string') return res.status(400).json({ error: 'سؤال غير صالح' });
+  const { question_id, code } = req.body || {};
+  if (!Number.isInteger(question_id)) return res.status(400).json({ error: 'سؤال غير صالح' });
+  if (!code || typeof code !== 'string') return res.status(400).json({ error: 'بيانات غير صالحة' });
 
-  const question_key = crypto.createHash('sha256').update(question.trim()).digest('hex');
-  const optionsJson = Array.isArray(options) ? JSON.stringify(options) : null;
-
-  // Pull the correct answer from the live room if it still matches this question.
-  let correct_answer = null;
-  const room = code && rooms[code];
-  if (room && room.currentQuestion && room.currentQuestion.question === question) {
-    correct_answer = room.currentQuestion.answer || null;
-  }
+  const room = rooms[code];
+  if (!room) return res.status(400).json({ error: 'الغرفة غير موجودة' });
+  if (!room.players[payload.id]) return res.status(403).json({ error: 'لست عضواً في هذه الغرفة' });
+  if (!room.servedQuestionIds.has(question_id)) return res.status(400).json({ error: 'لم يُعرض هذا السؤال في هذه الغرفة' });
 
   try {
+    const recent = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM question_flags WHERE user_id=$1 AND created_at > now() - interval '1 hour'`,
+      [payload.id]
+    );
+    if (recent.rows[0].c >= FLAG_RATE_LIMIT_PER_HOUR) {
+      return res.status(429).json({ error: 'وصلت للحد الأقصى من البلاغات، حاول لاحقاً' });
+    }
     await pool.query(
-      `INSERT INTO question_flags (question_key, user_id, question_text, options, correct_answer)
-       VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (question_key, user_id) DO NOTHING`,
-      [question_key, payload.id, question, optionsJson, correct_answer]
+      `INSERT INTO question_flags (question_id, user_id) VALUES ($1,$2)
+       ON CONFLICT (question_id, user_id) DO NOTHING`,
+      [question_id, payload.id]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -876,19 +1208,29 @@ async function buildRound(categories, difficulty, usedIds, ctx = {}){
   );
   let questions = picks.flat();
   questions.forEach(q => { if (q.id != null) usedIds.add(q.id); });   // AI-fallback rows have no id
-  if (AI_FALLBACK_ENABLED && questions.length < need) {
+  // Shortfall detection/logging fires regardless of AI_FALLBACK_ENABLED — a round
+  // coming up short of `need` must never be silent just because the fallback that
+  // would have filled it happens to be off. Previously this whole block, including the
+  // log line, only ran when AI_FALLBACK_ENABLED was true — with it permanently false in
+  // production, a thin-bucket shortfall produced fewer than `need` questions with ZERO
+  // signal anywhere. This does not add, re-enable, or change fallback behavior at all —
+  // the fallback attempt below is still exactly as gated as it always was.
+  if (questions.length < need) {
     const gap = need - questions.length;
-    let aiCount = 0;
-    try {
-      const ai = await generateQuestions(categories, difficulty, gap);
-      aiCount = ai.length;
-      questions = questions.concat(ai);
-    }
-    catch (e) { console.error(`❌ AI fallback failed [room=${ctx.code || '?'}, diff=${difficulty}]: ${e.message}`); }
-    // Fallback usage is always visible in logs, even without a DB error (thin bucket).
-    console.log(`ℹ️ AI fallback filled ${aiCount}/${gap} gap of ${need} [room=${ctx.code || '?'}, diff=${difficulty}, cats=${categories.join('،')}]`);
-    if (ctx.failures && ctx.failures.length){
-      console.error(`❌ Round gap after DB failure [room=${ctx.code || '?'}, diff=${difficulty}] failed=[${ctx.failures.join(', ')}] aiFilled=${aiCount}/${gap}`);
+    console.log(`⚠️ round shortfall: ${questions.length}/${need} [room=${ctx.code || '?'}, diff=${difficulty}, cats=${categories.join('،')}]`);
+    if (AI_FALLBACK_ENABLED) {
+      let aiCount = 0;
+      try {
+        const ai = await generateQuestions(categories, difficulty, gap);
+        aiCount = ai.length;
+        questions = questions.concat(ai);
+      }
+      catch (e) { console.error(`❌ AI fallback failed [room=${ctx.code || '?'}, diff=${difficulty}]: ${e.message}`); }
+      // Fallback usage is always visible in logs, even without a DB error (thin bucket).
+      console.log(`ℹ️ AI fallback filled ${aiCount}/${gap} gap of ${need} [room=${ctx.code || '?'}, diff=${difficulty}, cats=${categories.join('،')}]`);
+      if (ctx.failures && ctx.failures.length){
+        console.error(`❌ Round gap after DB failure [room=${ctx.code || '?'}, diff=${difficulty}] failed=[${ctx.failures.join(', ')}] aiFilled=${aiCount}/${gap}`);
+      }
     }
   }
   return shuffle(questions);   // interleave categories instead of grouping them
@@ -927,7 +1269,12 @@ io.on('connection', socket => {
     const cats = categories;
     rooms[code] = { code, host:socket.user.id, categories:cats, players:{}, phase:0,
       phaseNames:['easy','medium','hard'], qIndex:0, timer:null, status:'waiting', answered:{},
-      hostEditing:false, idleTimer:null };
+      hostEditing:false, idleTimer:null,
+      // Accumulated across the WHOLE game (not reset per phase) — every question.id
+      // actually dispatched in this room. /api/flag-question validates against this,
+      // never against a client-supplied id alone, so a player can only flag something
+      // that was genuinely served to them here.
+      servedQuestionIds:new Set() };
     addOrTakeoverPlayer(rooms[code], socket);
     socket.emit('room_created', { code, categories:cats });
     io.to(code).emit('players_update', getPlayers(code));
@@ -1387,12 +1734,17 @@ function askQuestion(code) {
   if (room.qIndex >= room.questions.length) { endPhase(code); return; }
   const q = room.questions[room.qIndex];
   room.currentQuestion = q; room.answered = {}; room.advancing = false;
+  // AI-fallback rows have no id (dead in practice — fallback is retired) — nothing to
+  // track for those. Real DB rows always have one, accumulated for the whole game so a
+  // flag from later in the game still validates against a question served earlier.
+  if (q.id != null) room.servedQuestionIds.add(q.id);
   // Whoever rejoined mid-question was excluded from THAT one only — clear it
   // for everyone (a no-op for anyone who didn't have it set) now that a new
   // question is actually starting, so they're back in the count from here on.
   Object.values(room.players).forEach(p => { p.excludedThisQuestion = false; });
   const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
   io.to(code).emit('question', {
+    id:q.id ?? null,
     index:room.qIndex+1, total:room.questions.length,
     question:q.question, options:q.options, points:pts, phase:room.phase+1,
     is_logo:q.logo_question||false,
@@ -1485,8 +1837,20 @@ async function endGame(code) {
   const leaderboard = getPlayers(code);
   for (const p of leaderboard) {
     const pts = Math.floor(p.sessionScore/100);
-    await pool.query('UPDATE users SET total_score=total_score+$1 WHERE id=$2', [pts, p.id]);
-    await pool.query('INSERT INTO game_history (user_id,room_code,score) VALUES ($1,$2,$3)', [p.id, code, p.sessionScore]);
+    try {
+      await pool.query('UPDATE users SET total_score=total_score+$1 WHERE id=$2', [pts, p.id]);
+      await pool.query('INSERT INTO game_history (user_id,room_code,score) VALUES ($1,$2,$3)', [p.id, code, p.sessionScore]);
+    } catch (e) {
+      // The in-memory game is already over regardless of whether this write lands, and
+      // there is nothing sensible to retry against — the room may already be gone by
+      // the time a retry would run. The goal is only that a DB hiccup can't take the
+      // whole process down with it (this isn't a request handler — there's no response
+      // to fail gracefully with), and that the failure is loud, not silent. One
+      // player's failed write does not stop the loop: the rest of the leaderboard still
+      // gets a chance to persist, and everyone still gets the game_end broadcast below
+      // rather than being stuck on a game that will never resolve.
+      console.error(`❌ endGame DB write failed [room=${code}, user=${p.id}]: ${e.message}`);
+    }
   }
   // Those DB writes are awaited sequentially per player — the room could have
   // been torn down (every player disconnected) while they were in flight, or
