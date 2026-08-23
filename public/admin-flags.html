@@ -42,6 +42,16 @@
     .back svg{ width:16px; height:16px; flex:0 0 auto; }
     .page-title{ width:100%; text-align:right; font-size:23px; font-weight:800; color:#000; text-decoration:underline; }
 
+    /* Filter tabs — splits the single-screen to-do list into quick-judgement vs
+       long-running-repair subsets without a second screen or endpoint. */
+    .filterbar{ display:flex; gap:8px; margin-bottom:14px; }
+    .fbtn{ flex:1 1 0; padding:9px 8px; border-radius:10px; border:1.5px solid #fff;
+      background:rgba(255,255,255,0.10); color:#fff; font-size:13px; font-weight:800;
+      font-family:var(--font); cursor:pointer; text-align:center; }
+    .fbtn.active{ background:var(--blue); }
+    .fbtn:active{ transform:scale(0.98); }
+    .filter-empty{ padding:34px 16px; text-align:center; font-size:16px; font-weight:800; }
+
     /* Question cards */
     .qcard{ padding:16px; margin-bottom:14px; }
     .qmeta{ display:flex; justify-content:space-between; gap:8px 14px; flex-wrap:wrap; font-size:12px; font-weight:700; opacity:0.92; margin-bottom:10px; }
@@ -69,7 +79,6 @@
     .btn{ flex:1 1 0; min-width:110px; padding:10px 8px; border-radius:10px; border:1.5px solid #fff; color:#fff; font-size:13.5px; font-weight:800; font-family:var(--font); cursor:pointer; text-align:center; }
     .btn:active{ transform:scale(0.98); }
     .btn-edit{ background:var(--blue); }
-    .btn-del{ background:var(--red); }
     .btn-keep{ background:var(--green); }
     .btn-save{ background:var(--green); }
     .btn-cancel{ background:var(--red); }
@@ -154,6 +163,11 @@
       </button>
       <div class="page-title">الأسئلة المُبلغ عنها</div>
     </div>
+    <div class="filterbar" id="filterbar">
+      <button class="fbtn active" data-filter="all" type="button">الكل</button>
+      <button class="fbtn" data-filter="pending" type="button">بانتظار المراجعة</button>
+      <button class="fbtn" data-filter="inactive" type="button">معطّلة</button>
+    </div>
     <div id="list"></div>
   </div>
 
@@ -172,7 +186,24 @@
   <script>
     const token = localStorage.getItem('token');
     let flags = [];
+    let currentFilter = 'all';
     const DIFF_AR = { easy:'سهل', medium:'متوسط', hard:'صعب' };
+
+    // pending = still active (needs a quick judgement call), inactive = pulled from
+    // rotation (needs the longer master-fix-and-reload repair). Client-side only —
+    // the already-loaded `flags` list is the full unresolved set either way.
+    function filteredFlags(){
+      if(currentFilter === 'pending') return flags.filter(f=> f.active);
+      if(currentFilter === 'inactive') return flags.filter(f=> !f.active);
+      return flags;
+    }
+    document.querySelectorAll('.fbtn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        currentFilter = btn.dataset.filter;
+        document.querySelectorAll('.fbtn').forEach(b=> b.classList.toggle('active', b===btn));
+        render();
+      });
+    });
 
     function goHome(){ location.href = '/'; }
     function goDash(){ location.href = '/admin.html'; }
@@ -227,9 +258,14 @@
     function render(){
       const wrap = document.getElementById('list');
       wrap.innerHTML = '';
-      if(!flags.length){ showOnly('empty'); return; }
+      if(!flags.length){ showOnly('empty'); return; }   // truly nothing to review — the dedicated empty screen
       showOnly('list-screen');
-      flags.forEach(f => wrap.appendChild(viewCard(f)));
+      const list = filteredFlags();
+      if(!list.length){
+        wrap.appendChild(el('div','glass filter-empty','لا توجد بطاقات ضمن هذا الفلتر'));
+        return;
+      }
+      list.forEach(f => wrap.appendChild(viewCard(f)));
     }
 
     function findCard(questionId){ return document.querySelector(`.qcard[data-id="${questionId}"]`); }
@@ -280,7 +316,11 @@
       card.appendChild(opts);
 
       const actions = el('div','actions');
-      if(!isImage){
+      // تعديل and لا يوجد خطأ both resolve the report (see server.js), so both are
+      // withheld while the question is deactivated — إعادة تفعيل is the only closing
+      // action for an inactive card. Without this, either button would clear the card
+      // from the whole panel while the question stayed out of rotation, invisible.
+      if(!isImage && f.active){
         const editBtn = el('button','btn btn-edit','تعديل');
         editBtn.onclick = ()=> card.replaceWith(editCard(f));
         actions.appendChild(editBtn);
@@ -294,12 +334,11 @@
         reactBtn.onclick = ()=> onReactivate(f, card);
         actions.appendChild(reactBtn);
       }
-      const delBtn = el('button','btn btn-del','تجاهل البلاغ');
-      delBtn.onclick = ()=> onDismiss(f, card);
-      actions.appendChild(delBtn);
-      const keepBtn = el('button','btn btn-keep','لا يوجد خطأ');
-      keepBtn.onclick = ()=> onKeep(f, card);
-      actions.appendChild(keepBtn);
+      if(f.active){
+        const keepBtn = el('button','btn btn-keep','لا يوجد خطأ');
+        keepBtn.onclick = ()=> onKeep(f, card);
+        actions.appendChild(keepBtn);
+      }
       card.appendChild(actions);
 
       return card;
@@ -389,35 +428,28 @@
       }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
     }
 
-    // Dismiss a report (the report was bad) — resolves it, leaves the question untouched.
-    async function onDismiss(f, card){
-      if(!confirm('تجاهل هذا البلاغ؟')) return;
-      try{
-        const res = await fetch('/api/admin/flags/' + f.question_id + '/dismiss', {
-          method:'POST', headers:{ Authorization:'Bearer ' + token }
-        });
-        if(!res.ok){ alert('تعذّر الحفظ، حاول مجدداً'); return; }
-        flags = flags.filter(x=> x.question_id !== f.question_id);
-        render();
-      }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
-    }
-
     // "لا مشكلة" — the reported question is actually fine. Resolves the report,
-    // leaves the question snapshot completely unchanged.
+    // leaves the question snapshot completely unchanged. Server refuses this with a
+    // 400 while the question is inactive (button is also hidden in that case — this
+    // is the belt-and-braces server-side half); the error body carries the specific
+    // reason, so it's parsed and shown rather than a generic retry message.
     async function onKeep(f, card){
       try{
         const res = await fetch('/api/admin/flags/' + f.question_id + '/keep', {
           method:'POST', headers:{ Authorization:'Bearer ' + token }
         });
-        if(!res.ok){ alert('تعذّر الحفظ، حاول مجدداً'); return; }
+        const d = await res.json().catch(()=> ({}));
+        if(!res.ok){ alert(d.error || 'تعذّر الحفظ، حاول مجدداً'); return; }
         flags = flags.filter(x=> x.question_id !== f.question_id);
         render();
       }catch(e){ alert('تعذّر الحفظ، حاول مجدداً'); }
     }
 
-    // Deactivate/reactivate does NOT resolve the flag report and does NOT remove the
-    // card from the pending list — it's an independent rotation control, not a fix.
-    // Only that one card's active-state is updated in place.
+    // Deactivate is asymmetric with reactivate on purpose: it does NOT resolve the
+    // flag report and does NOT remove the card — the card staying visible IS the
+    // to-do item while the fix happens in the master. Only that one card's
+    // active-state is updated in place. (Reactivate, below, does resolve the report
+    // and does remove the card — see onReactivate.)
     async function onDeactivate(f, card){
       let msg = 'تعطيل هذا السؤال؟ سيتوقف عن الظهور في الجولات.';
       try{
@@ -443,8 +475,11 @@
       }, { confirmText:'تعطيل' });
     }
 
+    // Reactivate is the only action that can close a report on an inactive question
+    // (server-enforced — see server.js), so unlike onDeactivate this removes the
+    // card from the list entirely, same as onSave/onKeep.
     async function onReactivate(f, card){
-      showConfirm('إعادة تفعيل هذا السؤال؟ سيعود للظهور في الجولات.', async (reason)=>{
+      showConfirm('إعادة تفعيل هذا السؤال؟ سيعود للظهور في الجولات ويُغلق بلاغه.', async (reason)=>{
         try{
           const res = await fetch('/api/admin/questions/' + f.question_id + '/reactivate', {
             method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
@@ -452,9 +487,8 @@
           });
           const d = await res.json().catch(()=> ({}));
           if(!res.ok){ alert(d.error || 'تعذّرت العملية'); return; }
-          f.active = true;
-          const cur = findCard(f.question_id);
-          if(cur) cur.replaceWith(viewCard(f));
+          flags = flags.filter(x=> x.question_id !== f.question_id);
+          render();
         }catch(e){ alert('تعذّرت العملية، حاول مجدداً'); }
       }, { confirmText:'إعادة تفعيل' });
     }

@@ -136,14 +136,22 @@ a leveling system. UI is right-to-left (RTL) Arabic.
   super-admin flag) may promote/demote admins; regular admins can review data but
   cannot manage admins. Enforce both in UI (hide controls) AND on the server
   (refuse the action). Never allow removing the last/super admin.
-- **Question reporting:** players tap a report button on a question → records to
-  `question_flags` with a `UNIQUE(question_key, user_id)` constraint (one report
-  per player per question = spam protection). Since questions aren't stored, the
-  flag saves a SNAPSHOT of the question text + answers so it's reviewable later.
-- **Flagged-review screen:** groups reports of the same question (count + earliest
-  date), oldest-first. Actions: تعديل (edit + resolve), حذف (delete/dismiss),
-  "لا يوجد خطأ" (keep/dismiss as fine). Resolutions are MARKED (`resolved=true`,
-  `resolution` = ok/edited/dismissed) rather than hard-deleted, to keep history.
+- **Question reporting:** in-game only — a player can flag a question only while
+  its room still exists, they're a member of it, and the server itself recorded
+  that question as served in that room this game. `question_flags` is keyed to
+  the real `questions.id` (`ON DELETE CASCADE`), not a text hash. There's no
+  snapshot: the review screen joins LIVE to `questions`.
+  Details: CLAUDE.md → "Question flags & panel edits".
+- **Flagged-review screen (`admin-flags.html`):** one screen, groups reports by
+  question, oldest-first. Text questions are editable in-panel (تعديل); image
+  questions are review-and-deactivate only. تعطيل pulls a question out of
+  rotation without resolving its report — the card staying visible IS the to-do
+  item. A deactivated question's report is deliberately UN-CLOSABLE: تعديل and
+  لا يوجد خطأ both refuse while inactive; إعادة تفعيل (reactivate) is the only
+  action that closes it. Every panel text edit also queues a
+  `question_pending_master_edits` row — the fix isn't done until it's mirrored
+  into the Excel master by hand. Details: CLAUDE.md → "Question flags & panel
+  edits".
 - **Admin stats:** `/api/admin/stats` (admin-only) returns activeGames,
   playersOnline (from Socket.io memory), totalUsers, gamesToday, flaggedCount.
   `gamesToday` uses `COUNT(DISTINCT room_code)` on a **Kuwait-time (UTC+3)** day

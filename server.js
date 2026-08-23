@@ -485,16 +485,21 @@ const QUESTION_EDIT_FIELDS = ['question', 'choice1', 'choice2', 'choice3', 'choi
 
 // Edits a TEXT question's content — the question, its four choices, and which one is
 // correct. Image-backed rows are refused outright: image questions are
-// review-and-deactivate only, the fix happens in the master, never here. The fixed
-// field list above is the only thing ever read from the body; any other key is
-// rejected rather than silently ignored. category/difficulty/image_url/active never
-// appear in the UPDATE's column list at all, so this cannot touch them regardless of
-// what the request contains. answer_index (0-3) selects by POSITION among the four
-// submitted choices — not by matching text — so the master-format letter (A-D) is
-// derived directly from that position with no text-matching ambiguity. Writes
-// questions, the admin_actions audit row, and the pending-master-edit upsert (see
-// question_pending_master_edits) all in ONE transaction, and resolves any pending
-// flag reports for this question — the fix has been made.
+// review-and-deactivate only, the fix happens in the master, never here. Deactivated
+// rows are also refused: reactivation is the ONLY path that resolves a flag report
+// (see the flags/:id/keep endpoint's identical guard) — an edit that resolved the
+// flag on a still-inactive row would silently empty its card while leaving it out of
+// rotation, the exact failure the deactivate-then-reactivate workflow exists to
+// prevent. The fixed field list above is the only thing ever read from the body; any
+// other key is rejected rather than silently ignored. category/difficulty/image_url/
+// active never appear in the UPDATE's column list at all, so this cannot touch them
+// regardless of what the request contains. answer_index (0-3) selects by POSITION
+// among the four submitted choices — not by matching text — so the master-format
+// letter (A-D) is derived directly from that position with no text-matching
+// ambiguity. Writes questions, the admin_actions audit row, and the
+// pending-master-edit upsert (see question_pending_master_edits) all in ONE
+// transaction, and resolves any pending flag reports for this question — the fix has
+// been made.
 app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
   const questionId = parseInt(req.params.id, 10);
   if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
@@ -523,7 +528,7 @@ app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
   try {
     await withTransaction(async (client) => {
       const r = await client.query(
-        `SELECT id, category, difficulty, question, choice1, choice2, choice3, choice4, answer, image_url
+        `SELECT id, category, difficulty, question, choice1, choice2, choice3, choice4, answer, image_url, active
            FROM questions WHERE id=$1 FOR UPDATE`,
         [questionId]
       );
@@ -531,6 +536,8 @@ app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
       if (!target) throw new AdminActionAbort(404, { error: 'السؤال غير موجود' });
       if (target.image_url != null)
         throw new AdminActionAbort(400, { error: 'الأسئلة المصوّرة للمراجعة فقط، لا يمكن تعديلها من هنا' });
+      if (!target.active)
+        throw new AdminActionAbort(400, { error: 'لا يمكن تعديل سؤال معطّل — أعد تفعيل السؤال أولاً' });
 
       const oldChoices = [target.choice1, target.choice2, target.choice3, target.choice4];
       const oldAnswerIndex = oldChoices.indexOf(target.answer);
@@ -595,6 +602,10 @@ app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
 // admin decides what leaves rotation, the review queue never does on its own. `active`
 // has no equivalent column in the Excel master (DB-only operational state), so neither
 // of these ever touches question_pending_master_edits — there is nothing to mirror.
+// Asymmetric on question_flags, on purpose: deactivate does NOT resolve the flag (the
+// card must stay on the review screen as the to-do item), reactivate DOES (it's the
+// only action that closes a report on an inactive question — see the matching guards
+// on /flags/:id/keep and the edit endpoint, which both refuse while active=false).
 app.post('/api/admin/questions/:id/deactivate', requireAdmin, async (req, res) => {
   const questionId = parseInt(req.params.id, 10);
   const reason = (req.body?.reason || '').toString().trim();
@@ -632,6 +643,11 @@ app.post('/api/admin/questions/:id/reactivate', requireAdmin, async (req, res) =
       const target = r.rows[0];
       if (!target) throw new AdminActionAbort(404, { error: 'السؤال غير موجود' });
       await client.query('UPDATE questions SET active=TRUE WHERE id=$1', [questionId]);
+      await client.query(
+        `UPDATE question_flags SET resolved=TRUE, resolved_at=now(), resolution='reactivated'
+         WHERE question_id=$1 AND resolved=FALSE`,
+        [questionId]
+      );
       await logAdminAction(client, {
         actorId: req.adminId, actorName: req.adminName, action: 'question_reactivate',
         targetId: questionId, targetName: target.question,
@@ -645,39 +661,21 @@ app.post('/api/admin/questions/:id/reactivate', requireAdmin, async (req, res) =
   }
 });
 
-// Dismiss a flag report (the report was bad) — resolves every pending report for this
-// question_id. Touches only question_flags, never questions itself.
-app.post('/api/admin/flags/:questionId/dismiss', requireAdmin, async (req, res) => {
-  const questionId = parseInt(req.params.questionId, 10);
-  if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
-  try {
-    await withTransaction(async (client) => {
-      const qr = await client.query('SELECT question FROM questions WHERE id=$1', [questionId]);
-      await client.query(
-        `UPDATE question_flags SET resolved=TRUE, resolved_at=now(), resolution='dismissed'
-         WHERE question_id=$1 AND resolved=FALSE`,
-        [questionId]
-      );
-      await logAdminAction(client, {
-        actorId: req.adminId, actorName: req.adminName, action: 'flag_dismiss',
-        targetId: questionId, targetName: qr.rows[0]?.question || null,
-        beforeValue: null, afterValue: null, reason: 'dismissed via triage'
-      });
-    });
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
 // "لا مشكلة" — the reported question is actually fine. Resolves every pending report
-// for this question_id, leaves the question itself completely unchanged.
+// for this question_id, leaves the question itself completely unchanged. Refused
+// while the question is deactivated: reactivation is the only path that resolves a
+// report on an inactive row (same guard as the edit endpoint) — otherwise this would
+// close the report and clear the card while the question stays out of rotation with
+// nothing left anywhere marking that it still needs fixing.
 app.post('/api/admin/flags/:questionId/keep', requireAdmin, async (req, res) => {
   const questionId = parseInt(req.params.questionId, 10);
   if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
   try {
     await withTransaction(async (client) => {
-      const qr = await client.query('SELECT question FROM questions WHERE id=$1', [questionId]);
+      const qr = await client.query('SELECT question, active FROM questions WHERE id=$1', [questionId]);
+      const target = qr.rows[0];
+      if (target && !target.active)
+        throw new AdminActionAbort(400, { error: 'لا يمكن إغلاق بلاغ لسؤال معطّل — أعد تفعيل السؤال أولاً' });
       await client.query(
         `UPDATE question_flags SET resolved=TRUE, resolved_at=now(), resolution='ok'
          WHERE question_id=$1 AND resolved=FALSE`,
@@ -685,12 +683,13 @@ app.post('/api/admin/flags/:questionId/keep', requireAdmin, async (req, res) => 
       );
       await logAdminAction(client, {
         actorId: req.adminId, actorName: req.adminName, action: 'flag_keep',
-        targetId: questionId, targetName: qr.rows[0]?.question || null,
+        targetId: questionId, targetName: target?.question || null,
         beforeValue: null, afterValue: null, reason: 'marked no issue via triage'
       });
     });
     res.json({ ok: true });
   } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -965,7 +964,7 @@ app.post('/api/admin/users/:id/demote', requireAdmin, async (req, res) => {
 //
 // The target join is restricted to the five user-management actions. target_id means
 // different things for different action types now (a users.id for ban/promote/etc.,
-// a questions.id for question_edit/question_deactivate/flag_dismiss/etc.) — joining
+// a questions.id for question_edit/question_deactivate/question_reactivate/flag_keep/etc.) — joining
 // unconditionally against `users` would occasionally match a question id that happens
 // to collide with an unrelated user id and show the wrong name. For every other action
 // type the join is meant to miss, falling back to the stored snapshot exactly as
