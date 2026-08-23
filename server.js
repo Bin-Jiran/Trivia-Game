@@ -104,6 +104,60 @@ async function initDB() {
       old_answer_letter TEXT NOT NULL,  new_answer_letter TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     );
+    -- One row per game ATTEMPT (create_room or play_again), not per room code — a
+    -- room can play many attempts across its lifetime, each with its own charge and
+    -- outcome. end_reason is NULL while the attempt is still open; the boot sweep
+    -- (server startup) stamps 'crashed' on every row still NULL there, since a
+    -- booting process's memory is always empty, so anything still open belongs to a
+    -- process that no longer exists. Requires exactly ONE Render instance — see
+    -- CLAUDE.md, Environment & deploys.
+    CREATE TABLE IF NOT EXISTS game_attempts (
+      id SERIAL PRIMARY KEY,
+      room_code TEXT NOT NULL,
+      host_user_id INTEGER NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMP,
+      categories TEXT[],
+      charged_at TIMESTAMP,
+      charged_user_ids INTEGER[],
+      last_phase_reached INTEGER,
+      end_reason TEXT CHECK (end_reason IS NULL OR end_reason = ANY (ARRAY[
+        'completed', 'abandoned_idle_lobby', 'all_left_before_start',
+        'all_left_midgame', 'abandoned_midgame', 'crashed', 'server_shutdown'
+      ])),
+      ended_at TIMESTAMP,
+      -- NOT a liveness heartbeat: bumped only by the two touch triggers below, i.e.
+      -- only when a DB write actually happens (an UPDATE to this row, or an INSERT
+      -- into game_attempt_events). Most of what happens during a game -- question
+      -- advances, timers, answers -- is in-memory only and never touches this
+      -- column. So this is "when this row last CHANGED," not "when this attempt
+      -- was last confirmedly alive." On a crash, ended_at is set to this value --
+      -- the last RECORDED moment, not the actual moment of death. That gap is fine
+      -- under the boot sweep (which ignores age/recency entirely) -- do not
+      -- reintroduce an age threshold anywhere that assumes this column is a
+      -- heartbeat, because it isn't one.
+      last_updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_game_attempts_room_code ON game_attempts(room_code);
+    CREATE INDEX IF NOT EXISTS idx_game_attempts_ended_at ON game_attempts(ended_at);
+    -- Per-event log for one attempt: every disconnect, rejoin, and voluntary leave,
+    -- timestamped as it happens — not just the attempt's final outcome. This is what
+    -- makes a refund decision answerable per player instead of guessed at: was THIS
+    -- player still present when the attempt went silent, or do they have their own
+    -- explicit leave/disconnect on record.
+    CREATE TABLE IF NOT EXISTS game_attempt_events (
+      id SERIAL PRIMARY KEY,
+      attempt_id INTEGER NOT NULL REFERENCES game_attempts(id) ON DELETE CASCADE,
+      user_id INTEGER,
+      event_type TEXT NOT NULL CHECK (event_type = ANY (ARRAY[
+        'disconnected', 'rejoined', 'left_voluntarily', 'left_for_other_room', 'banned_removed'
+      ])),
+      phase INTEGER,
+      question_index INTEGER,
+      detail JSONB,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_game_attempt_events_attempt_id ON game_attempt_events(attempt_id);
   `);
   // Backward-compatible: add new columns to pre-existing tables without touching data.
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
@@ -164,6 +218,14 @@ async function initDB() {
     END $mig2$;
   `);
   await pool.query('ALTER TABLE questions ADD COLUMN IF NOT EXISTS image_url TEXT');
+  // game_attempts is the parent, game_history stays the per-player scored-game record
+  // it already is — this just links a completed row back to its attempt (roster,
+  // timing, end_reason) instead of the loose, non-FK room_code text match that's all
+  // game_history has today. Nullable: only rows written going forward get one; old
+  // rows stay NULL, no backfill attempted. Verified empirically safe to rerun — the
+  // whole ADD COLUMN IF NOT EXISTS clause (column + its inline REFERENCES) is skipped
+  // together once the column exists, unlike a bare ADD CONSTRAINT.
+  await pool.query('ALTER TABLE game_history ADD COLUMN IF NOT EXISTS attempt_id INTEGER REFERENCES game_attempts(id)');
   // admin_actions is append-only: enforced here at the DB level (not just by never
   // writing an UPDATE/DELETE path in code) so it holds even against a future mistake.
   // Both triggers in one call so they're created atomically — either both exist or
@@ -185,6 +247,38 @@ async function initDB() {
       BEFORE TRUNCATE ON admin_actions
       FOR EACH STATEMENT EXECUTE FUNCTION admin_actions_block_mutation();
   `);
+  // Keeps game_attempts.last_updated_at current on any write to the row or a child
+  // event, at the DB level — not left to server.js to remember on every UPDATE/
+  // INSERT call site, the same reasoning as makeRoom() centralizing per-attempt
+  // field resets. This is NOT a heartbeat/poll mechanism (see the column comment on
+  // last_updated_at itself) — it only fires when something actually writes. The
+  // boot-time crash sweep depends on this being current, but deliberately ignores
+  // age/recency entirely rather than treating gaps between writes as meaningful.
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION game_attempts_touch() RETURNS trigger AS $fn$
+    BEGIN
+      NEW.last_updated_at := NOW();
+      RETURN NEW;
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS game_attempts_touch_on_update ON game_attempts;
+    CREATE TRIGGER game_attempts_touch_on_update
+      BEFORE UPDATE ON game_attempts
+      FOR EACH ROW EXECUTE FUNCTION game_attempts_touch();
+
+    CREATE OR REPLACE FUNCTION game_attempt_events_touch_parent() RETURNS trigger AS $fn$
+    BEGIN
+      UPDATE game_attempts SET last_updated_at = NOW() WHERE id = NEW.attempt_id;
+      RETURN NEW;
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS game_attempt_events_touch_parent_on_insert ON game_attempt_events;
+    CREATE TRIGGER game_attempt_events_touch_parent_on_insert
+      AFTER INSERT ON game_attempt_events
+      FOR EACH ROW EXECUTE FUNCTION game_attempt_events_touch_parent();
+  `);
   console.log('✅ Database ready');
 
   // The ADMIN_EMAIL account is the OWNER: it is both admin and super-admin. Idempotent —
@@ -200,6 +294,28 @@ async function initDB() {
     if (r.rowCount > 0) console.log(`👑 Owner (super-admin) privileges ensured for ${adminEmail}`);
     else console.log(`👑 ADMIN_EMAIL set to ${adminEmail} — no matching account yet (will apply once they register)`);
   }
+
+  // Boot-time crash sweep — LAST statement in initDB(), on purpose. This process's
+  // memory is guaranteed empty right now (it just started, rooms={} hasn't been
+  // touched by anything yet), so ANY attempt row still open (end_reason IS NULL)
+  // cannot belong to this process, and cannot belong to any other, since exactly
+  // ONE Render instance may ever run (see CLAUDE.md, Environment & deploys — two
+  // instances would ALSO break room broadcasting itself, not just this sweep).
+  // No age threshold: age is irrelevant once the predicate itself (memory is
+  // empty) is already conclusive on its own. ended_at is set to the row's own
+  // last_updated_at, not NOW() — the last moment it's actually known to have
+  // changed, not the unrelated moment this process happened to boot.
+  const sweepResult = await pool.query(
+    "UPDATE game_attempts SET end_reason='crashed', ended_at=last_updated_at WHERE end_reason IS NULL"
+  );
+  if (sweepResult.rowCount > 0) {
+    console.log(`⚠️ boot sweep: marked ${sweepResult.rowCount} orphaned attempt(s) as crashed`);
+  }
+
+  // Flips last, after the sweep above has already committed — create_room refuses
+  // until this is true, which is what makes the sweep race-free: no fresh attempt
+  // row can exist for the sweep to mistakenly catch before this line runs.
+  dbReady = true;
 }
 initDB().catch(console.error);
 
@@ -1238,6 +1354,117 @@ async function buildRound(categories, difficulty, usedIds, ctx = {}){
 const rooms = {};
 function generateCode() { return String(Math.floor(1000+Math.random()*9000)); }
 
+// Was room.phaseNames, copied onto every room even though it's never mutated —
+// pure per-room duplication of a constant.
+const PHASE_NAMES = ['easy','medium','hard'];
+
+// Flips true as the LAST statement of initDB(), after the boot-time crash sweep
+// has already run and committed. create_room refuses until then — see the sweep
+// itself (end of initDB()) for why: the sweep depends on nothing having created a
+// fresh, still-open attempt row before it runs, and create_room is the only path
+// that can ever insert one. join_room/play_again need no equivalent gate: rooms={}
+// starts empty every boot, so no room exists to join, and play_again requires an
+// existing rooms[code] entry — both are transitively blocked by this alone.
+let dbReady = false;
+
+// In-memory, not DB-backed on purpose: this counts failures of the very writes
+// meant to make refund decisions provable, so it can't depend on those same writes
+// working. Exposed on /api/admin/stats (Stage 3).
+let attemptRecordFailures = 0;
+
+// Mutates only the fields that must not survive into a new game: sessionScore and
+// excludedThisQuestion. Called for a genuinely new player (addOrTakeoverPlayer)
+// and for every existing player at play_again. Fixes a real gap: a brand-new
+// player's excludedThisQuestion was never explicitly set anywhere before this —
+// only ever falsy by accident of being undefined.
+function resetPlayerForNewAttempt(player) {
+  player.sessionScore = 0;
+  player.excludedThisQuestion = false;
+  return player;
+}
+
+// The single exhaustive field list for a fresh room/attempt — including fields the
+// old inline literal never declared at all (currentQuestion, advancing,
+// allQuestions, questions, abandonTimer), which only existed in practice because
+// some later function happened to touch them first. Anyone adding a new per-attempt
+// field later has one place to add it; a durable field (one that should survive
+// play_again) requires deliberately adding it to this function's parameter list
+// instead — the safer default for a system about to charge money, since an
+// accidentally-reset durable field is a minor annoyance and an
+// accidentally-carried-forward per-attempt field is a real money bug.
+function makeRoom(code, host, categories, players) {
+  return {
+    code, host, categories, players,
+    phase: 0, qIndex: 0, timer: null, status: 'waiting', answered: {},
+    hostEditing: false, idleTimer: null, servedQuestionIds: new Set(),
+    currentQuestion: null, advancing: false, allQuestions: null, questions: null,
+    abandonTimer: null, endTimer: null,
+    attemptId: null, chargedWritten: false,
+  };
+}
+
+// Fire-and-forget, never blocks room creation — the room runs regardless of
+// whether this succeeds. Retries once (matching buildRound's existing pattern),
+// then gives up loudly. If it never lands, askQuestion's charge write later finds
+// room.attemptId still null and skips the charge rather than charge without a
+// durable record.
+async function insertAttemptRow(room) {
+  const code = room.code;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await pool.query(
+        'INSERT INTO game_attempts (room_code, host_user_id) VALUES ($1,$2) RETURNING id',
+        [code, room.host]
+      );
+      if (rooms[code] !== room) return;   // stale by the time this resolved
+      room.attemptId = r.rows[0].id;
+      return;
+    } catch (e) {
+      if (attempt === 0) { await new Promise(res => setTimeout(res, 300)); continue; }
+      console.error(`❌ game_attempts INSERT failed after retry [room=${code}]: ${e.message}`);
+      attemptRecordFailures++;
+    }
+  }
+}
+
+// Render sends SIGTERM before a restart (a normal `git push` deploy, which happens
+// constantly on this project) specifically so a process can do cleanup like this.
+// Marks every attempt this process still had open as 'server_shutdown' — distinct
+// from 'crashed', so a routine deploy is never mistaken for one. Must genuinely
+// await the write before exiting: process.exit() does not wait for pending async
+// work on its own, so exiting without awaiting would fire the UPDATE and then kill
+// the process before it lands, most of the time. Raced against a self-imposed
+// timeout so a hung/unreachable DB still lets the process exit on its own terms
+// rather than waiting to be force-killed with zero opportunity to log anything —
+// on timeout this falls through to the next boot's crash sweep, same as a real
+// crash, which is an acceptable outcome. A hard kill (SIGKILL/OOM) gets no signal
+// at all and always falls through to the sweep — this handler can't do anything
+// about that, by design of what SIGKILL means.
+const SIGTERM_WRITE_TIMEOUT_MS = 3000;   // comfortably inside Render's own
+                                          // SIGTERM→SIGKILL grace period — worth
+                                          // confirming the actual value in Render's
+                                          // docs/dashboard, not assumed here
+process.on('SIGTERM', async () => {
+  console.log('⚠️ SIGTERM received — marking live attempts as server_shutdown');
+  const liveAttemptIds = Object.values(rooms).map(r => r.attemptId).filter(Boolean);
+  if (liveAttemptIds.length) {
+    try {
+      await Promise.race([
+        pool.query(
+          "UPDATE game_attempts SET end_reason='server_shutdown', ended_at=NOW() WHERE id = ANY($1) AND end_reason IS NULL",
+          [liveAttemptIds]
+        ),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('SIGTERM write timed out')), SIGTERM_WRITE_TIMEOUT_MS)),
+      ]);
+      console.log(`✅ marked ${liveAttemptIds.length} attempt(s) as server_shutdown`);
+    } catch (e) {
+      console.error(`❌ SIGTERM attempt-marking failed or timed out — falling through to next boot's sweep: ${e.message}`);
+    }
+  }
+  process.exit(0);   // only reached after the await above resolves or times out
+});
+
 io.use((socket, next) => {
   const payload = verifyToken(socket.handshake.auth.token);
   if (!payload) return next(new Error('غير مصرح'));
@@ -1254,6 +1481,9 @@ io.use((socket, next) => {
 
 io.on('connection', socket => {
   socket.on('create_room', ({ categories }) => {
+    // See dbReady's own comment — this closes the boot-sweep race: no fresh attempt
+    // row can be inserted until the sweep has already run and committed.
+    if (!dbReady) return socket.emit('error_msg', 'الخادم لا يزال يجهز، حاول خلال لحظات');
     if (MAINTENANCE_MODE && !socket.isAdmin) {
       return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
     }
@@ -1265,19 +1495,12 @@ io.on('connection', socket => {
     // any membership found here is unambiguously a DIFFERENT room — evict it.
     leaveOtherRooms(socket);
     const code = generateCode();
-    const cats = categories;
-    rooms[code] = { code, host:socket.user.id, categories:cats, players:{}, phase:0,
-      phaseNames:['easy','medium','hard'], qIndex:0, timer:null, status:'waiting', answered:{},
-      hostEditing:false, idleTimer:null,
-      // Accumulated across the WHOLE game (not reset per phase) — every question.id
-      // actually dispatched in this room. /api/flag-question validates against this,
-      // never against a client-supplied id alone, so a player can only flag something
-      // that was genuinely served to them here.
-      servedQuestionIds:new Set() };
+    rooms[code] = makeRoom(code, socket.user.id, categories, {});
     addOrTakeoverPlayer(rooms[code], socket);
-    socket.emit('room_created', { code, categories:cats });
+    socket.emit('room_created', { code, categories });
     io.to(code).emit('players_update', getPlayers(code));
     resetRoomIdleTimer(code);
+    insertAttemptRow(rooms[code]);
   });
 
   socket.on('join_room', ({ code }) => {
@@ -1307,8 +1530,15 @@ io.on('connection', socket => {
       // indicator immediately, instead of only finding out on the next broadcast.
       socket.emit('room_joined', { code, categories:room.categories, host:room.host, hostEditing:!!room.hostEditing });
     } else {
+      const wasFullyAbandoned = !!room.abandonTimer;   // checked BEFORE resumeAbandonedRoom clears it
       resumeAbandonedRoom(room);
       sendRejoinState(room, socket);
+      if (room.attemptId) {
+        pool.query(
+          'INSERT INTO game_attempt_events (attempt_id, user_id, event_type, phase, question_index, detail) VALUES ($1,$2,$3,$4,$5,$6)',
+          [room.attemptId, uid, 'rejoined', room.phase, room.qIndex, JSON.stringify({ was_fully_abandoned: wasFullyAbandoned })]
+        ).catch(e => console.error(`❌ event write failed [room=${code}]: ${e.message}`));
+      }
       // In-game presence banner for everyone ELSE in the room — socket.to()
       // (not io.to()) so the rejoining player is never told they rejoined.
       // gender never leaves the server: only the already-conjugated verb does.
@@ -1370,27 +1600,44 @@ io.on('connection', socket => {
   socket.on('leave_room', () => {
     const code = socket.roomCode; const room = rooms[code];
     if (!code || !room) return;
+    if (room.attemptId) {
+      pool.query(
+        'INSERT INTO game_attempt_events (attempt_id, user_id, event_type, phase, question_index) VALUES ($1,$2,$3,$4,$5)',
+        [room.attemptId, socket.user.id, 'left_voluntarily', room.phase, room.qIndex]
+      ).catch(e => console.error(`❌ event write failed [room=${code}]: ${e.message}`));
+    }
     socket.leave(code); socket.roomCode = null;
     removePlayerFromRoom(io, socket, code);
   });
 
-  // Play again: reset the SAME room back to a fresh lobby and keep it alive
+  // Play again: reset the SAME room back to a fresh lobby and keep it alive. Goes
+  // through makeRoom() rather than field-by-field mutation, and REPLACES rooms[code]
+  // rather than mutating the old object in place — which means play_again gets the
+  // same `rooms[code] !== room` staleness protection every other async path in this
+  // file already relies on, for free. code/host/categories/players carry forward
+  // explicitly; everything else is a fresh per-attempt default by construction,
+  // including attemptId and chargedWritten, and including servedQuestionIds — a
+  // real gap the old field-by-field reset had: it was never cleared here before,
+  // so a question served in game 1 stayed valid for a flag report in game 2.
   socket.on('play_again', () => {
     if (MAINTENANCE_MODE && !socket.isAdmin) {
       return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
     }
-    const code = socket.roomCode; const room = rooms[code];
-    if (!room) return socket.emit('error_msg', 'انتهت الغرفة، أنشئ غرفة جديدة');
-    if (room.endTimer) { clearTimeout(room.endTimer); room.endTimer = null; }
-    if (room.timer) { clearInterval(room.timer); room.timer = null; }
-    room.status = 'waiting'; room.phase = 0; room.qIndex = 0;
-    room.answered = {}; room.currentQuestion = null;
-    room.allQuestions = null; room.questions = null;
-    room.hostEditing = false; room.advancing = false;
-    Object.values(room.players).forEach(p => { p.sessionScore = 0; p.excludedThisQuestion = false; });
+    const code = socket.roomCode; const oldRoom = rooms[code];
+    if (!oldRoom) return socket.emit('error_msg', 'انتهت الغرفة، أنشئ غرفة جديدة');
+    if (oldRoom.endTimer) clearTimeout(oldRoom.endTimer);
+    if (oldRoom.timer) clearInterval(oldRoom.timer);
+    // abandonTimer is always already null by this point in every real path (the
+    // prior game's own resumeAbandonedRoom/endGame already resolved it) — cleared
+    // explicitly anyway rather than relied upon, same principle as makeRoom() itself.
+    if (oldRoom.abandonTimer) clearTimeout(oldRoom.abandonTimer);
+    Object.values(oldRoom.players).forEach(resetPlayerForNewAttempt);
+    rooms[code] = makeRoom(code, oldRoom.host, oldRoom.categories, oldRoom.players);
+    const room = rooms[code];
     io.to(code).emit('room_reset', { code, categories: room.categories, host: room.host });
     io.to(code).emit('players_update', getPlayers(code));
     resetRoomIdleTimer(code);
+    insertAttemptRow(room);
   });
 
   socket.on('start_game', async () => {
@@ -1414,6 +1661,16 @@ io.on('connection', socket => {
       if (rooms[code] !== room) return;
       room.allQuestions = { easy, medium, hard };
       room.status = 'playing'; room.phase = 0;
+      if (room.attemptId) {
+        try {
+          await pool.query(
+            'UPDATE game_attempts SET started_at = NOW(), categories = $1 WHERE id = $2',
+            [room.categories, room.attemptId]
+          );
+        } catch (e) {
+          console.error(`❌ started_at write failed [room=${code}]: ${e.message}`);
+        }
+      }
       startPhase(code);
     } catch(e) {
       console.error(e);
@@ -1432,7 +1689,7 @@ io.on('connection', socket => {
     if (!q || room.answered[uid] || room.players[uid].excludedThisQuestion) return;
     room.answered[uid] = true;
     const correct = answer === q.answer;
-    const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
+    const pts = { easy:100, medium:200, hard:300 }[PHASE_NAMES[room.phase]];
     if (correct) room.players[uid].sessionScore += pts;
     // FIX #1: Only send correct_answer AFTER player has answered
     socket.emit('answer_result', { correct, correct_answer:q.answer, points:correct?pts:0 });
@@ -1500,7 +1757,7 @@ function addOrTakeoverPlayer(room, socket) {
     }
     return existing;
   }
-  const player = { ...socket.user, sessionScore:0, socketId: socket.id, connected: true };
+  const player = resetPlayerForNewAttempt({ ...socket.user, socketId: socket.id, connected: true });
   room.players[uid] = player;
   return player;
 }
@@ -1518,7 +1775,7 @@ function sendRejoinState(room, socket) {
   const uid = socket.user.id;
   const midQuestion = room.status === 'playing' && room.currentQuestion && !room.advancing;
   if (midQuestion) room.players[uid].excludedThisQuestion = true;
-  const phaseName = { easy:'سهل', medium:'متوسط', hard:'صعب' }[room.phaseNames[room.phase]] || '';
+  const phaseName = { easy:'سهل', medium:'متوسط', hard:'صعب' }[PHASE_NAMES[room.phase]] || '';
   socket.emit('rejoined_game', { code: room.code, phase: room.phase + 1, phaseName, isHost: room.host === uid });
 }
 
@@ -1566,6 +1823,12 @@ function resetRoomIdleTimer(code) {
     if (!r) return;
     if (r.timer) clearInterval(r.timer);
     if (r.endTimer) clearTimeout(r.endTimer);
+    if (r.attemptId) {
+      pool.query(
+        "UPDATE game_attempts SET end_reason='abandoned_idle_lobby', ended_at=NOW() WHERE id=$1 AND end_reason IS NULL",
+        [r.attemptId]
+      ).catch(e => console.error(`❌ end_reason write failed [room=${code}]: ${e.message}`));
+    }
     delete rooms[code];
   }, ROOM_IDLE_MS);
 }
@@ -1599,6 +1862,14 @@ function removePlayerFromRoom(io, socket, code) {
     if (room.timer) clearInterval(room.timer);
     if (room.endTimer) clearTimeout(room.endTimer);
     if (room.idleTimer) clearTimeout(room.idleTimer);
+    if (room.attemptId) {
+      const reason = (room.status === 'waiting' || room.status === 'loading')
+        ? 'all_left_before_start' : 'all_left_midgame';
+      pool.query(
+        "UPDATE game_attempts SET end_reason=$1, ended_at=NOW() WHERE id=$2 AND end_reason IS NULL",
+        [reason, room.attemptId]
+      ).catch(e => console.error(`❌ end_reason write failed [room=${code}]: ${e.message}`));
+    }
     delete rooms[code];
     return;
   }
@@ -1641,6 +1912,12 @@ function leaveOtherRooms(socket, exceptCode) {
     const room = rooms[code];
     const player = room.players[uid];
     if (!player) continue;
+    if (room.attemptId) {
+      pool.query(
+        'INSERT INTO game_attempt_events (attempt_id, user_id, event_type, phase, question_index) VALUES ($1,$2,$3,$4,$5)',
+        [room.attemptId, uid, 'left_for_other_room', room.phase, room.qIndex]
+      ).catch(e => console.error(`❌ event write failed [room=${code}]: ${e.message}`));
+    }
     const liveSocket = io.sockets.sockets.get(player.socketId);
     removePlayerFromRoom(io, liveSocket || { user: { id: uid }, id: player.socketId }, code);
     if (liveSocket) {
@@ -1664,6 +1941,12 @@ function markPlayerDisconnected(io, socket, code) {
   const player = room.players[uid];
   if (!player || player.socketId !== socket.id) return;
   player.connected = false;
+  if (room.attemptId) {
+    pool.query(
+      'INSERT INTO game_attempt_events (attempt_id, user_id, event_type, phase, question_index) VALUES ($1,$2,$3,$4,$5)',
+      [room.attemptId, uid, 'disconnected', room.phase, room.qIndex]
+    ).catch(e => console.error(`❌ event write failed [room=${code}]: ${e.message}`));
+  }
 
   const anyoneConnected = Object.values(room.players).some(p => p.connected);
   if (!anyoneConnected) {
@@ -1682,6 +1965,12 @@ function markPlayerDisconnected(io, socket, code) {
       if (r.timer) clearInterval(r.timer);
       if (r.endTimer) clearTimeout(r.endTimer);
       if (r.idleTimer) clearTimeout(r.idleTimer);
+      if (r.attemptId) {
+        pool.query(
+          "UPDATE game_attempts SET end_reason='abandoned_midgame', ended_at=NOW() WHERE id=$1 AND end_reason IS NULL",
+          [r.attemptId]
+        ).catch(e => console.error(`❌ end_reason write failed [room=${code}]: ${e.message}`));
+      }
       delete rooms[code];
     }, ROOM_ABANDON_MS);
     return;
@@ -1711,6 +2000,13 @@ function markPlayerDisconnected(io, socket, code) {
 function kickUser(userId) {
   for (const s of io.sockets.sockets.values()) {
     if (!s.user || s.user.id !== userId) continue;
+    const room = rooms[s.roomCode];
+    if (room && room.attemptId) {
+      pool.query(
+        'INSERT INTO game_attempt_events (attempt_id, user_id, event_type, phase, question_index) VALUES ($1,$2,$3,$4,$5)',
+        [room.attemptId, userId, 'banned_removed', room.phase, room.qIndex]
+      ).catch(e => console.error(`❌ event write failed [room=${s.roomCode}]: ${e.message}`));
+    }
     removePlayerFromRoom(io, s, s.roomCode);
     s.emit('error_msg', 'تم حظرك من قبل الإدارة');
     s.disconnect(true);
@@ -1719,11 +2015,15 @@ function kickUser(userId) {
 
 function startPhase(code) {
   const room = rooms[code];
-  const phaseName = room.phaseNames[room.phase];
+  const phaseName = PHASE_NAMES[room.phase];
   room.questions = room.allQuestions[phaseName];
   room.qIndex = 0; room.answered = {};
   const phaseAr = { easy:'سهل', medium:'متوسط', hard:'صعب' }[phaseName];
   io.to(code).emit('phase_start', { phase:room.phase+1, name:phaseAr, total:3 });
+  if (room.attemptId) {
+    pool.query('UPDATE game_attempts SET last_phase_reached = $1 WHERE id = $2', [room.phase, room.attemptId])
+      .catch(e => console.error(`❌ last_phase_reached write failed [room=${code}]: ${e.message}`));
+  }
   setTimeout(() => askQuestion(code), 3000);
 }
 
@@ -1741,7 +2041,25 @@ function askQuestion(code) {
   // for everyone (a no-op for anyone who didn't have it set) now that a new
   // question is actually starting, so they're back in the count from here on.
   Object.values(room.players).forEach(p => { p.excludedThisQuestion = false; });
-  const pts = { easy:100, medium:200, hard:300 }[room.phaseNames[room.phase]];
+  // The CLAUDE.md-documented charge boundary: the single io.to(code).emit('question', ...)
+  // below, for phase 0 / question 0 only. Guarded by chargedWritten so later questions
+  // never re-fire it. If attemptId is still null here (the INSERT never landed despite
+  // its retry), the charge is skipped rather than fired with no durable record to back
+  // it — gameplay is unaffected either way, this is bookkeeping only.
+  if (!room.chargedWritten) {
+    room.chargedWritten = true;
+    if (room.attemptId) {
+      const chargedIds = Object.keys(room.players).map(Number);
+      pool.query(
+        'UPDATE game_attempts SET charged_at = NOW(), charged_user_ids = $1 WHERE id = $2',
+        [chargedIds, room.attemptId]
+      ).catch(e => console.error(`❌ charged_at write failed [room=${code}, attempt=${room.attemptId}]: ${e.message}`));
+    } else {
+      console.error(`❌ ATTEMPT RECORD MISSING — CHARGE SKIPPED [room=${code}]`);
+      attemptRecordFailures++;
+    }
+  }
+  const pts = { easy:100, medium:200, hard:300 }[PHASE_NAMES[room.phase]];
   io.to(code).emit('question', {
     id:q.id ?? null,
     index:room.qIndex+1, total:room.questions.length,
@@ -1838,7 +2156,7 @@ async function endGame(code) {
     const pts = Math.floor(p.sessionScore/100);
     try {
       await pool.query('UPDATE users SET total_score=total_score+$1 WHERE id=$2', [pts, p.id]);
-      await pool.query('INSERT INTO game_history (user_id,room_code,score) VALUES ($1,$2,$3)', [p.id, code, p.sessionScore]);
+      await pool.query('INSERT INTO game_history (user_id,room_code,score,attempt_id) VALUES ($1,$2,$3,$4)', [p.id, code, p.sessionScore, room.attemptId]);
     } catch (e) {
       // The in-memory game is already over regardless of whether this write lands, and
       // there is nothing sensible to retry against — the room may already be gone by
@@ -1859,6 +2177,12 @@ async function endGame(code) {
   // cleanup timer on a room object that isn't (or is no longer) rooms[code].
   if (rooms[code] !== room) return;
   io.to(code).emit('game_end', { leaderboard });
+  if (room.attemptId) {
+    pool.query(
+      "UPDATE game_attempts SET end_reason='completed', ended_at=NOW() WHERE id=$1 AND end_reason IS NULL",
+      [room.attemptId]
+    ).catch(e => console.error(`❌ end_reason write failed [room=${code}]: ${e.message}`));
+  }
   if (room.endTimer) clearTimeout(room.endTimer);
   room.endTimer = setTimeout(() => { delete rooms[code]; }, 120000);
 }
