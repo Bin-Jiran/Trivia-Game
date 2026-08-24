@@ -11,6 +11,7 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - Master format: answers as letters A–D, difficulty in Arabic (سهل/متوسط/صعب). Supabase format: answers as full text, difficulty in English (easy/medium/hard). Every load converts both.
 - `image_url` column: NULL = text question; a path (e.g. `/flags/kw.svg`) = classic image-in-question rendering. `is_image=true` is the separate (unused) 2×2 tile feature — never set both on one row.
 - Never trust terminal display of Arabic strings (RTL reordering lies) — verify by code points or a DB query.
+- NEVER pass Arabic text through a shell command line on Windows. `curl -d` with an Arabic JSON body in Git Bash silently corrupts the text into literal `?` characters BEFORE it reaches the server — this is not a display artifact, it writes corrupted data into the database. It happened on 2026-08-24: a test edit via `curl -d` corrupted a real `questions` row, and was only caught because the pending-mirror view happened to render the corrupted "after" value beside the intact "before" value from identical display code. With nothing to compare against, it would have passed as a successful edit. Use Node's `fetch()` from a script file instead, never a shell argument. This is distinct from — and worse than — the terminal-display caution above: that one misleads you about data that is fine, this one damages data that was fine.
 
 ## Load patterns
 - Content loads (new categories, bulk inserts, master→DB syncs) always follow the content-loader skill.
