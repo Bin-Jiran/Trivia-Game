@@ -148,20 +148,24 @@
       <div class="page-title">لوحة التحكم</div>
     </div>
 
-    <!-- Four metric boxes -->
+    <!-- Live signals only — vanity counts (total users, games today) were removed;
+         the statistics screen will cover those properly later. -->
     <div class="metrics">
       <div class="metric glass"><div class="num" id="m-active">…</div><div class="lbl">الألعاب النشطة</div></div>
       <div class="metric glass"><div class="num" id="m-online">…</div><div class="lbl">المتصلون الآن</div></div>
-      <div class="metric glass"><div class="num" id="m-users">…</div><div class="lbl">إجمالي اللاعبين</div></div>
-      <div class="metric glass"><div class="num" id="m-today">…</div><div class="lbl">ألعاب اليوم</div></div>
     </div>
 
-    <!-- Tappable detail bars (placeholder routes for now) -->
-    <div class="bar glass btn-green" onclick="go('/admin-rooms')">
-      <div class="bar-main" id="bar-rooms">الغرف النشطة: … - عدد اللاعبين: …</div>
-    </div>
-    <div class="bar glass btn-red" onclick="go('/admin-flags.html')">
+    <!-- Action queue bars: each carries a count AND a meaning. Color is set by
+         setQueueBarColor() — neutral blue at zero, red once something needs
+         attention — not hardcoded, so a class here is just a safe pre-JS default. -->
+    <div class="bar glass btn-blue" onclick="go('/admin-flags.html')">
       <div class="bar-main" id="bar-flags">عدد الأسئلة التي تم التبليغ عنها: …</div>
+    </div>
+    <div class="bar glass btn-blue" onclick="go('/admin-crashed-games.html')">
+      <div class="bar-main" id="bar-crashed">عدد الألعاب المتعطلة: …</div>
+    </div>
+    <div class="bar glass btn-blue" onclick="go('/admin-master-sync.html')">
+      <div class="bar-main" id="bar-pending-mirror">تعديلات لم تُنسخ إلى الملف الرئيسي: …</div>
     </div>
     <div class="bar glass btn-blue" onclick="go('/admin-actions.html')">
       <div class="bar-main">سجل الإجراءات</div>
@@ -295,22 +299,36 @@
     let statsTimer = null, onDash = false;
     const REFRESH_MS = 30000;
 
+    // Neutral (blue) at zero, needs-attention (red) once non-zero — the same
+    // convention across every queue bar, not just the ones that happened to be red
+    // before.
+    function setQueueBarColor(innerId, count){
+      // innerId is the .bar-main text node's id — the color class lives on its
+      // parent .bar element, not on the id'd element itself.
+      const bar = document.getElementById(innerId).closest('.bar');
+      bar.classList.remove('btn-red', 'btn-blue');
+      bar.classList.add(count > 0 ? 'btn-red' : 'btn-blue');
+    }
+
     // Update the existing nodes in place (no re-render, no flicker).
     function applyStats(d){
-      const activeGames   = d.activeGames   ?? 0,
-            playersOnline = d.playersOnline ?? 0,
-            totalUsers    = d.totalUsers    ?? 0,
-            gamesToday    = d.gamesToday    ?? 0,
-            flaggedCount  = d.flaggedCount  ?? 0;
+      const activeGames        = d.activeGames        ?? 0,
+            playersOnline      = d.playersOnline      ?? 0,
+            flaggedCount       = d.flaggedCount        ?? 0,
+            crashedCount       = d.crashedCount        ?? 0,
+            pendingMirrorCount = d.pendingMirrorCount  ?? 0;
       setNum('m-active', activeGames);
       setNum('m-online', playersOnline);
-      setNum('m-users',  totalUsers);
-      setNum('m-today',  gamesToday);
       // Numbers come from the server as integers (safe to inline); spans make them larger.
-      document.getElementById('bar-rooms').innerHTML =
-        `الغرف النشطة: <span class="bnum">${ar(activeGames)}</span> - عدد اللاعبين: <span class="bnum">${ar(playersOnline)}</span>`;
       document.getElementById('bar-flags').innerHTML =
         `عدد الأسئلة التي تم التبليغ عنها: <span class="bnum">${ar(flaggedCount)}</span>`;
+      document.getElementById('bar-crashed').innerHTML =
+        `عدد الألعاب المتعطلة: <span class="bnum">${ar(crashedCount)}</span>`;
+      document.getElementById('bar-pending-mirror').innerHTML =
+        `تعديلات لم تُنسخ إلى الملف الرئيسي: <span class="bnum">${ar(pendingMirrorCount)}</span>`;
+      setQueueBarColor('bar-flags', flaggedCount);
+      setQueueBarColor('bar-crashed', crashedCount);
+      setQueueBarColor('bar-pending-mirror', pendingMirrorCount);
     }
 
     // Fetch once. /api/admin/stats is requireAdmin-gated, so a non-ok IS the admin check.

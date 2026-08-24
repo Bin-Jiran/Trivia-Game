@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مزامنة الملف الرئيسي</title>
+  <style>
+    :root{
+      --yellow:#F5C200; --green:#2F9E44; --red:#E8472A; --blue:#2090BB; --orange:#EF6C00;
+      --glass:rgba(20,20,30,0.55); --glass-border:rgba(255,255,255,0.20);
+      --font:'Segoe UI', Tahoma, sans-serif;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    body{
+      min-height:100vh; direction:rtl; color:#fff; font-family:var(--font);
+      background-color:var(--yellow);
+      background-image:
+        radial-gradient(circle at 50% 34%, rgba(255,243,180,0.95), rgba(245,194,0,0) 58%),
+        repeating-conic-gradient(from 0deg at 50% 50%, var(--yellow) 0deg, #FFD64A 7.5deg, var(--yellow) 15deg);
+      background-attachment:fixed;
+      display:flex; justify-content:center; align-items:flex-start;
+      padding:18px 14px 40px;
+    }
+    .wrap{ width:100%; max-width:620px; }
+    .glass{
+      background:var(--glass);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      border:1px solid var(--glass-border); border-radius:16px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.22);
+    }
+    .topbar{ position:relative; display:flex; align-items:center; min-height:42px; margin-bottom:18px; }
+    .back{
+      position:absolute; top:0; left:0; display:inline-flex; align-items:center; gap:6px;
+      padding:7px 11px; font-size:13px; font-weight:700; color:#fff; cursor:pointer;
+      font-family:var(--font); background:#E8472A; border:1.5px solid #fff; border-radius:16px;
+    }
+    .back:active{ transform:scale(0.97); }
+    .back svg{ width:16px; height:16px; flex:0 0 auto; }
+    .page-title{ width:100%; text-align:right; font-size:23px; font-weight:800; color:#000; text-decoration:underline; }
+
+    .intro{ font-size:12.5px; font-weight:700; color:#000; opacity:0.85; margin:-6px 2px 14px; line-height:1.5; }
+    .filter-empty{ padding:34px 16px; text-align:center; font-size:16px; font-weight:800; }
+
+    .pcard{ padding:16px; margin-bottom:14px; }
+    .phead{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .pcat{ font-size:14px; font-weight:800; }
+    .pdiff{ font-size:11.5px; font-weight:800; padding:3px 10px; border-radius:999px; border:1.5px solid #fff; background:rgba(255,255,255,0.14); }
+    .pwhen{ font-size:11.5px; font-weight:700; opacity:0.75; }
+
+    .diffcols{ display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
+    @media (min-width:480px){ .diffcols{ flex-direction:row; } }
+    .diffcol{ flex:1 1 0; min-width:0; padding:11px 12px; border-radius:10px; background:rgba(255,255,255,0.06); }
+    .diffcol.old{ border:1px solid rgba(232,71,42,0.5); }
+    .diffcol.new{ border:1px solid rgba(47,158,68,0.6); }
+    .diff-label{ font-size:11px; font-weight:800; opacity:0.8; margin-bottom:8px; }
+    .diff-q{ font-size:14px; font-weight:700; line-height:1.5; margin-bottom:9px; }
+    .diff-opts{ display:flex; flex-direction:column; gap:5px; }
+    .diff-opt{ font-size:12.5px; font-weight:600; padding:6px 9px; border-radius:7px; background:rgba(255,255,255,0.08); }
+    .diff-opt.correct{ background:rgba(47,158,68,0.35); font-weight:800; }
+
+    .actions{ display:flex; }
+    .btn{ flex:1 1 0; padding:10px 8px; border-radius:10px; border:1.5px solid #fff; color:#fff; font-size:13.5px; font-weight:800; font-family:var(--font); cursor:pointer; text-align:center; background:var(--green); }
+    .btn:active{ transform:scale(0.98); }
+    .btn:disabled{ opacity:0.5; cursor:not-allowed; }
+
+    #loading, #denied, #error{ min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+    #loading .l-txt{ font-weight:700; font-size:16px; }
+    #denied .big, #error .big{ font-size:21px; font-weight:800; }
+    #denied .sub, #error .sub{ font-size:14px; opacity:0.9; max-width:300px; }
+    .statebtn{ padding:10px 22px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; font-family:var(--font); background:var(--blue); border:1.5px solid #fff; border-radius:12px; }
+    .spinner{ width:42px; height:42px; border:4px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING (default) -->
+  <div id="loading"><div class="spinner"></div><div class="l-txt">جاري التحميل...</div></div>
+
+  <!-- ACCESS DENIED -->
+  <div id="denied" style="display:none;">
+    <div class="big">✗ لا تملك صلاحية الدخول</div>
+    <div class="sub">يجب تسجيل الدخول بحساب مشرف لعرض هذه الصفحة.</div>
+    <button class="statebtn" type="button" onclick="goHome()">العودة للرئيسية</button>
+  </div>
+
+  <!-- SERVER ERROR -->
+  <div id="error" style="display:none;">
+    <div class="big">⚠ تعذّر الاتصال بالخادم</div>
+    <div class="sub">حدث خطأ في الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.</div>
+    <button class="statebtn" type="button" onclick="init()">إعادة المحاولة</button>
+  </div>
+
+  <!-- MAIN -->
+  <div id="screen" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="back" type="button" onclick="goDash()" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>رجوع</span>
+      </button>
+      <div class="page-title">مزامنة الملف الرئيسي</div>
+    </div>
+    <div class="intro">تعديلات تمت من لوحة التحكم ولم تُنسخ بعد يدوياً إلى ملف Excel الرئيسي. اضغط «تم النسخ» بعد نقل كل تعديل فعلياً — إلى أن يبقى هذا السجل فارغاً دائماً.</div>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const ANSWER_LETTERS = ['A', 'B', 'C', 'D'];
+
+    function goHome(){ location.href = '/'; }
+    function goDash(){ location.href = '/admin.html'; }
+    function showOnly(id){
+      ['loading','denied','error','screen'].forEach(s=>{
+        document.getElementById(s).style.display = (s===id) ? (s==='screen' ? 'block' : 'flex') : 'none';
+      });
+    }
+    function el(tag, cls, text){
+      const e = document.createElement(tag);
+      if(cls) e.className = cls;
+      if(text != null) e.textContent = text;
+      return e;
+    }
+    function fmtWhen(ts){
+      try { return new Date(ts).toLocaleString('ar', { dateStyle:'medium', timeStyle:'short' }); }
+      catch(e){ return ''; }
+    }
+
+    function diffColumn(label, cls, question, choices, answerLetter){
+      const col = el('div', 'diffcol ' + cls);
+      col.appendChild(el('div', 'diff-label', label));
+      col.appendChild(el('div', 'diff-q', question));
+      const opts = el('div', 'diff-opts');
+      choices.forEach((c, i)=>{
+        const isCorrect = ANSWER_LETTERS[i] === answerLetter;
+        opts.appendChild(el('div', 'diff-opt' + (isCorrect ? ' correct' : ''), ANSWER_LETTERS[i] + '. ' + c));
+      });
+      col.appendChild(opts);
+      return col;
+    }
+
+    function pendingCard(p){
+      const card = el('div', 'pcard glass');
+      const head = el('div', 'phead');
+      const left = el('div');
+      left.appendChild(el('div', 'pcat', p.category));
+      left.appendChild(el('div', 'pwhen', fmtWhen(p.created_at)));
+      head.appendChild(left);
+      head.appendChild(el('span', 'pdiff', p.difficulty));
+      card.appendChild(head);
+
+      const cols = el('div', 'diffcols');
+      cols.appendChild(diffColumn('قبل', 'old', p.old_question,
+        [p.old_choice1, p.old_choice2, p.old_choice3, p.old_choice4], p.old_answer_letter));
+      cols.appendChild(diffColumn('بعد', 'new', p.new_question,
+        [p.new_choice1, p.new_choice2, p.new_choice3, p.new_choice4], p.new_answer_letter));
+      card.appendChild(cols);
+
+      const actions = el('div', 'actions');
+      const btn = el('button', 'btn', 'تم النسخ إلى الملف الرئيسي');
+      btn.type = 'button';
+      btn.onclick = async ()=>{
+        btn.disabled = true;
+        try{
+          const res = await fetch('/api/admin/master-sync/' + p.id + '/mirrored', {
+            method:'POST', headers:{ Authorization:'Bearer ' + token }
+          });
+          const d = await res.json().catch(()=> ({}));
+          if(!res.ok){ alert(d.error || 'حدث خطأ'); btn.disabled = false; return; }
+          card.remove();
+          if(!document.getElementById('list').children.length) renderEmpty();
+        }catch(e){ alert('تعذّر الاتصال بالخادم'); btn.disabled = false; }
+      };
+      actions.appendChild(btn);
+      card.appendChild(actions);
+      return card;
+    }
+
+    function renderEmpty(){
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      list.appendChild(el('div', 'filter-empty glass', 'لا توجد تعديلات معلّقة — كل شيء منسوخ إلى الملف الرئيسي'));
+    }
+
+    async function init(){
+      if(!token){ showOnly('denied'); return; }
+      try{
+        const res = await fetch('/api/admin/master-sync', { headers:{ Authorization:'Bearer ' + token } });
+        if(res.status === 401 || res.status === 403){ showOnly('denied'); return; }
+        if(!res.ok){ showOnly('error'); return; }
+        const d = await res.json().catch(()=> ({}));
+        const pending = Array.isArray(d.pending) ? d.pending : [];
+        showOnly('screen');
+        const list = document.getElementById('list');
+        list.innerHTML = '';
+        if(!pending.length){ renderEmpty(); return; }
+        pending.forEach(p => list.appendChild(pendingCard(p)));
+      }catch(e){ showOnly('error'); }
+    }
+    init();
+  </script>
+</body>
+</html>

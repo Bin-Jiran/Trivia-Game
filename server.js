@@ -606,17 +606,113 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
     try { const r = await pool.query(sql); return parseInt(r.rows[0].c, 10) || 0; }
     catch (e) { return 0; }
   };
-  const totalUsers   = await count('SELECT COUNT(*)::int AS c FROM users');
-  // One game = one room_code (game_history has a row per player), and "today" is
-  // measured against Kuwait local midnight (UTC+3, no DST).
-  const gamesToday   = await count(
-    "SELECT COUNT(DISTINCT room_code)::int AS c FROM game_history " +
-    "WHERE (played_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kuwait') >= date_trunc('day', now() AT TIME ZONE 'Asia/Kuwait')"
-  );
   const flaggedCount = await count('SELECT COUNT(DISTINCT question_id)::int AS c FROM question_flags WHERE resolved = FALSE');
   const pendingMirrorCount = await count('SELECT COUNT(*)::int AS c FROM question_pending_master_edits');
+  const crashedCount = await count(
+    "SELECT COUNT(*)::int AS c FROM game_attempts WHERE end_reason IN ('crashed','server_shutdown')"
+  );
 
-  res.json({ activeGames, playersOnline, totalUsers, gamesToday, flaggedCount, pendingMirrorCount });
+  res.json({ activeGames, playersOnline, flaggedCount, pendingMirrorCount, crashedCount });
+});
+
+const LEAVE_EVENT_TYPES = ['left_voluntarily', 'left_for_other_room'];
+const END_REASON_LABELS_AR = {
+  completed: 'اكتملت اللعبة', abandoned_idle_lobby: 'انتهت مهلة الغرفة (لم تبدأ)',
+  all_left_before_start: 'غادر الجميع قبل البدء', all_left_midgame: 'غادر الجميع أثناء اللعبة',
+  abandoned_midgame: 'انقطع الجميع ولم يعد أحد', crashed: 'تعطل الخادم', server_shutdown: 'إعادة نشر الخادم'
+};
+
+// Read-only review queue for refund complaints. Two modes on one endpoint:
+//  - no `search`: the default queue -- crashed + server_shutdown attempts, newest
+//    first (see CLAUDE.md, "the case needing attention").
+//  - `search`: EVERY attempt (any end_reason) that a matching, ACTUALLY-CHARGED
+//    user was part of -- charged_user_ids is the scope, because an attempt that
+//    never reached question 1 was never charged and isn't part of a refund
+//    conversation. Matches name/email/phone.
+// Verdicts are computed HERE, server-side, so the rule lives in one place -- see
+// CLAUDE.md, Currency charge boundary, for why crashed and server_shutdown must be
+// read differently: a crash kills the process before it can log a leave event, so
+// "no leave event" on a CRASHED attempt is an absence of evidence, not proof the
+// player was connected -- refund is the default, not a claim. server_shutdown is
+// the opposite: the SIGTERM handler was alive to write events, so "no leave event"
+// there really does mean they were still connected. Verdicts are only meaningful
+// for these two end_reasons; other rows (surfaced only via search) carry no
+// per-player verdict, just the plain end_reason.
+app.get('/api/admin/crashed-games', requireAdmin, async (req, res) => {
+  const search = (req.query.search || '').toString().trim();
+  try {
+    let attempts;
+    if (search) {
+      const r = await pool.query(
+        `SELECT DISTINCT ga.*, u.id AS matched_user_id, u.first_name, u.last_name
+           FROM game_attempts ga
+           JOIN users u ON ga.charged_user_ids @> ARRAY[u.id]
+          WHERE u.first_name ILIKE $1 OR u.last_name ILIKE $1
+             OR (u.first_name || ' ' || u.last_name) ILIKE $1
+             OR u.phone ILIKE $1
+          ORDER BY ga.created_at DESC`,
+        [`%${search}%`]
+      );
+      attempts = r.rows;
+    } else {
+      const r = await pool.query(
+        `SELECT * FROM game_attempts WHERE end_reason IN ('crashed','server_shutdown')
+          ORDER BY created_at DESC`
+      );
+      attempts = r.rows;
+    }
+    if (!attempts.length) return res.json({ attempts: [] });
+
+    const attemptIds = attempts.map(a => a.id);
+    const allUserIds = [...new Set(attempts.flatMap(a => a.charged_user_ids || []))];
+
+    const [eventsResult, usersResult] = await Promise.all([
+      pool.query(
+        'SELECT attempt_id, user_id, event_type, question_index FROM game_attempt_events WHERE attempt_id = ANY($1)',
+        [attemptIds]
+      ),
+      allUserIds.length
+        ? pool.query('SELECT id, first_name, last_name FROM users WHERE id = ANY($1)', [allUserIds])
+        : Promise.resolve({ rows: [] })
+    ]);
+
+    const leftByAttemptUser = new Set(
+      eventsResult.rows.filter(e => LEAVE_EVENT_TYPES.includes(e.event_type)).map(e => `${e.attempt_id}:${e.user_id}`)
+    );
+    const maxQIndexByAttempt = {};
+    for (const e of eventsResult.rows) {
+      if (e.question_index == null) continue;
+      if (maxQIndexByAttempt[e.attempt_id] == null || e.question_index > maxQIndexByAttempt[e.attempt_id]) {
+        maxQIndexByAttempt[e.attempt_id] = e.question_index;
+      }
+    }
+    const userNames = Object.fromEntries(usersResult.rows.map(u => [u.id, `${u.first_name} ${u.last_name}`]));
+
+    const result = attempts.map(a => {
+      const verdictable = a.end_reason === 'crashed' || a.end_reason === 'server_shutdown';
+      const players = (a.charged_user_ids || []).map(uid => {
+        const left = leftByAttemptUser.has(`${a.id}:${uid}`);
+        let verdict = null;
+        if (verdictable) {
+          if (left) verdict = 'left_voluntarily';
+          else verdict = a.end_reason === 'server_shutdown' ? 'was_connected' : 'no_record_refund_default';
+        }
+        return { user_id: uid, name: userNames[uid] || `#${uid}`, verdict };
+      });
+      return {
+        id: a.id, room_code: a.room_code, created_at: a.created_at, started_at: a.started_at,
+        ended_at: a.ended_at, end_reason: a.end_reason, end_reason_label: END_REASON_LABELS_AR[a.end_reason] || a.end_reason,
+        last_phase_reached: a.last_phase_reached,
+        last_known_question_index: maxQIndexByAttempt[a.id] ?? null,
+        categories: a.categories || [],
+        eventsUnreliable: a.end_reason === 'crashed',
+        players
+      };
+    });
+    res.json({ attempts: result });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // Maintenance status for the admin panel. Reads the DB directly (not the cache) so
@@ -683,6 +779,10 @@ app.post('/api/admin/maintenance', requireAdmin, async (req, res) => {
 });
 
 const ANSWER_LETTERS = ['A', 'B', 'C', 'D'];
+// English (DB/questions.difficulty) -> Arabic (Excel master format). Single source
+// for every DB-format-to-master-format difficulty translation in this file --
+// duplicating this literal is how one copy silently drifts from the others.
+const DIFFICULTY_AR = { easy: 'سهل', medium: 'متوسط', hard: 'صعب' };
 
 // Flagged questions for review, grouped by the real questions.id they point at (not
 // a client-supplied text hash — see /api/flag-question). Content is joined LIVE from
@@ -798,6 +898,17 @@ app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
       if (!target.active)
         throw new AdminActionAbort(400, { error: 'لا يمكن تعديل سؤال معطّل — أعد تفعيل السؤال أولاً' });
 
+      // question_pending_master_edits.difficulty must be MASTER format (Arabic) --
+      // questions.difficulty is DB format (English). An unmapped value here means
+      // the column itself holds something unexpected; abort rather than silently
+      // writing a value the Excel master doesn't use, which would leave this edit's
+      // master-mirror obligation untrackable.
+      const difficultyAr = DIFFICULTY_AR[target.difficulty];
+      if (!difficultyAr) {
+        console.error(`❌ unmapped difficulty "${target.difficulty}" on question ${questionId} — refusing edit, pending-master-edit row would be untrackable`);
+        throw new AdminActionAbort(500, { error: 'صعوبة السؤال غير معروفة، تعذر إكمال التعديل' });
+      }
+
       const oldChoices = [target.choice1, target.choice2, target.choice3, target.choice4];
       const oldAnswerIndex = oldChoices.indexOf(target.answer);
       const oldAnswerLetter = ANSWER_LETTERS[oldAnswerIndex] || null;
@@ -825,6 +936,11 @@ app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
       // old_* values stay exactly as they were (they describe what the MASTER still
       // has) — only new_* moves forward to this latest edit. Collapses multiple edits
       // before a mirror into a single (master-value) -> (current DB value) delta.
+      // difficulty is passed as difficultyAr (already master-format Arabic), NOT
+      // target.difficulty (DB-format English) — if the ON CONFLICT SET clause below
+      // is ever extended to also update difficulty, source it from EXCLUDED.difficulty
+      // (which reflects this same translated value) or from difficultyAr again, never
+      // from target.difficulty directly, or this exact bug returns silently.
       await client.query(
         `INSERT INTO question_pending_master_edits
            (question_id, category, difficulty, old_question, new_question,
@@ -837,7 +953,7 @@ app.put('/api/admin/questions/:id', requireAdmin, async (req, res) => {
            new_choice1 = EXCLUDED.new_choice1, new_choice2 = EXCLUDED.new_choice2,
            new_choice3 = EXCLUDED.new_choice3, new_choice4 = EXCLUDED.new_choice4,
            new_answer_letter = EXCLUDED.new_answer_letter`,
-        [questionId, target.category, target.difficulty, target.question, newQuestion,
+        [questionId, target.category, difficultyAr, target.question, newQuestion,
          target.choice1, newChoices[0], target.choice2, newChoices[1],
          target.choice3, newChoices[2], target.choice4, newChoices[3],
          oldAnswerLetter, newAnswerLetter]
@@ -2094,7 +2210,7 @@ function sendRejoinState(room, socket) {
   const uid = socket.user.id;
   const midQuestion = room.status === 'playing' && room.currentQuestion && !room.advancing;
   if (midQuestion) room.players[uid].excludedThisQuestion = true;
-  const phaseName = { easy:'سهل', medium:'متوسط', hard:'صعب' }[PHASE_NAMES[room.phase]] || '';
+  const phaseName = DIFFICULTY_AR[PHASE_NAMES[room.phase]] || '';
   socket.emit('rejoined_game', { code: room.code, phase: room.phase + 1, phaseName, isHost: room.host === uid });
 }
 
@@ -2337,7 +2453,7 @@ function startPhase(code) {
   const phaseName = PHASE_NAMES[room.phase];
   room.questions = room.allQuestions[phaseName];
   room.qIndex = 0; room.answered = {};
-  const phaseAr = { easy:'سهل', medium:'متوسط', hard:'صعب' }[phaseName];
+  const phaseAr = DIFFICULTY_AR[phaseName];
   io.to(code).emit('phase_start', { phase:room.phase+1, name:phaseAr, total:3 });
   if (room.attemptId) {
     pool.query('UPDATE game_attempts SET last_phase_reached = $1 WHERE id = $2', [room.phase, room.attemptId])
