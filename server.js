@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +14,15 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'trivia_secret_key_2024';
 const PORT = process.env.PORT || 3000;
+// Render sets this per running instance — exactly the identity needed to tell "a
+// row this process owns" apart from "a row some other, possibly still-live,
+// instance owns" during a deploy's overlap window (see CLAUDE.md, Environment &
+// deploys). Falls back to a fresh random id outside Render (local dev, anywhere
+// else) — must be random, not a fixed string: two local processes sharing one
+// fallback id would each treat the other's rows as "mine" and never sweep them,
+// the same failure mode as the bug this whole mechanism exists to fix, just
+// inverted. Generated once, held for the life of the process.
+const INSTANCE_ID = process.env.RENDER_INSTANCE_ID || crypto.randomUUID();
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 // Maintenance mode: when 'true', only admins may create/join/restart games. Unset or
 // anything other than 'true' = game fully open (default). Flip via the Render env var.
@@ -106,11 +116,15 @@ async function initDB() {
     );
     -- One row per game ATTEMPT (create_room or play_again), not per room code — a
     -- room can play many attempts across its lifetime, each with its own charge and
-    -- outcome. end_reason is NULL while the attempt is still open; the boot sweep
-    -- (server startup) stamps 'crashed' on every row still NULL there, since a
-    -- booting process's memory is always empty, so anything still open belongs to a
-    -- process that no longer exists. Requires exactly ONE Render instance — see
-    -- CLAUDE.md, Environment & deploys.
+    -- outcome. end_reason is NULL while the attempt is still open; the crash sweep
+    -- (runCrashSweep(), run once at boot and then periodically) stamps 'crashed' on
+    -- a row when its owning process (owner_instance_id, below) has no fresh
+    -- heartbeat in server_instances. NOT simply "this process just booted, so my
+    -- memory being empty means nothing else is running" — that assumption is FALSE
+    -- during every deploy: Render's zero-downtime deploys keep the previous
+    -- instance alive and serving for up to 60s + shutdown_delay after the new one
+    -- already has traffic (confirmed in production: a 64-second overlap, three
+    -- instances alive at once — see CLAUDE.md, Environment & deploys).
     CREATE TABLE IF NOT EXISTS game_attempts (
       id SERIAL PRIMARY KEY,
       room_code TEXT NOT NULL,
@@ -125,6 +139,15 @@ async function initDB() {
         'completed', 'abandoned_idle_lobby', 'all_left_before_start',
         'all_left_midgame', 'abandoned_midgame', 'crashed', 'server_shutdown'
       ])),
+      -- Which server process created this attempt -- server.js's INSTANCE_ID
+      -- (RENDER_INSTANCE_ID, or a random fallback outside Render). Nullable for
+      -- rows that predate this column; the crash sweep treats a NULL owner as
+      -- always sweep-eligible (see runCrashSweep()), matching how it behaved
+      -- before ownership tracking existed. Lets the sweep tell "a row MY process
+      -- created" apart from "a row some OTHER, possibly still-live, process
+      -- created" -- load-bearing during a deploy's overlap window, see
+      -- CLAUDE.md's Environment & deploys single-instance entry.
+      owner_instance_id TEXT,
       ended_at TIMESTAMP,
       -- NOT a liveness heartbeat: bumped only by the two touch triggers below, i.e.
       -- only when a DB write actually happens (an UPDATE to this row, or an INSERT
@@ -132,10 +155,10 @@ async function initDB() {
       -- advances, timers, answers -- is in-memory only and never touches this
       -- column. So this is "when this row last CHANGED," not "when this attempt
       -- was last confirmedly alive." On a crash, ended_at is set to this value --
-      -- the last RECORDED moment, not the actual moment of death. That gap is fine
-      -- under the boot sweep (which ignores age/recency entirely) -- do not
-      -- reintroduce an age threshold anywhere that assumes this column is a
-      -- heartbeat, because it isn't one.
+      -- the last RECORDED moment, not the actual moment of death. The crash sweep
+      -- does now reason about recency -- but via server_instances.last_seen (a real
+      -- per-PROCESS heartbeat, see below), never via this column. Do not fold
+      -- staleness logic back onto last_updated_at -- it isn't a heartbeat.
       last_updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_game_attempts_room_code ON game_attempts(room_code);
@@ -158,7 +181,22 @@ async function initDB() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_game_attempt_events_attempt_id ON game_attempt_events(attempt_id);
+    -- One row per running server process, upserted every HEARTBEAT_INTERVAL_MS for
+    -- as long as it lives. This is the ONLY liveness signal the crash sweep trusts —
+    -- deliberately separate from game_attempts.last_updated_at, which reflects
+    -- activity on a ROOM, not the health of the PROCESS that owns it. A room can go
+    -- quiet for a while during totally normal play; that says nothing about whether
+    -- its owning process has crashed.
+    CREATE TABLE IF NOT EXISTS server_instances (
+      instance_id TEXT PRIMARY KEY,
+      last_seen TIMESTAMP NOT NULL DEFAULT NOW()
+    );
   `);
+  // game_attempts already exists in both dev and production from before this column
+  // was added, so it can't rely on the CREATE TABLE literal above (which no-ops
+  // entirely once the table exists) -- same situation game_history.attempt_id was
+  // in. Nullable: the crash sweep treats a NULL owner as always sweep-eligible.
+  await pool.query('ALTER TABLE game_attempts ADD COLUMN IF NOT EXISTS owner_instance_id TEXT');
   // Backward-compatible: add new columns to pre-existing tables without touching data.
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN NOT NULL DEFAULT FALSE');
@@ -295,27 +333,46 @@ async function initDB() {
     else console.log(`👑 ADMIN_EMAIL set to ${adminEmail} — no matching account yet (will apply once they register)`);
   }
 
-  // Boot-time crash sweep — LAST statement in initDB(), on purpose. This process's
-  // memory is guaranteed empty right now (it just started, rooms={} hasn't been
-  // touched by anything yet), so ANY attempt row still open (end_reason IS NULL)
-  // cannot belong to this process, and cannot belong to any other, since exactly
-  // ONE Render instance may ever run (see CLAUDE.md, Environment & deploys — two
-  // instances would ALSO break room broadcasting itself, not just this sweep).
-  // No age threshold: age is irrelevant once the predicate itself (memory is
-  // empty) is already conclusive on its own. ended_at is set to the row's own
-  // last_updated_at, not NOW() — the last moment it's actually known to have
-  // changed, not the unrelated moment this process happened to boot.
-  const sweepResult = await pool.query(
-    "UPDATE game_attempts SET end_reason='crashed', ended_at=last_updated_at WHERE end_reason IS NULL"
-  );
-  if (sweepResult.rowCount > 0) {
-    console.log(`⚠️ boot sweep: marked ${sweepResult.rowCount} orphaned attempt(s) as crashed`);
+  // FIRST HEARTBEAT — must land, awaited, before anything else touches
+  // game_attempts. Without this ordering there's a window that reopens the exact
+  // bug being fixed: dbReady flips, a player creates a room, a game_attempts row
+  // is stamped owner_instance_id=THIS, but THIS has no heartbeat row yet (the
+  // interval hasn't fired its first tick) — a still-live PREDECESSOR's periodic
+  // sweep would see an owned row with no matching heartbeat and mark it crashed,
+  // exactly the false positive this whole mechanism exists to prevent. Retried a
+  // few times (not just once) because nothing downstream is safe without it
+  // landing — if it never does, initDB() throws and dbReady stays false forever.
+  // Refusing new rooms is the correct failure mode here, not letting the race
+  // reopen silently.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await pool.query(
+        'INSERT INTO server_instances (instance_id, last_seen) VALUES ($1, NOW()) ON CONFLICT (instance_id) DO UPDATE SET last_seen = NOW()',
+        [INSTANCE_ID]
+      );
+      break;
+    } catch (e) {
+      if (attempt === 2) throw new Error(`first heartbeat write failed after 3 attempts, refusing to finish booting: ${e.message}`);
+      await new Promise(res => setTimeout(res, 500));
+    }
   }
+  console.log(`💓 first heartbeat recorded for instance ${INSTANCE_ID}`);
 
-  // Flips last, after the sweep above has already committed — create_room refuses
-  // until this is true, which is what makes the sweep race-free: no fresh attempt
-  // row can exist for the sweep to mistakenly catch before this line runs.
+  // Crash sweep — first invocation, awaited, before dbReady flips. See
+  // runCrashSweep() (defined further down, alongside the rest of the room-lifecycle
+  // machinery it depends on) for the actual predicate and reasoning.
+  await runCrashSweep();
+
+  // Flips after the first heartbeat AND the sweep above have both already
+  // committed — create_room refuses until this is true, which is what makes the
+  // sweep race-free: no fresh attempt row can exist without an owner that already
+  // has a heartbeat backing it, and nothing this process created can be caught by
+  // this SAME sweep pass (it already ran).
   dbReady = true;
+
+  // Only start recurring after dbReady flips, per the same ordering.
+  heartbeatIntervalHandle = setInterval(writeHeartbeat, HEARTBEAT_INTERVAL_MS);
+  sweepIntervalHandle = setInterval(runCrashSweep, PERIODIC_SWEEP_INTERVAL_MS);
 }
 initDB().catch(console.error);
 
@@ -1358,13 +1415,15 @@ function generateCode() { return String(Math.floor(1000+Math.random()*9000)); }
 // pure per-room duplication of a constant.
 const PHASE_NAMES = ['easy','medium','hard'];
 
-// Flips true as the LAST statement of initDB(), after the boot-time crash sweep
-// has already run and committed. create_room refuses until then — see the sweep
-// itself (end of initDB()) for why: the sweep depends on nothing having created a
-// fresh, still-open attempt row before it runs, and create_room is the only path
-// that can ever insert one. join_room/play_again need no equivalent gate: rooms={}
-// starts empty every boot, so no room exists to join, and play_again requires an
-// existing rooms[code] entry — both are transitively blocked by this alone.
+// Flips true inside initDB(), after — in this order — this instance's first
+// heartbeat has landed AND the first crash sweep has already run and committed
+// (see runCrashSweep()). create_room refuses until then: without the heartbeat
+// ordering, a room created the instant dbReady flips could get an attempt row
+// whose owner has no heartbeat yet, making it look crash-sweepable to any OTHER
+// still-live instance during a deploy's overlap window. join_room/play_again need
+// no equivalent gate: rooms={} starts empty every boot, so no room exists to join,
+// and play_again requires an existing rooms[code] entry — both are transitively
+// blocked by this alone.
 let dbReady = false;
 
 // In-memory, not DB-backed on purpose: this counts failures of the very writes
@@ -1413,8 +1472,8 @@ async function insertAttemptRow(room) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const r = await pool.query(
-        'INSERT INTO game_attempts (room_code, host_user_id) VALUES ($1,$2) RETURNING id',
-        [code, room.host]
+        'INSERT INTO game_attempts (room_code, host_user_id, owner_instance_id) VALUES ($1,$2,$3) RETURNING id',
+        [code, room.host, INSTANCE_ID]
       );
       if (rooms[code] !== room) return;   // stale by the time this resolved
       room.attemptId = r.rows[0].id;
@@ -1424,6 +1483,97 @@ async function insertAttemptRow(room) {
       console.error(`❌ game_attempts INSERT failed after retry [room=${code}]: ${e.message}`);
       attemptRecordFailures++;
     }
+  }
+}
+
+// Heartbeat cadence and crash-sweep staleness. Render's deploy timeline (the 60s
+// health-check-to-SIGTERM window, shutdown_delay) is NOT part of this derivation —
+// a live instance heartbeats every 20s for its whole life, including throughout a
+// deploy's overlap window, so the overlap's length is irrelevant to how stale is
+// too stale. STALENESS_SECONDS only has to tolerate missed heartbeat ticks: 150s
+// is ~7.5x the 20s interval, so several consecutive missed writes are absorbed
+// before a live process could ever be mistaken for dead. A late 'crashed' label
+// costs nothing; a false one is the exact bug this mechanism exists to fix.
+// (The one case where a dying instance stops heartbeating early — SIGTERM clears
+// the interval, so it may go quiet for up to shutdown_delay before actually
+// exiting — is already handled elsewhere: its rows are marked 'server_shutdown'
+// before that point, or, if that write failed too, sweeping them as crashed is
+// the correct outcome anyway. Not something this threshold needs to cover.)
+const HEARTBEAT_INTERVAL_MS = 20 * 1000;
+const STALENESS_SECONDS = 150;
+const PERIODIC_SWEEP_INTERVAL_MS = 2 * 60 * 1000;
+
+// Handles for the two recurring timers — started once in initDB() after dbReady
+// flips, cleared once in the SIGTERM handler before it does anything else.
+// Module-level so both places can reach them.
+let heartbeatIntervalHandle = null;
+let sweepIntervalHandle = null;
+
+let heartbeatFailureCount = 0;
+// Proof of life for THIS process, independent of any room's own activity — a room
+// can go quiet for a while during totally normal play; that says nothing about
+// whether its owning process has crashed. A failed tick never cancels or
+// reschedules the interval itself: the interval is the only clock, so the
+// staleness window is "time since the last SUCCESSFUL write," and a single blip
+// doesn't shorten it.
+async function writeHeartbeat() {
+  try {
+    await pool.query(
+      'INSERT INTO server_instances (instance_id, last_seen) VALUES ($1, NOW()) ON CONFLICT (instance_id) DO UPDATE SET last_seen = NOW()',
+      [INSTANCE_ID]
+    );
+    heartbeatFailureCount = 0;
+  } catch (e) {
+    heartbeatFailureCount++;
+    console.error(`❌ heartbeat write failed (${heartbeatFailureCount} in a row): ${e.message}`);
+    if (heartbeatFailureCount === 3) {
+      console.error('❌ heartbeat has failed 3 times in a row (~60s) — this instance may be unable to prove itself alive to others');
+    }
+  }
+}
+
+// Run once at boot (awaited, before dbReady flips — see initDB()) and then
+// periodically for the process's life. A one-shot boot-only sweep is insufficient
+// once the sweep can legitimately skip a row: if a predecessor is correctly
+// skipped here as "still alive," and then genuinely crashes a few seconds later,
+// nothing would revisit that row until THIS process's own next restart, which
+// could be days away. Running periodically closes that gap — caught within
+// minutes instead.
+//
+// Never touches a row this process itself owns, unconditionally, regardless of
+// heartbeat freshness — a process always knows its own liveness directly and never
+// needs to infer it from a table it might have just failed to write to. A
+// transient DB blip that drops a few of THIS process's own heartbeat writes must
+// never be able to make it conclude it's dead and sweep its own live games.
+async function runCrashSweep() {
+  try {
+    const sweepResult = await pool.query(
+      `UPDATE game_attempts SET end_reason='crashed', ended_at=last_updated_at
+       WHERE end_reason IS NULL
+         AND owner_instance_id IS DISTINCT FROM $1
+         AND NOT EXISTS (
+           SELECT 1 FROM server_instances si
+           WHERE si.instance_id = game_attempts.owner_instance_id
+             AND si.last_seen > NOW() - make_interval(secs => $2)
+         )`,
+      [INSTANCE_ID, STALENESS_SECONDS]
+    );
+    if (sweepResult.rowCount > 0) {
+      console.log(`⚠️ crash sweep: marked ${sweepResult.rowCount} orphaned attempt(s) as crashed`);
+    }
+    // Table hygiene only — 24h is vastly larger than STALENESS_SECONDS, so this can
+    // never delete a heartbeat row the sweep above would still have treated as
+    // fresh. A missing row and a stale row are indistinguishable to the NOT EXISTS
+    // check above, so deleting an already-stale one changes nothing about
+    // correctness.
+    const cleanupResult = await pool.query(
+      "DELETE FROM server_instances WHERE last_seen < NOW() - INTERVAL '24 hours'"
+    );
+    if (cleanupResult.rowCount > 0) {
+      console.log(`🧹 removed ${cleanupResult.rowCount} stale server_instances row(s)`);
+    }
+  } catch (e) {
+    console.error(`❌ crash sweep failed: ${e.message}`);
   }
 }
 
@@ -1446,10 +1596,18 @@ const SIGTERM_WRITE_TIMEOUT_MS = 3000;   // comfortably inside Render's own
                                           // docs/dashboard, not assumed here
 process.on('SIGTERM', async () => {
   console.log('⚠️ SIGTERM received — marking live attempts as server_shutdown');
+  // Cleared FIRST, before anything else: a heartbeat tick firing mid-shutdown would
+  // refresh last_seen for a process that's about to die, making it look alive to
+  // every OTHER instance's crash sweep for up to another STALENESS_SECONDS. The
+  // sweep interval is cleared too, purely for tidiness — nothing correctness-
+  // critical depends on stopping it, but there's no reason to leave a timer running
+  // that competes with the SIGTERM write for the same tight time budget.
+  if (heartbeatIntervalHandle) clearInterval(heartbeatIntervalHandle);
+  if (sweepIntervalHandle) clearInterval(sweepIntervalHandle);
   const liveAttemptIds = Object.values(rooms).map(r => r.attemptId).filter(Boolean);
   if (liveAttemptIds.length) {
     try {
-      await Promise.race([
+      const result = await Promise.race([
         pool.query(
           "UPDATE game_attempts SET end_reason='server_shutdown', ended_at=NOW() WHERE id = ANY($1) AND end_reason IS NULL",
           [liveAttemptIds]
@@ -1457,11 +1615,28 @@ process.on('SIGTERM', async () => {
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('SIGTERM write timed out')), SIGTERM_WRITE_TIMEOUT_MS)),
       ]);
-      console.log(`✅ marked ${liveAttemptIds.length} attempt(s) as server_shutdown`);
+      // rowCount, not liveAttemptIds.length — a row already claimed by another
+      // instance's crash sweep (the exact race this whole design exists to close)
+      // matches zero rows here with no error, which the old code couldn't tell
+      // apart from success. A mismatch is itself a signal something else claimed
+      // the row first and is worth knowing about, not silently swallowed.
+      console.log(`✅ SIGTERM write: marked ${result.rowCount}/${liveAttemptIds.length} attempt(s) as server_shutdown`);
+      if (result.rowCount < liveAttemptIds.length) {
+        console.warn(`⚠️ ${liveAttemptIds.length - result.rowCount} attempt(s) were already resolved by something else before this write landed`);
+      }
     } catch (e) {
       console.error(`❌ SIGTERM attempt-marking failed or timed out — falling through to next boot's sweep: ${e.message}`);
     }
   }
+  // Deliberately NOT deleting this instance's server_instances row here. Once the
+  // UPDATE above has landed, none of this instance's game_attempts rows are open
+  // any more, so nothing depends on this row's freshness — its eventual staleness
+  // (or the periodic 24h cleanup) is harmless either way. Deleting it would only
+  // add a second query racing the same tight timeout budget, and doing so BEFORE
+  // (or concurrently with) the UPDATE above would reopen a smaller version of the
+  // exact bug this handler exists to fix: a window where this instance looks dead
+  // (no heartbeat row) while its rows are still open, visible to any OTHER
+  // instance's periodic sweep.
   process.exit(0);   // only reached after the await above resolves or times out
 });
 
