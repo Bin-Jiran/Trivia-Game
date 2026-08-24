@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الإحصائيات</title>
+  <style>
+    :root{
+      --yellow:#F5C200; --green:#2F9E44; --red:#E8472A; --blue:#2090BB; --orange:#EF6C00; --amber:#C98A00;
+      --glass:rgba(20,20,30,0.55); --glass-border:rgba(255,255,255,0.20);
+      --font:'Segoe UI', Tahoma, sans-serif;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    body{
+      min-height:100vh; direction:rtl; color:#fff; font-family:var(--font);
+      background-color:var(--yellow);
+      background-image:
+        radial-gradient(circle at 50% 34%, rgba(255,243,180,0.95), rgba(245,194,0,0) 58%),
+        repeating-conic-gradient(from 0deg at 50% 50%, var(--yellow) 0deg, #FFD64A 7.5deg, var(--yellow) 15deg);
+      background-attachment:fixed;
+      display:flex; justify-content:center; align-items:flex-start;
+      padding:18px 14px 40px;
+    }
+    .wrap{ width:100%; max-width:640px; }
+    .glass{
+      background:var(--glass);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      border:1px solid var(--glass-border); border-radius:16px;
+      box-shadow:0 6px 20px rgba(0,0,0,0.22);
+    }
+    .topbar{ position:relative; display:flex; align-items:center; min-height:42px; margin-bottom:18px; }
+    .back{
+      position:absolute; top:0; left:0; display:inline-flex; align-items:center; gap:6px;
+      padding:7px 11px; font-size:13px; font-weight:700; color:#fff; cursor:pointer;
+      font-family:var(--font); background:#E8472A; border:1.5px solid #fff; border-radius:16px;
+    }
+    .back:active{ transform:scale(0.97); }
+    .back svg{ width:16px; height:16px; flex:0 0 auto; }
+    .page-title{ width:100%; text-align:right; font-size:23px; font-weight:800; color:#000; text-decoration:underline; }
+
+    .section{ padding:16px; margin-bottom:16px; }
+    .sec-title{ font-size:16px; font-weight:800; margin-bottom:4px; }
+    .sec-sub{ font-size:12px; font-weight:700; opacity:0.8; margin-bottom:12px; line-height:1.5; }
+
+    /* Top strip */
+    .strip{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:16px; }
+    .strip-box{ padding:16px 10px; text-align:center; }
+    .strip-num{ font-size:26px; font-weight:800; }
+    .strip-lbl{ font-size:12.5px; font-weight:600; opacity:0.9; margin-top:6px; }
+
+    /* Bars (categorical / trend) — width by relative proportion, no charting lib */
+    .barrow{ display:flex; align-items:center; gap:8px; margin-bottom:7px; font-size:12.5px; }
+    .barrow .blbl{ flex:0 0 92px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .barrow .btrack{ flex:1 1 auto; height:16px; border-radius:8px; background:rgba(255,255,255,0.12); overflow:hidden; }
+    .barrow .bfill{ height:100%; border-radius:8px; background:var(--blue); min-width:2px; }
+    .barrow .bval{ flex:0 0 26px; font-weight:800; text-align:left; }
+
+    .rate-line{ font-size:14px; font-weight:800; margin-top:8px; }
+    .rate-note{ font-size:12px; font-weight:700; opacity:0.75; margin-top:4px; }
+    .empty-note{ font-size:13px; font-weight:700; opacity:0.85; padding:6px 0; }
+
+    /* Retention cohort rows */
+    .cohort-row{ padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.08); margin-bottom:8px; }
+    .cohort-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; font-weight:800; }
+    .cohort-badge{ font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; border:1.5px solid #fff; white-space:nowrap; }
+    .cohort-badge-test{ background:var(--amber); border-style:dashed; }
+    .cohort-badge-mixed{ background:var(--orange); border-style:dashed; }
+    .cohort-badge-pending{ background:rgba(255,255,255,0.16); }
+    .cohort-badge-organic{ background:var(--blue); }
+    .cohort-detail{ font-size:12px; font-weight:700; opacity:0.85; margin-top:6px; line-height:1.5; }
+
+    #loading, #denied, #error{ min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+    #loading .l-txt{ font-weight:700; font-size:16px; }
+    #denied .big, #error .big{ font-size:21px; font-weight:800; }
+    #denied .sub, #error .sub{ font-size:14px; opacity:0.9; max-width:300px; }
+    .statebtn{ padding:10px 22px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; font-family:var(--font); background:var(--blue); border:1.5px solid #fff; border-radius:12px; }
+    .spinner{ width:42px; height:42px; border:4px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING (default) -->
+  <div id="loading"><div class="spinner"></div><div class="l-txt">جاري التحميل...</div></div>
+
+  <!-- ACCESS DENIED -->
+  <div id="denied" style="display:none;">
+    <div class="big">✗ لا تملك صلاحية الدخول</div>
+    <div class="sub">يجب تسجيل الدخول بحساب مشرف لعرض هذه الصفحة.</div>
+    <button class="statebtn" type="button" onclick="goHome()">العودة للرئيسية</button>
+  </div>
+
+  <!-- SERVER ERROR -->
+  <div id="error" style="display:none;">
+    <div class="big">⚠ تعذّر الاتصال بالخادم</div>
+    <div class="sub">حدث خطأ في الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.</div>
+    <button class="statebtn" type="button" onclick="init()">إعادة المحاولة</button>
+  </div>
+
+  <!-- MAIN -->
+  <div id="screen" class="wrap" style="display:none;">
+    <div class="topbar">
+      <button class="back" type="button" onclick="goDash()" aria-label="رجوع">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>رجوع</span>
+      </button>
+      <div class="page-title">الإحصائيات</div>
+    </div>
+
+    <div class="strip">
+      <div class="strip-box glass"><div class="strip-num" id="s-total-users">…</div><div class="strip-lbl">إجمالي المسجّلين</div></div>
+      <div class="strip-box glass"><div class="strip-num" id="s-total-charged">…</div><div class="strip-lbl">إجمالي الألعاب المشحونة</div></div>
+    </div>
+
+    <div class="section glass">
+      <div class="sec-title">اكتمال الألعاب مقابل الانقطاع</div>
+      <div class="sec-sub">من الألعاب التي تم شحن رصيدها فعلياً فقط — لا يُحتسب ما لم يصل إلى السؤال الأول.</div>
+      <div id="completion-bars"></div>
+      <div class="rate-line" id="completion-rate"></div>
+    </div>
+
+    <div class="section glass">
+      <div class="sec-title">شعبية الفئات</div>
+      <div class="sec-sub">من كل الألعاب التي بدأت فعلياً (اختيار الفئات)، بغض النظر عن كيفية انتهائها.</div>
+      <div id="category-bars"></div>
+    </div>
+
+    <div class="section glass">
+      <div class="sec-title">التسجيلات يومياً (آخر 14 يوماً)</div>
+      <div id="signups-bars"></div>
+    </div>
+
+    <div class="section glass">
+      <div class="sec-title">الألعاب يومياً (آخر 14 يوماً)</div>
+      <div class="sec-sub">الألعاب التي تم شحن رصيدها فعلياً فقط.</div>
+      <div id="games-bars"></div>
+    </div>
+
+    <div class="section glass">
+      <div class="sec-title">لاعبون مختلفون أسبوعياً (آخر 8 أسابيع)</div>
+      <div id="weekly-bars"></div>
+    </div>
+
+    <div class="section glass">
+      <div class="sec-title">تكرار اللعب</div>
+      <div id="repeat-summary"></div>
+    </div>
+
+    <div class="section glass">
+      <div class="sec-title">الاحتفاظ بين الشهر الأول والثاني</div>
+      <div class="sec-sub" id="retention-sub"></div>
+      <div id="retention-cohorts"></div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const ar = (v)=> (v==null ? 0 : v).toLocaleString('ar');
+    const arPct = (v)=> (v*100).toLocaleString('ar', { maximumFractionDigits: 0 }) + '%';
+
+    function goHome(){ location.href = '/'; }
+    function goDash(){ location.href = '/admin.html'; }
+    function showOnly(id){
+      ['loading','denied','error','screen'].forEach(s=>{
+        document.getElementById(s).style.display = (s===id) ? (s==='screen' ? 'block' : 'flex') : 'none';
+      });
+    }
+    function el(tag, cls, text){
+      const e = document.createElement(tag);
+      if(cls) e.className = cls;
+      if(text != null) e.textContent = text;
+      return e;
+    }
+
+    // A row of proportional bars — no charting library: at this data volume a
+    // handful of width-proportional divs carries the same relative-comparison
+    // information a bar chart would, reusing the panel's existing glass/color look.
+    function renderBars(containerId, rows, labelKey, valueKey){
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      if(!rows.length){ container.appendChild(el('div', 'empty-note', 'لا توجد بيانات بعد')); return; }
+      const max = Math.max(...rows.map(r => r[valueKey]), 1);
+      rows.forEach(r=>{
+        const row = el('div', 'barrow');
+        row.appendChild(el('div', 'blbl', r[labelKey]));
+        const track = el('div', 'btrack');
+        const fill = el('div', 'bfill');
+        fill.style.width = Math.max(2, Math.round((r[valueKey] / max) * 100)) + '%';
+        track.appendChild(fill);
+        row.appendChild(track);
+        row.appendChild(el('div', 'bval', ar(r[valueKey])));
+        container.appendChild(row);
+      });
+    }
+
+    const END_REASON_AR = {
+      completed: 'اكتملت', crashed: 'تعطل الخادم', server_shutdown: 'إعادة نشر',
+      abandoned_midgame: 'انقطع الجميع', all_left_midgame: 'غادر الجميع', all_left_before_start: 'غادروا قبل البدء',
+      abandoned_idle_lobby: 'انتهت مهلة الغرفة'
+    };
+
+    // Zero-fills the trailing 14 Kuwait-local calendar days so a day with no
+    // activity shows an explicit 0 bar, not a gap that could be mistaken for
+    // missing data.
+    function kuwaitYMD(d){ return d.toLocaleDateString('en-CA', { timeZone:'Asia/Kuwait' }); }
+    function last14Days(){
+      const days = [];
+      for(let i = 13; i >= 0; i--){
+        days.push(kuwaitYMD(new Date(Date.now() - i*24*60*60*1000)));
+      }
+      return days;
+    }
+    function zeroFillDaily(rows){
+      const byDay = Object.fromEntries(rows.map(r => [r.day, r.c]));
+      return last14Days().map(day => ({ day: day.slice(5), c: byDay[day] || 0 }));
+    }
+
+    function renderCompletion(d){
+      const rows = d.breakdown.map(r => ({ label: END_REASON_AR[r.end_reason] || r.end_reason, c: r.c }));
+      renderBars('completion-bars', rows, 'label', 'c');
+      const rateEl = document.getElementById('completion-rate');
+      if(d.rate != null){
+        rateEl.innerHTML = `نسبة الاكتمال: <b>${arPct(d.rate)}</b> (${ar(d.completed)} من ${ar(d.total)})`;
+      } else {
+        rateEl.innerHTML = `${ar(d.completed)} من ${ar(d.total)} — <span class="rate-note">${d.note}</span>`;
+      }
+    }
+    function renderCategories(rows){
+      renderBars('category-bars', rows.map(r => ({ label: r.cat, c: r.c })), 'label', 'c');
+    }
+    function renderRepeat(d){
+      const container = document.getElementById('repeat-summary');
+      container.innerHTML = '';
+      const line1 = el('div', 'rate-line');
+      if(d.rate != null){
+        line1.innerHTML = `<b>${arPct(d.rate)}</b> من اللاعبين لعبوا أكثر من مرة (${ar(d.repeat_players)} من ${ar(d.distinct_players)})`;
+      } else {
+        line1.innerHTML = `${ar(d.repeat_players)} من ${ar(d.distinct_players)} لعبوا أكثر من مرة — <span class="rate-note">${d.note}</span>`;
+      }
+      container.appendChild(line1);
+      if(d.avg_gap_days != null){
+        container.appendChild(el('div', 'rate-note', 'متوسط الفجوة بين اللعبات: ' + d.avg_gap_days.toLocaleString('ar', { maximumFractionDigits: 1 }) + ' يوماً'));
+      }
+    }
+    function renderRetention(d){
+      document.getElementById('retention-sub').textContent = d.note;
+      const container = document.getElementById('retention-cohorts');
+      container.innerHTML = '';
+      if(!d.cohorts.length){ container.appendChild(el('div', 'empty-note', 'لا توجد أشهر تسجيل بعد')); return; }
+      d.cohorts.forEach(c=>{
+        const row = el('div', 'cohort-row');
+        const head = el('div', 'cohort-head');
+        const monthLbl = new Date(c.reg_month).toLocaleDateString('ar', { year:'numeric', month:'long', timeZone:'UTC' });
+        head.appendChild(el('span', null, monthLbl + ' — ' + ar(c.cohort_size) + ' مستخدم'));
+        const BADGE = {
+          test_period: ['cohort-badge-test', 'فترة اختبار'],
+          mixed: ['cohort-badge-mixed', 'مختلط — غير موثوق'],
+          pending: ['cohort-badge-pending', 'قيد الانتظار'],
+          organic: ['cohort-badge-organic', 'عضوي']
+        };
+        const [badgeCls, badgeTxt] = BADGE[c.status] || BADGE.organic;
+        head.appendChild(el('span', 'cohort-badge ' + badgeCls, badgeTxt));
+        row.appendChild(head);
+        const detail = el('div', 'cohort-detail');
+        if(c.rate != null){
+          detail.textContent = `نسبة العودة في الشهر التالي: ${arPct(c.rate)} (${ar(c.retained_next_month)} من ${ar(c.cohort_size)})`;
+        } else {
+          detail.textContent = c.note;
+        }
+        row.appendChild(detail);
+        container.appendChild(row);
+      });
+    }
+
+    function applyStatsDetail(d){
+      document.getElementById('s-total-users').textContent = ar(d.totals.total_users);
+      document.getElementById('s-total-charged').textContent = ar(d.totals.total_charged);
+      renderCompletion(d.completion);
+      renderCategories(d.categories);
+      renderBars('signups-bars', zeroFillDaily(d.signupsPerDay), 'day', 'c');
+      renderBars('games-bars', zeroFillDaily(d.gamesPerDay), 'day', 'c');
+      renderBars('weekly-bars', d.playersPerWeek.map(r => ({ label: r.week.slice(5), c: r.c })), 'label', 'c');
+      renderRepeat(d.repeatPlay);
+      renderRetention(d.retention);
+    }
+
+    async function init(){
+      if(!token){ showOnly('denied'); return; }
+      try{
+        const res = await fetch('/api/admin/stats-detail', { headers:{ Authorization:'Bearer ' + token } });
+        if(res.status === 401 || res.status === 403){ showOnly('denied'); return; }
+        if(!res.ok){ showOnly('error'); return; }
+        const d = await res.json().catch(()=> ({}));
+        showOnly('screen');
+        applyStatsDetail(d);
+      }catch(e){ showOnly('error'); }
+    }
+    init();
+  </script>
+</body>
+</html>

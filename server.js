@@ -715,6 +715,192 @@ app.get('/api/admin/crashed-games', requireAdmin, async (req, res) => {
   }
 });
 
+// A rate/percentage is only shown once its denominator reaches this many samples --
+// below it, one additional event swings the number by more than 10 percentage
+// points, too volatile to present as a settled figure. Applies to rates only
+// (completion rate, retention rate, repeat-play rate) -- raw counts and category/
+// daily/weekly bars are shown at any volume, since a count is true regardless of n.
+const MIN_SAMPLE_FOR_RATE = 10;
+
+// Registration windows known to be NON-organic (a deliberate test, not real
+// acquisition) -- manually maintained, NOT derived automatically. The one window
+// that matters today (2026-08-22..08-24, the coworker test -- see CLAUDE.md,
+// Environment & deploys HISTORY) predates the DB-backed maintenance toggle and its
+// admin_actions audit trail entirely, so there is no logged event to reconstruct
+// it from; a maintenance-history lookup couldn't find this window even if built.
+// Add an entry here for any future deliberate test/preview opening BEFORE it
+// happens, so that cohort is never later blended into organic retention data.
+const NON_ORGANIC_REGISTRATION_WINDOWS = [
+  { start: '2026-08-22', end: '2026-08-25', label: 'فترة اختبار مع زميل عمل — ليست بيانات حقيقية' }
+];
+
+// Read-only statistics screen: raw counts and simple breakdowns computed at read
+// time from existing tables, never pre-aggregated/stored -- so a question asked
+// differently later can be re-cut without a migration. See CLAUDE.md for the
+// small-sample and test-cohort policies this endpoint implements.
+app.get('/api/admin/stats-detail', requireAdmin, async (req, res) => {
+  try {
+    const [totalsR, endReasonR, categoryR, signupsDayR, gamesDayR, weeklyPlayersR, repeatR, cohortR] = await Promise.all([
+      pool.query(`
+        SELECT (SELECT COUNT(*)::int FROM users) AS total_users,
+               (SELECT COUNT(*)::int FROM game_attempts WHERE charged_at IS NOT NULL) AS total_charged
+      `),
+      pool.query(`
+        SELECT end_reason, COUNT(*)::int c FROM game_attempts
+         WHERE charged_at IS NOT NULL
+         GROUP BY end_reason ORDER BY c DESC
+      `),
+      pool.query(`
+        SELECT cat, COUNT(*)::int c FROM game_attempts, unnest(categories) AS cat
+         WHERE categories IS NOT NULL
+         GROUP BY cat ORDER BY c DESC
+      `),
+      pool.query(`
+        SELECT ((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kuwait')::date)::text AS day, COUNT(*)::int c
+          FROM users WHERE created_at >= NOW() - INTERVAL '14 days'
+         GROUP BY day
+      `),
+      pool.query(`
+        SELECT ((charged_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kuwait')::date)::text AS day, COUNT(*)::int c
+          FROM game_attempts WHERE charged_at >= NOW() - INTERVAL '14 days'
+         GROUP BY day
+      `),
+      pool.query(`
+        SELECT (date_trunc('week', (charged_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kuwait'))::date)::text AS week,
+               COUNT(DISTINCT uid)::int c
+          FROM game_attempts, unnest(charged_user_ids) AS uid
+         WHERE charged_at >= NOW() - INTERVAL '8 weeks'
+         GROUP BY week ORDER BY week
+      `),
+      pool.query(`
+        WITH per_user AS (
+          SELECT uid, COUNT(*)::int plays
+            FROM game_attempts, unnest(charged_user_ids) AS uid
+           WHERE charged_at IS NOT NULL
+           GROUP BY uid
+        ),
+        gaps AS (
+          SELECT uid, charged_at - LAG(charged_at) OVER (PARTITION BY uid ORDER BY charged_at) AS gap
+            FROM game_attempts, unnest(charged_user_ids) AS uid
+           WHERE charged_at IS NOT NULL
+        )
+        SELECT
+          (SELECT COUNT(*) FROM per_user)::int AS distinct_players,
+          (SELECT COUNT(*) FROM per_user WHERE plays >= 2)::int AS repeat_players,
+          (SELECT AVG(EXTRACT(EPOCH FROM gap)/86400) FROM gaps WHERE gap IS NOT NULL) AS avg_gap_days
+      `),
+      // Non-organic-window membership is evaluated ENTIRELY in SQL, comparing
+      // Postgres timestamp columns directly against timestamp literals -- never a
+      // client-side `new Date(...)` comparison. A JS-side comparison here would
+      // depend on this process's local timezone: pg-node parses a naive
+      // TIMESTAMP column via the multi-argument Date constructor (local-time
+      // semantics), while `new Date('2026-05-01')` (bare ISO date, no time) is
+      // spec-mandated UTC -- two different interpretations of the same moment,
+      // off by exactly this server's UTC offset. On a machine where that offset
+      // is nonzero, that mismatch can flip which calendar day a boundary lands
+      // on. Doing the comparison in SQL sidesteps the asymmetry entirely.
+      pool.query(`
+        WITH cohort AS (
+          SELECT id, created_at, date_trunc('month', created_at) AS reg_month,
+                 (${NON_ORGANIC_REGISTRATION_WINDOWS.map((_, i) =>
+                   `(created_at >= $${i*2+1}::timestamp AND created_at < $${i*2+2}::timestamp)`
+                 ).join(' OR ') || 'FALSE'}) AS is_test_signup
+            FROM users
+        ),
+        played_month AS (
+          SELECT DISTINCT uid, date_trunc('month', charged_at) AS play_month
+            FROM game_attempts, unnest(charged_user_ids) AS uid
+           WHERE charged_at IS NOT NULL
+        )
+        SELECT (c.reg_month::date)::text AS reg_month,
+               COUNT(*)::int AS cohort_size,
+               COUNT(*) FILTER (WHERE EXISTS (
+                 SELECT 1 FROM played_month pm WHERE pm.uid = c.id AND pm.play_month = c.reg_month + INTERVAL '1 month'
+               ))::int AS retained_next_month,
+               bool_and(c.is_test_signup) AS all_test,
+               bool_or(c.is_test_signup) AS any_test
+          FROM cohort c
+         GROUP BY c.reg_month
+         ORDER BY c.reg_month
+      `, NON_ORGANIC_REGISTRATION_WINDOWS.flatMap(w => [w.start, w.end]))
+    ]);
+
+    const rateOrNote = (numerator, denominator) => {
+      if (denominator === 0) return { rate: null, note: 'لا توجد بيانات' };
+      if (denominator < MIN_SAMPLE_FOR_RATE) return { rate: null, note: `العدد صغير جداً لحساب نسبة موثوقة (n=${denominator})` };
+      return { rate: numerator / denominator, note: null };
+    };
+
+    const totalCharged = totalsR.rows[0].total_charged;
+    const completedCount = endReasonR.rows.find(r => r.end_reason === 'completed')?.c || 0;
+
+    const repeatRow = repeatR.rows[0];
+    const distinctPlayers = repeatRow.distinct_players || 0;
+    const repeatPlayers = repeatRow.repeat_players || 0;
+
+    // is_test_signup / all_test / any_test are computed in SQL above (see that
+    // query's comment for why) -- a cohort is a KNOWN TEST period if every member
+    // is a test signup: not "hasn't happened yet" (a time problem) but "isn't
+    // organic acquisition" (a data-meaning problem), and must never render as a
+    // percentage even once enough time has passed. A cohort with even one
+    // test-window member (any_test true, all_test false) already has its rate
+    // distorted -- "mostly organic" is not the same as "organic."
+    const currentMonth = new Date(); currentMonth.setUTCDate(1); currentMonth.setUTCHours(0,0,0,0);
+    const cohorts = cohortR.rows.map(row => {
+      const allTest = row.all_test;
+      const anyTest = row.any_test;
+      const regMonth = new Date(row.reg_month);
+      const nextMonthStart = new Date(Date.UTC(regMonth.getUTCFullYear(), regMonth.getUTCMonth() + 1, 1));
+      const nextMonthElapsed = nextMonthStart < currentMonth;
+      let status, rate = null, note = null;
+      if (allTest) {
+        // With one window today this is unambiguous. If a second window is ever
+        // added and a cohort could straddle both, this label picks the first match
+        // rather than being precise about which -- fine for a label, not for math.
+        status = 'test_period';
+        note = NON_ORGANIC_REGISTRATION_WINDOWS[0].label;
+      } else if (anyTest) {
+        status = 'mixed';
+        note = 'يحتوي هذا الشهر على حسابات اختبار وحسابات حقيقية معاً — أي نسبة هنا غير موثوقة';
+      } else if (!nextMonthElapsed) {
+        status = 'pending';
+        note = 'الشهر التالي لم يكتمل بعد';
+      } else {
+        status = 'organic';
+        const r = rateOrNote(row.retained_next_month, row.cohort_size);
+        rate = r.rate; note = r.note;
+      }
+      return { reg_month: row.reg_month, cohort_size: row.cohort_size, retained_next_month: row.retained_next_month, status, rate, note };
+    });
+
+    res.json({
+      totals: { total_users: totalsR.rows[0].total_users, total_charged: totalCharged },
+      completion: {
+        breakdown: endReasonR.rows,
+        total: totalCharged,
+        completed: completedCount,
+        ...rateOrNote(completedCount, totalCharged)
+      },
+      categories: categoryR.rows,
+      signupsPerDay: signupsDayR.rows,
+      gamesPerDay: gamesDayR.rows,
+      playersPerWeek: weeklyPlayersR.rows,
+      repeatPlay: {
+        distinct_players: distinctPlayers,
+        repeat_players: repeatPlayers,
+        avg_gap_days: repeatRow.avg_gap_days != null ? Number(repeatRow.avg_gap_days) : null,
+        ...rateOrNote(repeatPlayers, distinctPlayers)
+      },
+      retention: {
+        cohorts,
+        note: 'لا توجد بعد بيانات عضوية (طبيعية) كافية لحساب معدل الاحتفاظ — كل الحسابات الحالية سُجّلت خلال فترة اختبار مقصودة، وليست اكتساباً عضوياً للمستخدمين.'
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 // Maintenance status for the admin panel. Reads the DB directly (not the cache) so
 // the panel always shows ground truth, not a value that could be up to
 // MAINTENANCE_CACHE_REFRESH_MS stale. Open to any admin (unlike the toggle below)

@@ -172,6 +172,7 @@ Durable rules only. No live row counts here — they go stale; get counts from t
 - The manual admin refund path still exists for what automation deliberately does NOT cover: a disputed voluntary quit, the documented ~850ms charge-timing gap, and anything genuinely anomalous. It is an exception handler, not the primary mechanism.
 - NOT refundable, unchanged: abandoned_midgame (the 2-minute window expired with nobody returning — the game was delivered), and any attempt where the player has a voluntary-leave event.
 - BUILD ORDER: this cannot be built until the currency ledger exists. Design is settled; implementation belongs on Track A.
+- NO REVENUE METRICS ARE POSSIBLE YET: ARPU, LTV, and any other revenue-based number require the currency ledger, which doesn't exist. This is typically the FIRST thing a buyer's due diligence asks for. It CANNOT be backfilled — whatever isn't recorded from the very first paid game onward is lost permanently, since there is no transaction log to reconstruct it from. Build the ledger with this in mind from day one, not as an afterthought once someone asks for the number.
 - MONEY RULE: when the 2-minute abandonment window (`ROOM_ABANDON_MS`, see Lobby & room lifecycle) expires with nobody having returned, the room is deleted and players are NOT refunded — the game was delivered and they had two minutes to come back.
 
 ## Known blockers before currency ships
