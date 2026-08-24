@@ -24,9 +24,11 @@ const PORT = process.env.PORT || 3000;
 // inverted. Generated once, held for the life of the process.
 const INSTANCE_ID = process.env.RENDER_INSTANCE_ID || crypto.randomUUID();
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-// Maintenance mode: when 'true', only admins may create/join/restart games. Unset or
-// anything other than 'true' = game fully open (default). Flip via the Render env var.
-const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true';
+// Maintenance mode now lives in the DB (maintenance_state table, see below) so
+// flipping it doesn't need a redeploy. This env var is now only the BOOT-TIME
+// SEED for a fresh table and the EMERGENCY FALLBACK if the DB can never be read
+// -- see MAINTENANCE_CACHE_REFRESH_MS and isMaintenanceOn() further down.
+const MAINTENANCE_ENV_FALLBACK = process.env.MAINTENANCE_MODE === 'true';
 
 // Questions come from the Supabase `questions` table. AI generation is now only a
 // gap-filler for short rounds. Defaults ON; set the AI_FALLBACK_ENABLED env var to the
@@ -191,6 +193,15 @@ async function initDB() {
       instance_id TEXT PRIMARY KEY,
       last_seen TIMESTAMP NOT NULL DEFAULT NOW()
     );
+    -- Single-row table (id fixed to 1) holding whether the game is in maintenance
+    -- mode. Read through an in-process cache, never per socket event -- see
+    -- MAINTENANCE_CACHE_REFRESH_MS.
+    CREATE TABLE IF NOT EXISTS maintenance_state (
+      id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_by INTEGER REFERENCES users(id)
+    );
   `);
   // game_attempts already exists in both dev and production from before this column
   // was added, so it can't rely on the CREATE TABLE literal above (which no-ops
@@ -333,6 +344,17 @@ async function initDB() {
     else console.log(`👑 ADMIN_EMAIL set to ${adminEmail} — no matching account yet (will apply once they register)`);
   }
 
+  // Seeded once from the env var so a fresh table never silently starts as "open".
+  // ON CONFLICT DO NOTHING makes this a no-op on every boot after the first, and it
+  // never overwrites a value an admin has since set via the panel.
+  await pool.query(
+    'INSERT INTO maintenance_state (id, enabled) VALUES (1, $1) ON CONFLICT (id) DO NOTHING',
+    [MAINTENANCE_ENV_FALLBACK]
+  );
+  // Awaited so traffic gated by dbReady sees the real DB value, not just the
+  // env-var seed -- same ordering reasoning as the first heartbeat just below.
+  await refreshMaintenanceCache();
+
   // FIRST HEARTBEAT — must land, awaited, before anything else touches
   // game_attempts. Without this ordering there's a window that reopens the exact
   // bug being fixed: dbReady flips, a player creates a room, a game_attempts row
@@ -373,6 +395,7 @@ async function initDB() {
   // Only start recurring after dbReady flips, per the same ordering.
   heartbeatIntervalHandle = setInterval(writeHeartbeat, HEARTBEAT_INTERVAL_MS);
   sweepIntervalHandle = setInterval(runCrashSweep, PERIODIC_SWEEP_INTERVAL_MS);
+  maintenanceRefreshIntervalHandle = setInterval(refreshMaintenanceCache, MAINTENANCE_CACHE_REFRESH_MS);
 }
 initDB().catch(console.error);
 
@@ -594,6 +617,69 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   const pendingMirrorCount = await count('SELECT COUNT(*)::int AS c FROM question_pending_master_edits');
 
   res.json({ activeGames, playersOnline, totalUsers, gamesToday, flaggedCount, pendingMirrorCount });
+});
+
+// Maintenance status for the admin panel. Reads the DB directly (not the cache) so
+// the panel always shows ground truth, not a value that could be up to
+// MAINTENANCE_CACHE_REFRESH_MS stale. Open to any admin (unlike the toggle below)
+// so a non-owner admin can still see whether the game is open.
+app.get('/api/admin/maintenance', requireAdmin, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT ms.enabled, ms.updated_at, u.first_name, u.last_name
+         FROM maintenance_state ms LEFT JOIN users u ON u.id = ms.updated_by
+        WHERE ms.id = 1`
+    );
+    const row = r.rows[0] || { enabled: false };
+    res.json({
+      enabled: !!row.enabled,
+      updated_at: row.updated_at || null,
+      updated_by_name: row.first_name ? `${row.first_name} ${row.last_name}` : null
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Toggle maintenance mode — the launch switch and the kill switch, so restricted to
+// the owner only, same tier as /promote and /demote. A second admin added later
+// must not be able to take the game offline. Same audit pattern as every other
+// mutating admin endpoint: FOR UPDATE lock, single transaction, admin_actions row.
+// No target user/question, so targetId/targetName are null.
+app.post('/api/admin/maintenance', requireAdmin, async (req, res) => {
+  if (!req.isSuperAdmin) return res.status(403).json({ error: 'صلاحية المالك مطلوبة' });
+  const enabled = req.body?.enabled;
+  const reason = (req.body?.reason || '').toString().trim();
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
+  try {
+    const result = await withTransaction(async (client) => {
+      const r = await client.query('SELECT enabled FROM maintenance_state WHERE id=1 FOR UPDATE');
+      const before = r.rows[0] ? r.rows[0].enabled : false;
+      if (before === enabled) {
+        throw new AdminActionAbort(400, { error: enabled ? 'الصيانة مفعّلة بالفعل' : 'الصيانة متوقفة بالفعل' });
+      }
+      await client.query(
+        'UPDATE maintenance_state SET enabled=$1, updated_at=NOW(), updated_by=$2 WHERE id=1',
+        [enabled, req.adminId]
+      );
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName,
+        action: enabled ? 'maintenance_on' : 'maintenance_off',
+        targetId: null, targetName: null,
+        beforeValue: String(before), afterValue: String(enabled), reason
+      });
+      return { enabled };
+    });
+    // Write-through: update this process's own cache immediately instead of
+    // waiting for the next periodic refresh — see the comment on maintenanceCache.
+    maintenanceCache = { enabled: result.enabled };
+    res.json({ ok: true, enabled: result.enabled });
+  } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 const ANSWER_LETTERS = ['A', 'B', 'C', 'D'];
@@ -1604,6 +1690,7 @@ process.on('SIGTERM', async () => {
   // that competes with the SIGTERM write for the same tight time budget.
   if (heartbeatIntervalHandle) clearInterval(heartbeatIntervalHandle);
   if (sweepIntervalHandle) clearInterval(sweepIntervalHandle);
+  if (maintenanceRefreshIntervalHandle) clearInterval(maintenanceRefreshIntervalHandle);
   const liveAttemptIds = Object.values(rooms).map(r => r.attemptId).filter(Boolean);
   if (liveAttemptIds.length) {
     try {
@@ -1640,6 +1727,49 @@ process.on('SIGTERM', async () => {
   process.exit(0);   // only reached after the await above resolves or times out
 });
 
+// Maintenance mode is DB-backed so flipping it takes effect without a redeploy --
+// a redeploy drops every in-memory room, which used to mean turning maintenance ON
+// to stop new games also killed the games already running. Cached in-process and
+// refreshed on a timer (never queried per socket event) so a toggle costs nothing
+// on the hot path.
+const MAINTENANCE_CACHE_REFRESH_MS = 10 * 1000;
+// The admin toggle endpoint updates this SAME variable synchronously the instant
+// its transaction commits -- so in the normal single-instance steady state (see
+// CLAUDE.md, Environment & deploys) the toggle is effectively instant for all
+// traffic, since there's only one process and it just wrote through itself. The
+// periodic refresh below is a safety net for a SECOND instance still holding live
+// traffic during a deploy's ~60s overlap window (confirmed 2026-08-23/24) -- that
+// instance keeps serving its last-cached value for up to
+// MAINTENANCE_CACHE_REFRESH_MS after the toggle, not instantly.
+let maintenanceCache = { enabled: MAINTENANCE_ENV_FALLBACK };
+let maintenanceRefreshFailureCount = 0;
+let maintenanceRefreshIntervalHandle = null;
+function isMaintenanceOn() { return maintenanceCache.enabled; }
+
+// A FAILED read changes nothing -- the cache keeps serving its last known-good
+// value, which until the very first successful read is still the env-var seed
+// above. Deliberately not a fail-open/fail-closed choice: a transient blip is
+// invisible to players, and a DB outage that never recovers falls back to
+// whatever the env var says, indefinitely -- the "emergency override" role the
+// env var keeps now that the DB is the normal source of truth.
+// Logged loudly after 3 consecutive failures, same pattern as writeHeartbeat's
+// heartbeatFailureCount -- without this, a sustained refresh failure is silent: an
+// admin flips the toggle, the write succeeds, but this process keeps serving a
+// stale cached value for hours with nothing anywhere saying so.
+async function refreshMaintenanceCache() {
+  try {
+    const r = await pool.query('SELECT enabled FROM maintenance_state WHERE id=1');
+    if (r.rows[0]) maintenanceCache = { enabled: r.rows[0].enabled };
+    maintenanceRefreshFailureCount = 0;
+  } catch (e) {
+    maintenanceRefreshFailureCount++;
+    console.error(`❌ maintenance cache refresh failed (${maintenanceRefreshFailureCount} in a row): ${e.message}`);
+    if (maintenanceRefreshFailureCount === 3) {
+      console.error('❌ maintenance cache has failed to refresh 3 times in a row (~30s) -- serving a possibly stale value; an admin toggle may not be taking effect on this instance');
+    }
+  }
+}
+
 io.use((socket, next) => {
   const payload = verifyToken(socket.handshake.auth.token);
   if (!payload) return next(new Error('غير مصرح'));
@@ -1659,7 +1789,7 @@ io.on('connection', socket => {
     // See dbReady's own comment — this closes the boot-sweep race: no fresh attempt
     // row can be inserted until the sweep has already run and committed.
     if (!dbReady) return socket.emit('error_msg', 'الخادم لا يزال يجهز، حاول خلال لحظات');
-    if (MAINTENANCE_MODE && !socket.isAdmin) {
+    if (isMaintenanceOn() && !socket.isAdmin) {
       return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
     }
     // Enforce 6–12 categories on the server too (mirrors the client check).
@@ -1679,19 +1809,23 @@ io.on('connection', socket => {
   });
 
   socket.on('join_room', ({ code }) => {
-    if (MAINTENANCE_MODE && !socket.isAdmin) {
-      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
-    }
     const room = rooms[code];
-    // A room mid-cleanup (room.endTimer is only ever set in the post-game
-    // window, awaiting play_again or its 120s auto-delete) is treated as
-    // gone for join/rejoin purposes too — same message as not existing.
-    if (!room || room.endTimer) return socket.emit('error_msg', 'الغرفة غير موجودة');
     const uid = socket.user.id;
     // Someone already IN this room (by user id) is allowed back in even
     // after the game has started — everyone else still gets the usual
     // rejection. No new player may enter a started game.
-    const isReturningPlayer = room.status !== 'waiting' && !!room.players[uid];
+    const isReturningPlayer = !!room && room.status !== 'waiting' && !!room.players[uid];
+    // Maintenance blocks only a genuinely NEW join — never a player already on
+    // this room's roster reconnecting to a game that's still running. Gating this
+    // ahead of isReturningPlayer would strand an already-charged, already-playing
+    // user exactly when they most need to get back in.
+    if (isMaintenanceOn() && !socket.isAdmin && !isReturningPlayer) {
+      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
+    }
+    // A room mid-cleanup (room.endTimer is only ever set in the post-game
+    // window, awaiting play_again or its 120s auto-delete) is treated as
+    // gone for join/rejoin purposes too — same message as not existing.
+    if (!room || room.endTimer) return socket.emit('error_msg', 'الغرفة غير موجودة');
     if (room.status !== 'waiting' && !isReturningPlayer) {
       return socket.emit('error_msg', 'اللعبة بدأت');
     }
@@ -1734,11 +1868,15 @@ io.on('connection', socket => {
   // a true prediction — but the response is a bare boolean either way, no
   // room details, so a dead/foreign code leaks nothing about what it was.
   socket.on('check_rejoin', ({ code }) => {
-    if (MAINTENANCE_MODE && !socket.isAdmin) {
-      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
-    }
     const room = rooms[code];
     const available = !!room && room.status !== 'waiting' && !room.endTimer && !!room.players[socket.user.id];
+    // Same reordering as join_room: only a non-returning caller can be blocked by
+    // maintenance. available already IS exactly that "is this a genuine returning
+    // player" predicate, so it's reused directly — still leaks nothing about a
+    // dead/foreign code either way, maintenance or not.
+    if (isMaintenanceOn() && !socket.isAdmin && !available) {
+      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
+    }
     socket.emit('rejoin_available', { available });
   });
 
@@ -1795,7 +1933,7 @@ io.on('connection', socket => {
   // real gap the old field-by-field reset had: it was never cleared here before,
   // so a question served in game 1 stayed valid for a flag report in game 2.
   socket.on('play_again', () => {
-    if (MAINTENANCE_MODE && !socket.isAdmin) {
+    if (isMaintenanceOn() && !socket.isAdmin) {
       return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
     }
     const code = socket.roomCode; const oldRoom = rooms[code];
@@ -1818,6 +1956,12 @@ io.on('connection', socket => {
   socket.on('start_game', async () => {
     const code = socket.roomCode; const room = rooms[code];
     if (!room || room.host !== socket.user.id) return;
+    // A lobby that hasn't started is not a game in progress — block it the same
+    // as create_room, before anything is mutated, so the room is left exactly as
+    // it was (still 'waiting', idle timer untouched) rather than half-transitioned.
+    if (isMaintenanceOn() && !socket.isAdmin) {
+      return socket.emit('maintenance_blocked', 'اللعبة قيد الصيانة حالياً، حاول لاحقاً');
+    }
     clearRoomIdleTimer(room);   // leaving 'waiting' — idle timeout doesn't apply mid-game
     room.status = 'loading';
     io.to(code).emit('game_loading', { message:'جاري تحضير الأسئلة...' });
