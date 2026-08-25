@@ -45,10 +45,14 @@
     /* Filter tabs — splits the single-screen to-do list into quick-judgement vs
        long-running-repair subsets without a second screen or endpoint. */
     .filterbar{ display:flex; gap:8px; margin-bottom:14px; }
-    .fbtn{ flex:1 1 0; padding:9px 8px; border-radius:10px; border:1.5px solid #fff;
-      background:rgba(255,255,255,0.10); color:#fff; font-size:13px; font-weight:800;
+    .fbtn{ flex:1 1 0; padding:9px 8px; border-radius:10px; border:1px solid var(--glass-border);
+      background:var(--glass); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+      color:#fff; font-size:13px; font-weight:800;
       font-family:var(--font); cursor:pointer; text-align:center; }
-    .fbtn.active{ background:var(--blue); }
+    /* Selected state is a saturated surface, not a dark translucent one -- takes
+       the bold-chrome border family (matches .btn-keep and every other saturated
+       button on this page), not the smoked-glass border above. */
+    .fbtn.active{ background:var(--green); border:1.5px solid #fff; }
     .fbtn:active{ transform:scale(0.98); }
     .filter-empty{ padding:34px 16px; text-align:center; font-size:16px; font-weight:800; }
 
