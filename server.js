@@ -245,20 +245,30 @@ async function initDB() {
       ON pulp_ledger (user_id) WHERE type = 'signup_bonus';
     -- Deliberately MUTABLE, unlike pulp_ledger above -- shown_at is set once the
     -- player has seen the popup, mirroring question_flags' resolved/resolved_at
-    -- pattern. Covers BOTH refund triggers (a crashed game via runCrashSweep, and a
-    -- charge_reversal via the stale-room path above) with one player-facing
-    -- notice: "something went wrong, your pulp was returned" -- the trigger differs,
-    -- the thing the player needs to know does not.
-    CREATE TABLE IF NOT EXISTS pulp_refund_notifications (
+    -- pattern. Originally refund-only (pulp_refund_notifications); GENERALIZED
+    -- 2026-08-26 to also carry admin-credit notices ("instant update" -- see
+    -- CLAUDE.md, Currency display design) rather than inventing a second table +
+    -- second overlay for the same kind of event ("your balance changed and you
+    -- weren't there to see it"). The type column covers three triggers under two
+    -- player-facing messages: 'refund' (a crashed game via runCrashSweep, OR a
+    -- charge_reversal via the stale-room path in askQuestion -- both share the
+    -- identical "your pulp was returned" wording, so both are 'refund', not a
+    -- third type) and 'admin_credit' (the manual tool). Debits never appear here
+    -- -- silent by design, see CLAUDE.md. attempt_id is required for 'refund' only
+    -- (an admin credit isn't tied to any game) -- same conditional-NOT-NULL CHECK
+    -- pattern pulp_ledger already uses above, not a new convention.
+    CREATE TABLE IF NOT EXISTS pulp_notifications (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id),
-      attempt_id INTEGER NOT NULL REFERENCES game_attempts(id),
+      type TEXT NOT NULL CHECK (type IN ('refund','admin_credit')),
+      attempt_id INTEGER REFERENCES game_attempts(id),
       amount INTEGER NOT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      shown_at TIMESTAMP
+      shown_at TIMESTAMP,
+      CHECK ((type = 'refund') = (attempt_id IS NOT NULL))
     );
-    CREATE INDEX IF NOT EXISTS idx_pulp_refund_notifications_unshown
-      ON pulp_refund_notifications(user_id) WHERE shown_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_pulp_notifications_unshown
+      ON pulp_notifications(user_id) WHERE shown_at IS NULL;
   `);
   // game_attempts already exists in both dev and production from before this column
   // was added, so it can't rely on the CREATE TABLE literal above (which no-ops
@@ -413,6 +423,27 @@ async function initDB() {
     );
     if (r.rowCount > 0) console.log(`👑 Owner (super-admin) privileges ensured for ${adminEmail}`);
     else console.log(`👑 ADMIN_EMAIL set to ${adminEmail} — no matching account yet (will apply once they register)`);
+  }
+
+  // PRE-EXISTING-ACCOUNT BACKFILL, added when the pulp system shipped
+  // (2026-08-26): any account created before pulp_ledger existed has no
+  // signup_bonus row and would otherwise sit at a real balance of 0 forever —
+  // unable to ever start a game once the currency gate is live, through no
+  // action of their own. Idempotent by construction, not by a run-once flag:
+  // the NOT EXISTS guard means this only ever matches accounts still missing a
+  // signup_bonus row, so after the first boot post-deploy it matches nobody, on
+  // every boot after that, forever — same "safe by DB state, not by
+  // application code remembering what it already ran" principle as the
+  // idx_pulp_ledger_*_once indexes above. Grants the SAME signup_bonus type and
+  // amount a real signup gets — this is the bonus every account gets, not a
+  // special one-time grant needing separate accounting or its own ledger type.
+  const pulpBackfillR = await pool.query(`
+    INSERT INTO pulp_ledger (user_id, amount, type)
+    SELECT u.id, $1, 'signup_bonus' FROM users u
+    WHERE NOT EXISTS (SELECT 1 FROM pulp_ledger pl WHERE pl.user_id = u.id AND pl.type = 'signup_bonus')
+  `, [SIGNUP_BONUS_PULPS]);
+  if (pulpBackfillR.rowCount > 0) {
+    console.log(`💡 pulp signup-bonus backfill: granted ${pulpBackfillR.rowCount} pre-existing account(s) ${SIGNUP_BONUS_PULPS} lamps`);
   }
 
   // Seeded once from the env var so a fresh table never silently starts as "open".
@@ -637,6 +668,30 @@ class InsufficientPulpBalance extends Error {
   constructor(userIds) { super('insufficient pulp balance'); this.userIds = userIds; }
 }
 
+// See CLAUDE.md, Currency display design -- ARABIC NUMBER AGREEMENT. Only the
+// refund notice ever carries a variable count, and it is ALWAYS exactly 1 --
+// deliberately two branches, not a full Arabic-numeral-agreement table, since
+// the dual/plural forms would handle counts that cannot occur.
+function formatLampPhrase(n) {
+  return n === 1 ? 'لمبة واحدة' : `${n} لمبة`;
+}
+
+// Builds the player-facing message for one pulp_notifications row. Message text
+// is never stored in the table -- built fresh here every time (at /api/me read
+// time, and again at live-push time from the admin route), same as the refund
+// message always was before this table generalized to cover credits too. NOTE
+// ON WORDING: رصيد appears here deliberately, unlike the six charge/refund
+// strings that dropped it -- there رصيد was standing IN for the currency name
+// (wrong: لمبة is the name). Here it names WHERE the لمبات sit ("تم إضافة N
+// لمبة إلى رصيدك" -- lamps are the thing, رصيدك is the account they land in),
+// same as "نقطة إلى رصيدك" reads fine for points. Do not "fix" this to match
+// the other six -- see CLAUDE.md, Currency display design.
+function buildPulpNotificationMessage(type, amount) {
+  return type === 'refund'
+    ? `نعتذر، تعطلت إحدى ألعابك قبل اكتمالها وأعدنا لك ${formatLampPhrase(amount)}`
+    : `تم إضافة ${formatLampPhrase(amount)} إلى رصيدك`;
+}
+
 app.post('/api/register', async (req, res) => {
   const { first_name, last_name, phone, dob, gender, password } = req.body;
   const email = (req.body.email || '').trim().toLowerCase();
@@ -663,7 +718,14 @@ app.post('/api/register', async (req, res) => {
       return newUser;
     });
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: safeUser(user) });
+    // BUG, FOUND 2026-08-26 by driving the real UI: safeUser() never carried
+    // pulp_balance (see /api/me, which adds it separately) -- so a fresh signup
+    // set `me` from THIS response, and the home pill rendered from a balance
+    // that was simply absent, showing 0 until something else (e.g. game_end)
+    // eventually refetched /api/me. The signup bonus itself always landed
+    // correctly -- this was a display gap on this response only, not a ledger
+    // bug. Same fix applied to /api/login below for the identical reason.
+    res.json({ token, user: { ...safeUser(user), pulp_balance: await getPulpBalance(user.id) } });
   } catch(e) {
     if (e.code === '23505') return res.status(400).json({ error: 'البريد أو الهاتف مسجل مسبقاً' });
     res.status(500).json({ error: 'خطأ في الخادم: ' + e.message });
@@ -684,7 +746,8 @@ app.post('/api/login', async (req, res) => {
     // Banned accounts cannot obtain a fresh session.
     if (user.is_banned) return res.status(403).json({ error: 'تم حظر حسابك. للاستفسار تواصل مع الإدارة.' });
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: safeUser(user) });
+    // Same fix as /api/register above -- see the comment there.
+    res.json({ token, user: { ...safeUser(user), pulp_balance: await getPulpBalance(user.id) } });
   } catch (e) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
@@ -698,21 +761,22 @@ app.get('/api/me', async (req, res) => {
     const r = await pool.query('SELECT * FROM users WHERE id=$1', [payload.id]);
     if (!r.rows[0]) return res.status(404).json({ error: 'غير موجود' });
     const pulpBalance = await getPulpBalance(payload.id);
-    // Not a socket emit -- the player is by definition disconnected at the moment
-    // a refund happens (see CLAUDE.md, Currency charge boundary). This is what
-    // "notified on next app load" actually means: whatever's still unshown here,
-    // shown once and acknowledged via /api/pulp-refund-notifications/:id/ack.
+    // Covers a player who was offline for either trigger (a refund, OR an admin
+    // credit that found no live socket to push to -- see CLAUDE.md, "instant
+    // update"). This is what "notified on next app load" actually means: whatever
+    // is still unshown here, shown once and acknowledged via
+    // /api/pulp-notifications/:id/ack.
     const pending = await pool.query(
-      `SELECT id, amount FROM pulp_refund_notifications WHERE user_id=$1 AND shown_at IS NULL ORDER BY created_at`,
+      `SELECT id, type, amount FROM pulp_notifications WHERE user_id=$1 AND shown_at IS NULL ORDER BY created_at`,
       [payload.id]
     );
     res.json({ ...safeUser(r.rows[0]),
       is_admin: r.rows[0].is_admin || false,
       is_super_admin: r.rows[0].is_super_admin || false,
       pulp_balance: pulpBalance,
-      pending_refund_notifications: pending.rows.map(n => ({
+      pending_notifications: pending.rows.map(n => ({
         id: n.id,
-        message: `نعتذر، تعطلت إحدى ألعابك قبل اكتمالها وتم إرجاع ${n.amount} من رصيدك`
+        message: buildPulpNotificationMessage(n.type, n.amount)
       }))
     });
   } catch (e) {
@@ -720,9 +784,12 @@ app.get('/api/me', async (req, res) => {
   }
 });
 
-// Marks one refund notice as shown, scoped to the caller's own account so one
-// user can never acknowledge (and hide) another's notice.
-app.post('/api/pulp-refund-notifications/:id/ack', async (req, res) => {
+// Marks one pulp notice (refund OR admin credit) as shown, scoped to the caller's
+// own account so one user can never acknowledge (and hide) another's notice. The
+// SAME idempotent ack whether the popup was reached live (pulp_update) or from
+// pending_notifications on the next load -- there's exactly one way a notice
+// ever gets marked shown, regardless of how it was delivered.
+app.post('/api/pulp-notifications/:id/ack', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'غير مصرح' });
@@ -730,7 +797,7 @@ app.post('/api/pulp-refund-notifications/:id/ack', async (req, res) => {
   if (!Number.isInteger(notifId)) return res.status(400).json({ error: 'بيانات غير صالحة' });
   try {
     await pool.query(
-      'UPDATE pulp_refund_notifications SET shown_at = NOW() WHERE id=$1 AND user_id=$2 AND shown_at IS NULL',
+      'UPDATE pulp_notifications SET shown_at = NOW() WHERE id=$1 AND user_id=$2 AND shown_at IS NULL',
       [notifId, payload.id]
     );
     res.json({ ok: true });
@@ -1491,6 +1558,9 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
         LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`,
       listParams
     );
+    // Batched, not per-row -- one query for the whole page's balances rather than
+    // N round trips (same reasoning as getPulpBalances' other callers).
+    const pulpBalances = await getPulpBalances(r.rows.map(u => u.id));
     const users = r.rows.map(u => {
       const lvl = getLevel(u.total_score || 0);
       return {
@@ -1500,6 +1570,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
         points: u.total_score || 0,
         level_name: lvl.name,
         level: lvl.level,
+        pulp_balance: pulpBalances[u.id],
         created_at: u.created_at,
         is_admin: !!u.is_admin,
         is_super_admin: !!u.is_super_admin,
@@ -1546,6 +1617,100 @@ app.post('/api/admin/users/:id/points', requireAdmin, async (req, res) => {
       return { points: newPoints, level_name: lvl.name, level: lvl.level };
     });
     res.json({ ok: true, ...result });
+  } catch (e) {
+    if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Credit/debit the pulp ledger by a SIGNED amount -- mirrors /points exactly (one
+// endpoint, sign decides direction), but writes an admin_credit/admin_debit
+// pulp_ledger row instead of touching a balance column, since balance is never
+// stored (see getPulpBalance). OWNER ONLY, unlike /points -- creating money is a
+// bigger risk than adjusting a score, same tier as the maintenance toggle. A debit
+// that would take the balance negative is rejected outright and nothing is written
+// -- unlike /points, which floors a negative total at 0, this is money, not a
+// display number, so there is no silent clamp.
+app.post('/api/admin/users/:id/pulp', requireAdmin, async (req, res) => {
+  if (!req.isSuperAdmin) return res.status(403).json({ error: 'صلاحية المالك مطلوبة' });
+  const targetId = parseInt(req.params.id, 10);
+  const amount = parseInt(req.body?.amount, 10);
+  const reason = (req.body?.reason || '').toString().trim();
+  if (!Number.isInteger(targetId) || !Number.isInteger(amount) || amount === 0)
+    return res.status(400).json({ error: 'بيانات غير صالحة' });
+  if (!reason) return res.status(400).json({ error: 'السبب مطلوب' });
+  if (reason.length > 500) return res.status(400).json({ error: 'السبب طويل جداً (الحد الأقصى 500 حرف)' });
+  try {
+    const result = await withTransaction(async (client) => {
+      // Locking the users row is the same concurrency-serialization trick
+      // askQuestion()'s charge transaction already uses -- there's no balance row
+      // to lock directly (balance is a derived SUM), so the user row stands in for
+      // one, exactly as documented there.
+      const r = await client.query(ADMIN_TARGET_LOCK_SQL, [targetId]);
+      const target = r.rows[0];
+      if (!target) throw new AdminActionAbort(404, { error: 'المستخدم غير موجود' });
+      const balR = await client.query(
+        'SELECT COALESCE(SUM(amount),0)::int AS balance FROM pulp_ledger WHERE user_id=$1',
+        [targetId]
+      );
+      const before = balR.rows[0].balance;
+      const after = before + amount;
+      if (after < 0) {
+        // Not a permission failure -- AdminActionAbort (see requireAdmin/the 403/404
+        // throws above) is reserved for those and deliberately leaves no audit row,
+        // since there's nothing real to log. This IS real: an authorized admin, a
+        // real target, a real supplied reason, an action that was refused only by a
+        // business rule. Logged rather than silently discarded so a pattern of
+        // rejected attempts against one account is visible in admin_actions, not
+        // just in this one response -- see CLAUDE.md, "Admin pulp credit/debit
+        // tool." after_value is deliberately left NEGATIVE here (a committed
+        // credit/debit below can never produce one) -- that sign is the marker that
+        // this row records a rejection, and after_value - before_value reconstructs
+        // the attempted amount without a dedicated column.
+        await logAdminAction(client, {
+          actorId: req.adminId, actorName: req.adminName, action: 'pulp_debit_rejected',
+          targetId, targetName: `${target.first_name} ${target.last_name}`,
+          beforeValue: String(before), afterValue: String(after), reason
+        });
+        return { rejected: true };
+      }
+      await client.query(
+        `INSERT INTO pulp_ledger (user_id, amount, type, admin_id, reason) VALUES ($1, $2, $3, $4, $5)`,
+        [targetId, amount, amount > 0 ? 'admin_credit' : 'admin_debit', req.adminId, reason]
+      );
+      await logAdminAction(client, {
+        actorId: req.adminId, actorName: req.adminName,
+        action: amount > 0 ? 'pulp_credit' : 'pulp_debit',
+        targetId, targetName: `${target.first_name} ${target.last_name}`,
+        beforeValue: String(before), afterValue: String(after), reason
+      });
+      // NOTIFY ON CREDIT, SILENT ON DEBIT (see CLAUDE.md, Currency display design):
+      // a credit gets a persisted notice -- the SAME table/mechanism a crash
+      // refund already uses, not a second pattern for the same kind of event
+      // ("your balance changed and you weren't there to see it"). Written inside
+      // this same transaction so the credit and its notice land or roll back
+      // together. A debit never reaches here -- the pill still updates (via the
+      // live push below), just without a popup: it's almost always a correction,
+      // already logged to admin_actions above, and announcing it would start an
+      // argument nobody asked for.
+      let notification = null;
+      if (amount > 0) {
+        const notifR = await client.query(
+          `INSERT INTO pulp_notifications (user_id, type, amount) VALUES ($1, 'admin_credit', $2) RETURNING id`,
+          [targetId, amount]
+        );
+        notification = { id: notifR.rows[0].id, message: buildPulpNotificationMessage('admin_credit', amount) };
+      }
+      return { rejected: false, balance: after, notification };
+    });
+    if (result.rejected) return res.status(400).json({ error: 'هذا الخصم سيجعل الرصيد سالباً — غير مسموح' });
+    // INSTANT UPDATE, after commit (see CLAUDE.md): pushed to this one user's own
+    // live socket(s) only, never broadcast to a room. No live socket -> a no-op
+    // here is already correct -- the balance and any notification are durably
+    // committed above, so the next /api/me (next load, or the client's own
+    // game_end refetch) picks them up exactly as if this push never existed.
+    pushPulpUpdate(targetId, result.balance, result.notification);
+    res.json({ ok: true, balance: result.balance });
   } catch (e) {
     if (e instanceof AdminActionAbort) return res.status(e.status).json(e.body);
     res.status(500).json({ error: 'خطأ في الخادم' });
@@ -2156,7 +2321,7 @@ async function runCrashSweep() {
               // call -- ties the notification 1:1 to a real refund, never
               // duplicated by a harmless re-sweep of an already-handled attempt.
               await client.query(
-                'INSERT INTO pulp_refund_notifications (user_id, attempt_id, amount) VALUES ($1, $2, $3)',
+                `INSERT INTO pulp_notifications (user_id, type, attempt_id, amount) VALUES ($1, 'refund', $2, $3)`,
                 [uid, attemptId, PULP_COST_PER_GAME]
               );
               refundCount++;
@@ -2328,6 +2493,7 @@ io.on('connection', socket => {
     addOrTakeoverPlayer(rooms[code], socket);
     socket.emit('room_created', { code, categories });
     io.to(code).emit('players_update', getPlayers(code));
+    broadcastAffordability(code).catch(e => console.error(`❌ affordability broadcast failed [room=${code}]: ${e.message}`));
     resetRoomIdleTimer(code);
     insertAttemptRow(rooms[code]);
   });
@@ -2382,6 +2548,7 @@ io.on('connection', socket => {
       });
     }
     io.to(code).emit('players_update', getPlayers(code));
+    broadcastAffordability(code).catch(e => console.error(`❌ affordability broadcast failed [room=${code}]: ${e.message}`));
     resetRoomIdleTimer(code);
   });
 
@@ -2469,7 +2636,35 @@ io.on('connection', socket => {
     // explicitly anyway rather than relied upon, same principle as makeRoom() itself.
     if (oldRoom.abandonTimer) clearTimeout(oldRoom.abandonTimer);
     Object.values(oldRoom.players).forEach(resetPlayerForNewAttempt);
-    rooms[code] = makeRoom(code, oldRoom.host, oldRoom.categories, oldRoom.players);
+    // BUG, FOUND 2026-08-26 by driving the real UI: a player who drops mid-game is
+    // marked disconnected but kept in room.players (see markPlayerDisconnected) --
+    // correct WITHIN a game, since a rage-quit and a disconnect are
+    // indistinguishable and a rejoin path exists to bring them back. play_again
+    // used to carry that ENTIRE roster forward via makeRoom regardless, and the
+    // charge at the new attempt's question 1 takes Object.keys(room.players) --
+    // so a player who dropped out of game 1 was silently charged for game 2,
+    // which they never agreed to, were never present for, and were never told
+    // about. Across a play_again boundary neither justification from "within a
+    // game" holds: this is a NEW attempt, there is no rejoin to protect (nothing
+    // to rejoin INTO), and a disconnected player is demonstrably gone -- no live
+    // socket, by definition. So only CONNECTED players carry forward; a
+    // disconnected one simply isn't a member of the new room at all -- not
+    // charged, not shown in the new lobby, nothing to clean up for them because
+    // they were never part of this attempt in the first place.
+    const survivingPlayers = {};
+    for (const [uid, p] of Object.entries(oldRoom.players)) {
+      if (p.connected) survivingPlayers[uid] = p;
+    }
+    // The presser is always connected -- this handler only ever runs on their
+    // own live socket -- so survivingPlayers can never be empty here.
+    let newHost = oldRoom.host;
+    if (!survivingPlayers[newHost]) {
+      // The old host was the one who dropped. room_reset (below) already carries
+      // the new host to every client, and the existing room_reset handler already
+      // sets isHost from that payload -- no separate host_changed emit needed.
+      newHost = Number(Object.keys(survivingPlayers)[0]);
+    }
+    rooms[code] = makeRoom(code, newHost, oldRoom.categories, survivingPlayers);
     const room = rooms[code];
     io.to(code).emit('room_reset', { code, categories: room.categories, host: room.host });
     io.to(code).emit('players_update', getPlayers(code));
@@ -2482,10 +2677,17 @@ io.on('connection', socket => {
     // get refused -- it doesn't block play_again or start_game itself.
     const chargedIds = Object.keys(room.players).map(Number);
     const balances = await getPulpBalances(chargedIds);
+    if (rooms[code] === room) {
+      // Reuses the balances just fetched above for the low-balance warning --
+      // one query serves both, rather than broadcastAffordability firing a
+      // second one (see CLAUDE.md, Currency display design, lobby affordability).
+      const affordability = Object.fromEntries(chargedIds.map(id => [id, balances[id] >= PULP_COST_PER_GAME]));
+      io.to(code).emit('affordability_update', affordability);
+    }
     const lowIds = chargedIds.filter(id => balances[id] < PULP_COST_PER_GAME);
     if (lowIds.length && rooms[code] === room) {
       const names = lowIds.map(id => room.players[id].display_name).join('، ');
-      io.to(code).emit('error_msg', `تنبيه: لا يملك ${names} رصيداً كافياً للعبة القادمة`);
+      io.to(code).emit('error_msg', `تنبيه: لا يملك ${names} لمبات كافية للعبة القادمة`);
     }
   });
 
@@ -2509,8 +2711,20 @@ io.on('connection', socket => {
       const balances = await getPulpBalances(chargedIds);
       const insufficientIds = chargedIds.filter(id => balances[id] < PULP_COST_PER_GAME);
       if (insufficientIds.length) {
+        // BUG, FOUND 2026-08-26 by driving the real UI: this used to emit
+        // error_msg (a toast) -- but startGame() already calls show('s-loading')
+        // optimistically the instant the button is pressed, client-side, before
+        // the server ever answers. A toast doesn't undo that, so the host was
+        // left staring at "جاري تحضير الأسئلة" forever with nothing telling them
+        // why. game_start_failed is the event that actually returns the client
+        // to the lobby (see showGameStartFailedOverlay) -- the exact same event
+        // the charge-failure branches in askQuestion() already use for the
+        // identical reason. Broadcast to the whole room, not just the presser,
+        // matching those branches: harmless for a non-host client (already in
+        // the lobby, so show('s-lobby') is a no-op), and it tells everyone why
+        // the game didn't start rather than leaving the host to explain it.
         const names = insufficientIds.map(id => room.players[id].display_name).join('، ');
-        return io.to(code).emit('error_msg', `لا يملك ${names} رصيداً كافياً لبدء اللعبة`);
+        return io.to(code).emit('game_start_failed', { message: `لا يملك ${names} لمبات كافية لبدء اللعبة` });
       }
     }
     clearRoomIdleTimer(room);   // leaving 'waiting' — idle timeout doesn't apply mid-game
@@ -2596,6 +2810,54 @@ function getPlayers(code) {
     connected: p.connected,
     answered: !!room.answered[p.id]
   })).sort((a,b) => b.sessionScore-a.sessionScore);
+}
+
+// Lobby affordability indicator (see CLAUDE.md, Currency display design): a
+// dimmed bulb next to a roster member's name when they can't afford the next
+// game. Broadcast as a BOOLEAN ONLY, per user id, never the balance itself --
+// a courtesy signal; start_game's own pre-flight remains the real gate.
+//
+// Deliberately a SEPARATE, fire-and-forget broadcast rather than folded into
+// getPlayers() above -- that function is called synchronously from several
+// socket handlers that would otherwise all need to become async (and pick up
+// the file's own `rooms[code] === room` staleness re-check) just to await a
+// balance lookup for a courtesy indicator. No-ops outside the lobby --
+// affordability is a 'waiting'-room concept only, by design.
+async function broadcastAffordability(code) {
+  const room = rooms[code];
+  if (!room || room.status !== 'waiting') return;
+  const ids = Object.keys(room.players).map(Number);
+  const balances = await getPulpBalances(ids);
+  if (rooms[code] !== room) return;   // room went stale while the balance query was in flight
+  const affordability = Object.fromEntries(ids.map(id => [id, balances[id] >= PULP_COST_PER_GAME]));
+  io.to(code).emit('affordability_update', affordability);
+}
+
+// Instant delivery for an admin pulp balance change -- see CLAUDE.md, Currency
+// display design, "instant update". Called from the admin credit/debit route
+// (already async/Express, not a socket handler) AFTER its transaction has
+// committed. SYNCHRONOUS and fire-and-forget from the caller's side: nothing
+// here needs awaiting, and a failed delivery is not a correctness problem --
+// "no live socket -> do nothing, they'll see it on next load" is already the
+// designed fallback (the balance/notification are already durably committed
+// before this ever runs).
+//
+// Pushed to EVERY live socket for this ONE user, never broadcast to a room --
+// a user can hold more than one open tab/session at once (only joining a room
+// forces a takeover, not plain connection; see addOrTakeoverPlayer), so every
+// matching socket gets it, mirroring kickUser's own loop (below) for the same
+// reason. `notification` is null for a silent debit.
+function pushPulpUpdate(userId, balance, notification) {
+  for (const s of io.sockets.sockets.values()) {
+    if (!s.user || s.user.id !== userId) continue;
+    s.emit('pulp_update', { balance, notification });
+    // If this socket is sitting in a lobby, that room's whole roster needs its
+    // affordability re-evaluated too -- crediting a broke player clears their
+    // dim bulb for everyone else without anyone rejoining. Reuses the exact
+    // same boolean-only broadcast the lobby already relies on elsewhere, not a
+    // bespoke one; no-ops on its own if the room isn't actually 'waiting'.
+    if (s.roomCode) broadcastAffordability(s.roomCode).catch(e => console.error(`❌ affordability broadcast failed [room=${s.roomCode}]: ${e.message}`));
+  }
 }
 
 // Insert a player into a room, keyed by user id — or, if that user id is
@@ -2761,6 +3023,7 @@ function removePlayerFromRoom(io, socket, code) {
     io.to(code).emit('host_changed', { host: room.host });
   }
   io.to(code).emit('players_update', getPlayers(code));
+  broadcastAffordability(code).catch(e => console.error(`❌ affordability broadcast failed [room=${code}]: ${e.message}`));
   resetRoomIdleTimer(code);
 }
 
@@ -2937,7 +3200,7 @@ async function askQuestion(code) {
       attemptRecordFailures++;
       room.chargedWritten = false;   // a retry on this room must attempt the charge again, not skip it
       room.status = 'waiting';
-      io.to(code).emit('game_start_failed', { message: 'تعذر بدء اللعبة ولم يتم خصم أي رصيد — حاول مرة أخرى' });
+      io.to(code).emit('game_start_failed', { message: 'تعذر بدء اللعبة ولم تُخصم أي لمبة — حاول مرة أخرى' });
       resetRoomIdleTimer(code);
       return;
     }
@@ -2983,14 +3246,14 @@ async function askQuestion(code) {
       const names = insufficientIds.map(id => room.players[id].display_name).join('، ');
       room.chargedWritten = false;   // a retry on this room must attempt the charge again, not skip it
       room.status = 'waiting';
-      io.to(code).emit('game_start_failed', { message: `لا يملك ${names} رصيداً كافياً، لذلك تعذر بدء اللعبة ولم يتم خصم أي رصيد` });
+      io.to(code).emit('game_start_failed', { message: `لا يملك ${names} لمبات كافية، لذلك تعذر بدء اللعبة ولم تُخصم أي لمبة` });
       resetRoomIdleTimer(code);
       return;
     }
     if (!chargeOk) {
       room.chargedWritten = false;   // a retry on this room must attempt the charge again, not skip it
       room.status = 'waiting';
-      io.to(code).emit('game_start_failed', { message: 'تعذر بدء اللعبة ولم يتم خصم أي رصيد — حاول مرة أخرى' });
+      io.to(code).emit('game_start_failed', { message: 'تعذر بدء اللعبة ولم تُخصم أي لمبة — حاول مرة أخرى' });
       resetRoomIdleTimer(code);
       return;
     }
@@ -3015,7 +3278,7 @@ async function askQuestion(code) {
             // actually new, same guard as the crash sweep's own.
             if (ins.rows[0]) {
               await client.query(
-                'INSERT INTO pulp_refund_notifications (user_id, attempt_id, amount) VALUES ($1, $2, $3)',
+                `INSERT INTO pulp_notifications (user_id, type, attempt_id, amount) VALUES ($1, 'refund', $2, $3)`,
                 [uid, room.attemptId, PULP_COST_PER_GAME]
               );
             }

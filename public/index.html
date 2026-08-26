@@ -510,6 +510,48 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
   font-weight: 600;
   color: #fff;
 }
+/* Pulp balance pill -- bulb icon + number, see CLAUDE.md "Currency display
+   design". Smoked-glass convention, same tokens as .level-plaque just above.
+   SHAPE is deliberately icon+number only, no text label -- the icon's
+   dimmed/lit state (toggled by .has-pulp, same off/on asset pair as the
+   bottom-nav home bulb) carries the "this is currency" identity. */
+.pulp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 14px;
+  background: rgba(0,0,0,0.16);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+}
+.pulp-pill img { width: 20px; height: 20px; display: block; }
+.pulp-pill .bulb-on { display: none; }
+.pulp-pill.has-pulp .bulb-on { display: block; }
+.pulp-pill.has-pulp .bulb-off { display: none; }
+.pulp-pill .pulp-count { direction: ltr; }
+
+/* Lobby-only: last-lamp warning (own balance exactly 1) and the dim bulb next
+   to a roster member who can't afford the next game -- both informational,
+   neither is a gate (see CLAUDE.md, Currency display design). */
+.last-lamp-warning {
+  display: none;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.player-card .afford-dim { width: 22px; height: 22px; flex-shrink: 0; opacity: 0.85; }
+
+/* Cost badge on the lobby start button -- static "label │ −1 [bulb]", never
+   computed from a balance (the cost is always 1). */
+.btn-cost { display: inline-flex; align-items: center; gap: 4px; margin: 0 6px; }
+.btn-cost-bulb { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
+
 .section-title { font-size:12px; color:var(--muted); margin-bottom:8px; letter-spacing:1px; font-weight:600; }
 
 /* ── Loading ── */
@@ -780,6 +822,11 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
       <div id="admin-entry"></div>
       <img class="hp-emo" id="home-emo" src="" alt="">
       <div class="hp-name" id="home-name"></div>
+      <div class="pulp-pill" id="home-pulp-pill">
+        <img class="bulb-off" src="/icons/nav-home-off.png" alt="">
+        <img class="bulb-on" src="/icons/nav-home-on.png" alt="">
+        <span class="pulp-count">0</span>
+      </div>
     </div>
 
     <div class="hero-actions">
@@ -806,6 +853,13 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
 <!-- SHOP (placeholder) -->
 <div id="s-shop" class="screen">
   <h2 style="font-size:20px;margin:14px 0 14px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2);">المتجر</h2>
+  <div style="text-align:center;">
+    <div class="pulp-pill" id="shop-pulp-pill">
+      <img class="bulb-off" src="/icons/nav-home-off.png" alt="">
+      <img class="bulb-on" src="/icons/nav-home-on.png" alt="">
+      <span class="pulp-count">0</span>
+    </div>
+  </div>
   <div class="card">
     <div class="glass-chip" style="text-align:center;">
       <i class="ti ti-shopping-bag" style="font-size:48px;" aria-hidden="true"></i>
@@ -843,6 +897,11 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
         <span class="level-plaque-label">المستوى:</span>
         <span id="p-level-name"></span>
       </span>
+      <div class="pulp-pill" id="profile-pulp-pill">
+        <img class="bulb-off" src="/icons/nav-home-off.png" alt="">
+        <img class="bulb-on" src="/icons/nav-home-on.png" alt="">
+        <span class="pulp-count">0</span>
+      </div>
     </div>
     <div class="info-grid">
       <div class="info-item"><div class="ilabel">الاسم الأول</div><div class="ivalue" id="p-fname"></div></div>
@@ -932,6 +991,14 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div class="code-label">كود مشاركة الغرفة</div>
     <div class="code-num" id="lobby-code">----</div>
   </div>
+  <div style="text-align:center;">
+    <div class="pulp-pill" id="lobby-pulp-pill">
+      <img class="bulb-off" src="/icons/nav-home-off.png" alt="">
+      <img class="bulb-on" src="/icons/nav-home-on.png" alt="">
+      <span class="pulp-count">0</span>
+    </div>
+    <div class="last-lamp-warning" id="lobby-last-lamp-warning">⚠ هذه آخر لمبة لديك</div>
+  </div>
   <div class="card">
     <div class="players-title">اللاعبين</div>
     <div class="players-list" id="lobby-players"></div>
@@ -940,7 +1007,10 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
     <div class="lobby-cats-grid" id="lobby-cats-grid"></div>
   </div>
   <div id="lobby-host-btn" style="display:none;">
-    <button class="btn btn-success" id="start-btn" onclick="startGame()" disabled>▶ ابدأ اللعبة!</button>
+    <button class="btn btn-success" id="start-btn" onclick="startGame()" disabled>
+      <span id="start-btn-label">▶ ابدأ اللعبة!</span><span class="btn-cost">│ −1 <img class="btn-cost-bulb" src="/icons/nav-home-on.png" alt=""></span>
+    </button>
+    <div class="last-lamp-warning" id="start-btn-afford-reason" style="text-align:center;"></div>
   </div>
 </div>
 
@@ -1090,16 +1160,21 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
   </div>
 </div>
 
-<!-- Refund notice: the player was offline when the refund actually happened (a
-     crashed game, or a stale-room charge reversal — see CLAUDE.md), so this is
-     shown on next app load instead of a socket emit. A small queue, not a single
-     notice: shown one at a time, each acknowledgement marking just that one as
-     shown server-side before the next (if any) appears. -->
-<div class="confirm-overlay" id="refund-notice-overlay">
+<!-- Pulp notice: covers TWO triggers under one overlay (see CLAUDE.md, Currency
+     display design, "instant update") -- a refund (crashed game, or a stale-room
+     charge reversal) the player was offline for, OR an admin credit that arrived
+     while they were mid-game (deliberately not popped live over active gameplay --
+     see the pulp_update handler). Shown from pending_notifications on the next
+     load/game_end refetch, exactly like a refund always was; a LIVE credit reuses
+     this exact same overlay/queue instead of a second notification pattern for the
+     same kind of event. A small queue, not a single notice: shown one at a time,
+     each acknowledgement marking just that one as shown server-side before the
+     next (if any) appears. -->
+<div class="confirm-overlay" id="pulp-notice-overlay">
   <div class="confirm-box confirm-box-neutral">
-    <div class="confirm-text" id="refund-notice-text"></div>
+    <div class="confirm-text" id="pulp-notice-text"></div>
     <div class="confirm-actions">
-      <button class="confirm-btn confirm-btn-neutral" type="button" onclick="ackRefundNotice()">حسناً</button>
+      <button class="confirm-btn confirm-btn-neutral" type="button" onclick="ackPulpNotice()">حسناً</button>
     </div>
   </div>
 </div>
@@ -1178,6 +1253,51 @@ let awaitingRejoinConfirm=false;
 function rejoinCodeKey(){ return (me && me.id) ? `pendingRejoinCode_${me.id}` : null; }
 let currentRoomCode=null, currentFlagQuestionId=null, reportedThisQuestion=false, reportInFlight=false;
 let editingRoom=false, currentRoomCategories=[];
+// Lobby roster + per-user affordability (see CLAUDE.md, Currency display design).
+// Two separate server events (players_update, affordability_update) can arrive
+// in either order, so both are cached and every roster render reads both.
+let lastLobbyPlayers=[], lobbyAffordability={};
+function renderLobbyPlayers(){
+  const el=document.getElementById('lobby-players'); el.innerHTML='';
+  lastLobbyPlayers.forEach(p=>{
+    const lvl=p.level||{img:'/levels/penguin.png'};
+    const badge=p.isHost?'<span class="badge-host">المضيف</span>':'';
+    // Dim bulb, no number -- a boolean-only courtesy signal (see socket handler).
+    // Missing from the map yet (affordability_update hasn't landed) is treated
+    // as "can afford" so nobody flashes as broke before the async check resolves.
+    const afford=lobbyAffordability[p.id];
+    const dim=(afford===false)?'<img class="afford-dim" src="/icons/nav-home-off.png" alt="" title="لا يملك لمبات كافية">':'';
+    el.innerHTML+=`<div class="player-card"><img src="${lvl.img}" alt=""><div class="name">${p.display_name}</div>${dim}${badge}</div>`;
+  });
+  updateStartButtonAffordability();
+}
+
+// BUG FIX 2026-08-26: the host used to be able to press start with a broke
+// player present, reach the server's pre-flight rejection, and get stuck on a
+// permanent loading spinner (see the game_start_failed fix on the server side --
+// the pre-flight used to answer with a toast while the client had already
+// optimistically shown s-loading, which nothing then undid). This keeps the
+// host from ever reaching that point: disabled here, same lobbyAffordability
+// boolean the dim bulb already uses, re-evaluated every time the roster or the
+// affordability map changes (both paths already call renderLobbyPlayers). The
+// server pre-flight remains the REAL gate -- this is only a courtesy that stops
+// a known-doomed click before it happens; a stale/late affordability map just
+// means the (now also fixed) server rejection is the fallback, not a dead end.
+function updateStartButtonAffordability(){
+  const btn=document.getElementById('start-btn');
+  const reasonEl=document.getElementById('start-btn-afford-reason');
+  if(!btn) return;
+  const cannotAfford=lastLobbyPlayers.filter(p=>lobbyAffordability[p.id]===false);
+  btn.disabled = cannotAfford.length>0;
+  if(reasonEl){
+    if(cannotAfford.length>0){
+      reasonEl.textContent = `لا يملك ${cannotAfford.map(p=>p.display_name).join('، ')} لمبات كافية`;
+      reasonEl.style.display='block';
+    } else {
+      reasonEl.style.display='none';
+    }
+  }
+}
 let lastPickedAnswer=null, lastAnswerCorrect=false;
 // In-game presence banner (player_presence: mid-game leave/rejoin). Newest
 // first, capped at 3 — see pushPresenceRow. One shared timer, reset on every
@@ -1313,32 +1433,40 @@ async function init() {
   const res=await fetch('/api/me',{headers:{Authorization:'Bearer '+token}});
   if (!res.ok) { localStorage.removeItem('token'); show('s-login'); return; }
   me=await res.json(); updateHomeUI(); show('s-home'); playSound('enter'); connectSocket();
-  // "Notified on next app load" (see CLAUDE.md, Currency charge boundary) --
-  // this IS that moment. Queue whatever's unshown; showNextRefundNotice() handles
-  // the empty case as a no-op.
-  refundNoticeQueue = me.pending_refund_notifications || [];
-  showNextRefundNotice();
+  // "Notified on next app load" (see CLAUDE.md, Currency display design) -- this
+  // IS that moment, for a refund OR an admin credit that found no live socket
+  // (or arrived mid-game -- see the pulp_update handler). showNextPulpNotice()
+  // handles the empty case as a no-op.
+  pulpNoticeQueue = me.pending_notifications || [];
+  showNextPulpNotice();
 }
 
 // A small queue, not a single popup: shown one at a time so multiple stacked
-// refunds (rare, but possible if several games crashed while offline) are each
-// actually read, not collapsed into one message or silently dropped.
-let refundNoticeQueue = [];
-function showNextRefundNotice(){
-  if (!refundNoticeQueue.length) return;
-  document.getElementById('refund-notice-text').textContent = refundNoticeQueue[0].message;
-  document.getElementById('refund-notice-overlay').classList.add('show');
+// notices (rare, but possible -- several games crashed while offline, or an
+// admin credit landed on top of an unseen refund) are each actually read, not
+// collapsed into one message or silently dropped.
+let pulpNoticeQueue = [];
+// Screens calm enough for a live credit popup to interrupt without covering an
+// active timer/question -- see the pulp_update handler. Deliberately excludes
+// every in-game screen (s-question, s-phase, s-loading, s-leaderboard) even
+// though s-gameover is itself in-game context, since it's a static results
+// screen with no timer at risk.
+const PULP_NOTICE_CALM_SCREENS = ['s-home','s-shop','s-profile','s-levels','s-howto','s-create','s-join','s-lobby','s-gameover'];
+function showNextPulpNotice(){
+  if (!pulpNoticeQueue.length) return;
+  document.getElementById('pulp-notice-text').textContent = pulpNoticeQueue[0].message;
+  document.getElementById('pulp-notice-overlay').classList.add('show');
 }
-async function ackRefundNotice(){
-  const notice = refundNoticeQueue.shift();
-  document.getElementById('refund-notice-overlay').classList.remove('show');
+async function ackPulpNotice(){
+  const notice = pulpNoticeQueue.shift();
+  document.getElementById('pulp-notice-overlay').classList.remove('show');
   if (!notice) return;
   try{
-    await fetch(`/api/pulp-refund-notifications/${notice.id}/ack`, {
+    await fetch(`/api/pulp-notifications/${notice.id}/ack`, {
       method:'POST', headers:{ Authorization:'Bearer '+token }
     });
   }catch(e){ /* worst case it's shown again next load -- not silently lost either way */ }
-  showNextRefundNotice();
+  showNextPulpNotice();
 }
 
 function nextLevelInfo(lvl) {
@@ -1346,9 +1474,34 @@ function nextLevelInfo(lvl) {
   return LEVELS[lvl.level]; // next level object (0-indexed array, level is 1-indexed)
 }
 
+// One balance (me.pulp_balance), four pills (home/shop/profile/lobby) plus the
+// lobby's own last-lamp warning -- see CLAUDE.md, "Currency display design".
+// Called from updateHomeUI() so every existing place that already refreshes
+// `me` (login, register, and critically game_end's own /api/me refetch) also
+// keeps every pill in sync for free, with no new call sites needed. Screens
+// this game isn't currently showing still have their pill elements in the
+// DOM (screens are hidden via CSS, never removed), so rendering into all four
+// unconditionally is safe and cheap.
+const PULP_PILL_IDS = ['home-pulp-pill', 'shop-pulp-pill', 'profile-pulp-pill', 'lobby-pulp-pill'];
+function renderAllPulpPills() {
+  const bal = (me && me.pulp_balance) || 0;
+  PULP_PILL_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('has-pulp', bal > 0);
+    const countEl = el.querySelector('.pulp-count');
+    if (countEl) countEl.textContent = bal.toLocaleString('ar');
+  });
+  // LAST-LAMP WARNING: informational only, at balance exactly 1 -- the game
+  // still starts normally, this is not a gate (see CLAUDE.md).
+  const warnEl = document.getElementById('lobby-last-lamp-warning');
+  if (warnEl) warnEl.style.display = (bal === 1) ? 'block' : 'none';
+}
+
 function updateHomeUI() {
   document.getElementById('home-emo').src=me.level.img||'';
   document.getElementById('home-name').textContent=me.display_name;
+  renderAllPulpPills();
   // Current-level line and progress bar were removed from the home screen.
   // Admin-only control panel button: rendered only for confirmed admins, otherwise absent.
   const adminEntry=document.getElementById('admin-entry');
@@ -1468,6 +1621,23 @@ function connectSocket() {
   // player would otherwise wonder whether they just paid for nothing.
   socket.on('game_start_failed',({message})=>showGameStartFailedOverlay(message));
 
+  // INSTANT UPDATE (see CLAUDE.md, Currency display design): an admin credit or
+  // debit landed on THIS account. Balance always applies immediately -- silent
+  // for a debit (notification is null). A credit's popup is shown right away
+  // only on a calm screen; mid-game it stays queued server-side (still unshown)
+  // and surfaces at the next natural pause instead of interrupting active play --
+  // see the game_end handler below, and CLAUDE.md.
+  socket.on('pulp_update',({balance,notification})=>{
+    if (me) me.pulp_balance = balance;
+    renderAllPulpPills();
+    if (!notification) return;
+    const activeId = document.querySelector('.screen.active')?.id;
+    if (PULP_NOTICE_CALM_SCREENS.includes(activeId)) {
+      pulpNoticeQueue.push(notification);
+      showNextPulpNotice();
+    }
+  });
+
   // Offered once per connection: a stored code from a previous session means
   // this user was in a game that may still be running. The server's answer
   // is a bare boolean — no room details leak either way.
@@ -1490,7 +1660,7 @@ function connectSocket() {
     stopEditingIndicator();
     // No ready system — the host can start immediately, solo or with others.
     document.getElementById('start-btn').disabled=false;
-    document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
+    document.getElementById('start-btn-label').textContent='▶ ابدأ اللعبة!';
     playSound('click');show('s-lobby');
   });
 
@@ -1528,7 +1698,7 @@ function connectSocket() {
     document.getElementById('lobby-host-btn').style.display = isHost ? 'block' : 'none';
     if(isHost){
       document.getElementById('start-btn').disabled=false;
-      document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
+      document.getElementById('start-btn-label').textContent='▶ ابدأ اللعبة!';
     }
     showToast('غرفة جديدة — استعدوا!'); playSound('enter'); show('s-lobby');
   });
@@ -1545,12 +1715,17 @@ function connectSocket() {
   socket.on('host_editing_end',()=>{ stopEditingIndicator(); });
 
   socket.on('players_update',players=>{
-    const el=document.getElementById('lobby-players'); el.innerHTML='';
-    players.forEach(p=>{
-      const lvl=p.level||{img:'/levels/penguin.png'};
-      const badge=p.isHost?'<span class="badge-host">المضيف</span>':'';
-      el.innerHTML+=`<div class="player-card"><img src="${lvl.img}" alt=""><div class="name">${p.display_name}</div>${badge}</div>`;
-    });
+    lastLobbyPlayers = players;   // affordability_update can arrive after this and needs the current roster to re-render against
+    renderLobbyPlayers();
+  });
+
+  // Lobby affordability indicator (see CLAUDE.md, Currency display design): a
+  // BOOLEAN ONLY per user id, never the balance itself. Arrives as its own
+  // event, separately from players_update (the balance lookup behind it is
+  // async server-side) -- merged against whatever roster is currently known.
+  socket.on('affordability_update',map=>{
+    lobbyAffordability = map;
+    renderLobbyPlayers();
   });
 
   // Mid-game leave/rejoin only (server never emits this from the lobby) —
@@ -1760,7 +1935,19 @@ function connectSocket() {
     const key=rejoinCodeKey(); if (key) localStorage.removeItem(key);
     renderPodium(leaderboard);
     playSound('leaderboard'); show('s-gameover');
-    fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(u=>{me=u;updateHomeUI();});
+    fetch('/api/me',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(u=>{
+      me=u; updateHomeUI();
+      // Picks up a credit that arrived mid-game and was deliberately NOT popped
+      // live over active gameplay (see the pulp_update handler) -- this is the
+      // first natural pause after that interruption risk is gone. Nothing to
+      // dedupe against: a notice only ever reaches pulpNoticeQueue by being shown
+      // live on a CALM screen, which s-question/s-phase/etc. never are, so one
+      // deferred here was never queued client-side before this point.
+      if (u.pending_notifications && u.pending_notifications.length) {
+        pulpNoticeQueue = pulpNoticeQueue.concat(u.pending_notifications);
+        showNextPulpNotice();
+      }
+    });
   });
 
   socket.on('host_changed',({host})=>{
@@ -1771,7 +1958,7 @@ function connectSocket() {
     if(isHost && !wasHost){
       document.getElementById('lobby-host-btn').style.display='block';
       document.getElementById('start-btn').disabled=false;
-      document.getElementById('start-btn').textContent='▶ ابدأ اللعبة!';
+      document.getElementById('start-btn-label').textContent='▶ ابدأ اللعبة!';
       showNewHostOverlay();
     }
     const active = document.querySelector('.screen.active');

@@ -67,6 +67,7 @@
     .btn{ flex:1 1 0; min-width:110px; padding:10px 8px; border-radius:10px; border:1.5px solid #fff; color:#fff; font-size:13.5px; font-weight:800; font-family:var(--font); cursor:pointer; text-align:center; }
     .btn:active{ transform:scale(0.98); }
     .btn-points{ background:var(--blue); }
+    .btn-pulp{ background:var(--gold); color:#3a2c00; }
     .btn-ban, .btn-demote{ background:var(--red); }
     .btn-unban, .btn-promote{ background:var(--green); }
 
@@ -255,6 +256,8 @@
       meta.appendChild(el('span', null, u.level_name || ''));
       const pts = el('span'); pts.innerHTML = 'النقاط: <span dir="ltr" class="pnum">' + ar(u.points) + '</span>';
       meta.appendChild(pts);
+      const pulp = el('span'); pulp.innerHTML = 'اللمبات: <span dir="ltr" class="pnum">' + ar(u.pulp_balance) + '</span>';
+      meta.appendChild(pulp);
       meta.appendChild(el('span', null, 'انضم: ' + fmtDate(u.created_at)));
       card.appendChild(meta);
 
@@ -271,6 +274,13 @@
       if(canAct){
         const b = el('button','btn btn-points','تعديل النقاط');
         b.onclick = ()=> togglePointsEditor(u, card);
+        actions.appendChild(b);
+      }
+      // Pulp (لمبات): OWNER ONLY, unlike points -- creating money is a bigger risk
+      // than adjusting a score, same tier as promote/demote/maintenance below.
+      if(viewerIsOwner){
+        const b = el('button','btn btn-pulp','تعديل اللمبات');
+        b.onclick = ()=> togglePulpEditor(u, card);
         actions.appendChild(b);
       }
       // Ban/unban: allowed to act, and never the owner card or yourself.
@@ -295,10 +305,17 @@
       return card;
     }
 
-    // ---- Points editor ----
+    // ---- Points / pulp editors ----
+    // Both share the one .pe-slot per card (rebuilt fresh each open), so a
+    // dataset.kind marker distinguishes "already open, same button clicked again
+    // -> collapse" from "a different editor's button clicked -> switch contents"
+    // instead of the toggle blindly reading the slot's current visibility alone.
     function togglePointsEditor(u, card){
       const slot = card.querySelector('.pe-slot');
-      if(slot.style.display !== 'none'){ slot.style.display='none'; slot.innerHTML=''; return; }
+      if(slot.style.display !== 'none' && slot.dataset.kind === 'points'){
+        slot.style.display='none'; slot.innerHTML=''; return;
+      }
+      slot.dataset.kind = 'points';
       slot.innerHTML='';
       const row = el('div','pe-row');
       const inp = el('input','pe-amount'); inp.type='number'; inp.min='1'; inp.inputMode='numeric'; inp.placeholder='المبلغ';
@@ -323,6 +340,44 @@
           const d = await res.json().catch(()=> ({}));
           if(!res.ok){ alert(d.error || 'تعذّر التعديل'); return; }
           u.points = d.points; u.level_name = d.level_name; u.level = d.level;
+          replaceCard(u, card);
+        }catch(e){ alert('تعذّر التعديل، حاول مجدداً'); }
+      }, { danger: sign < 0, confirmText: sign > 0 ? 'إضافة' : 'خصم' });
+    }
+
+    // Pulp: same shape as points, but hits /pulp and reads back .balance instead of
+    // .points -- the server rejects a debit that would go negative (400, surfaced via
+    // the same alert(d.error) path), it never silently clamps to 0 the way points does.
+    function togglePulpEditor(u, card){
+      const slot = card.querySelector('.pe-slot');
+      if(slot.style.display !== 'none' && slot.dataset.kind === 'pulp'){
+        slot.style.display='none'; slot.innerHTML=''; return;
+      }
+      slot.dataset.kind = 'pulp';
+      slot.innerHTML='';
+      const row = el('div','pe-row');
+      const inp = el('input','pe-amount'); inp.type='number'; inp.min='1'; inp.inputMode='numeric'; inp.placeholder='عدد اللمبات';
+      row.appendChild(inp);
+      const addB = el('button','btn pe-add','＋ إضافة'); addB.onclick = ()=> applyPulp(u, card, inp, 1);
+      const subB = el('button','btn pe-sub','－ خصم');   subB.onclick = ()=> applyPulp(u, card, inp, -1);
+      const cancel = el('button','btn pe-cancel','إلغاء'); cancel.onclick = ()=>{ slot.style.display='none'; slot.innerHTML=''; };
+      row.appendChild(addB); row.appendChild(subB); row.appendChild(cancel);
+      slot.appendChild(row); slot.style.display='block'; inp.focus();
+    }
+
+    function applyPulp(u, card, inp, sign){
+      const mag = parseInt(inp.value, 10);
+      if(!Number.isInteger(mag) || mag <= 0){ alert('أدخل عدداً صحيحاً أكبر من صفر'); return; }
+      const msg = sign > 0 ? ('إضافة ' + mag + ' لمبة؟') : ('خصم ' + mag + ' لمبة؟');
+      showConfirm(msg, async (reason)=>{
+        try{
+          const res = await fetch('/api/admin/users/' + u.id + '/pulp', {
+            method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token },
+            body: JSON.stringify({ amount: sign * mag, reason })
+          });
+          const d = await res.json().catch(()=> ({}));
+          if(!res.ok){ alert(d.error || 'تعذّر التعديل'); return; }
+          u.pulp_balance = d.balance;
           replaceCard(u, card);
         }catch(e){ alert('تعذّر التعديل، حاول مجدداً'); }
       }, { danger: sign < 0, confirmText: sign > 0 ? 'إضافة' : 'خصم' });
