@@ -1075,6 +1075,35 @@ body { background-color: var(--yellow); background-image: repeating-conic-gradie
   </div>
 </div>
 
+<!-- Game-start failure (e.g. the pulp charge couldn't be completed): blocking,
+     single acknowledgement button — a toast would disappear along with the
+     explanation, and this is exactly the moment the player needs to actually
+     read it. The room is genuinely back in 'waiting' server-side by the time
+     this fires, so the player is returned to the LOBBY underneath this, not
+     home — they never left the room. -->
+<div class="confirm-overlay" id="game-start-failed-overlay">
+  <div class="confirm-box confirm-box-neutral">
+    <div class="confirm-text" id="game-start-failed-text"></div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-btn-neutral" type="button" onclick="closeGameStartFailedOverlay()">حسناً</button>
+    </div>
+  </div>
+</div>
+
+<!-- Refund notice: the player was offline when the refund actually happened (a
+     crashed game, or a stale-room charge reversal — see CLAUDE.md), so this is
+     shown on next app load instead of a socket emit. A small queue, not a single
+     notice: shown one at a time, each acknowledgement marking just that one as
+     shown server-side before the next (if any) appears. -->
+<div class="confirm-overlay" id="refund-notice-overlay">
+  <div class="confirm-box confirm-box-neutral">
+    <div class="confirm-text" id="refund-notice-text"></div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-btn-neutral" type="button" onclick="ackRefundNotice()">حسناً</button>
+    </div>
+  </div>
+</div>
+
 <!-- Rejoin-prompt: blocking, offered once per connection when a stored
      in-progress room code exists and the server confirms it's still valid.
      Not destructive — blue border, like the host-handoff dialog — but
@@ -1284,6 +1313,32 @@ async function init() {
   const res=await fetch('/api/me',{headers:{Authorization:'Bearer '+token}});
   if (!res.ok) { localStorage.removeItem('token'); show('s-login'); return; }
   me=await res.json(); updateHomeUI(); show('s-home'); playSound('enter'); connectSocket();
+  // "Notified on next app load" (see CLAUDE.md, Currency charge boundary) --
+  // this IS that moment. Queue whatever's unshown; showNextRefundNotice() handles
+  // the empty case as a no-op.
+  refundNoticeQueue = me.pending_refund_notifications || [];
+  showNextRefundNotice();
+}
+
+// A small queue, not a single popup: shown one at a time so multiple stacked
+// refunds (rare, but possible if several games crashed while offline) are each
+// actually read, not collapsed into one message or silently dropped.
+let refundNoticeQueue = [];
+function showNextRefundNotice(){
+  if (!refundNoticeQueue.length) return;
+  document.getElementById('refund-notice-text').textContent = refundNoticeQueue[0].message;
+  document.getElementById('refund-notice-overlay').classList.add('show');
+}
+async function ackRefundNotice(){
+  const notice = refundNoticeQueue.shift();
+  document.getElementById('refund-notice-overlay').classList.remove('show');
+  if (!notice) return;
+  try{
+    await fetch(`/api/pulp-refund-notifications/${notice.id}/ack`, {
+      method:'POST', headers:{ Authorization:'Bearer '+token }
+    });
+  }catch(e){ /* worst case it's shown again next load -- not silently lost either way */ }
+  showNextRefundNotice();
 }
 
 function nextLevelInfo(lvl) {
@@ -1407,6 +1462,11 @@ function connectSocket() {
   });
   // Maintenance rejections get a centered red overlay instead of the small toast.
   socket.on('maintenance_blocked',msg=>showMaintenanceOverlay(msg));
+  // The pulp charge (or the game-start attempt behind it) failed -- the server has
+  // already reverted the room to 'waiting'. A toast is wrong here: it disappears
+  // and takes the "nothing was charged" reassurance with it, right when the
+  // player would otherwise wonder whether they just paid for nothing.
+  socket.on('game_start_failed',({message})=>showGameStartFailedOverlay(message));
 
   // Offered once per connection: a stored code from a previous session means
   // this user was in a game that may still be running. The server's answer
@@ -1888,6 +1948,20 @@ function showNewHostOverlay(){
 }
 function closeNewHostOverlay(){
   document.getElementById('new-host-overlay').classList.remove('show');
+}
+
+// Game-start failure: the server has already reverted the room to 'waiting' by
+// the time this fires (see askQuestion()'s charge block, server.js) — show() is
+// a pure screen-visibility toggle, so returning to 's-lobby' here just re-reveals
+// the exact lobby DOM (categories, host controls, player list) that was already
+// there before the player pressed start; nothing needs re-fetching.
+function showGameStartFailedOverlay(message){
+  show('s-lobby');
+  document.getElementById('game-start-failed-text').textContent = message;
+  document.getElementById('game-start-failed-overlay').classList.add('show');
+}
+function closeGameStartFailedOverlay(){
+  document.getElementById('game-start-failed-overlay').classList.remove('show');
 }
 
 function renderLobbyCategories(){
